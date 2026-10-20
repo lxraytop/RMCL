@@ -1,4 +1,4 @@
-
+﻿
 
 #Region "附加属性"
 
@@ -149,28 +149,21 @@ Public Class CustomEvent
         None = 0
         打开网页
         打开文件
-        打开帮助
         执行命令
         启动游戏
         复制文本
         刷新主页
         刷新页面
-        刷新帮助
-        今日人品
-        内存优化
-        清理垃圾
         弹出窗口
         弹出提示
         切换页面
         导入整合包
         安装整合包
-        下载文件
         修改设置
         写入设置
         修改变量
         写入变量
         加入房间
-        检查更新
     End Enum
 
     ''' <summary>
@@ -194,7 +187,7 @@ Public Class CustomEvent
                     Hint("正在开启，请稍候：" & Arg)
                     RunInThread(Sub() OpenWebsite(Arg))
 
-                Case EventType.打开文件, EventType.打开帮助, EventType.执行命令
+                Case EventType.打开文件, EventType.执行命令
                     RunInThread(
                     Sub()
                         Try
@@ -203,17 +196,13 @@ Public Class CustomEvent
                             Dim Location = ActualPaths(0), WorkingDir = ActualPaths(1)
                             Logger.Info($"打开类自定义事件实际路径：{Location}，工作目录：{WorkingDir}")
                             '执行
-                            If Type = EventType.打开帮助 Then
-                                PageOtherHelp.EnterHelpPage(Location)
-                            Else
-                                If Not EventSafetyConfirm("即将执行：" & Location & If(Args.Length >= 2, " " & Arg1, "")) Then Return
-                                Dim Info As New ProcessStartInfo With {
-                                    .Arguments = If(Args.Length >= 2, Arg1, ""),
-                                    .FileName = Location,
-                                    .WorkingDirectory = WorkingDir
-                                }
-                                StartProcess(Info)
-                            End If
+                            If Not EventSafetyConfirm("即将执行：" & Location & If(Args.Length >= 2, " " & Arg1, "")) Then Return
+                            Dim Info As New ProcessStartInfo With {
+                                .Arguments = If(Args.Length >= 2, Arg1, ""),
+                                .FileName = Location,
+                                .WorkingDirectory = WorkingDir
+                            }
+                            StartProcess(Info)
                         Catch ex As Exception
                             Logger.Error(ex, "执行打开类自定义事件失败", LogBehavior.Alert)
                         End Try
@@ -254,18 +243,6 @@ Public Class CustomEvent
                         Hint("当前页面不支持刷新操作！", HintType.Red)
                     End If
 
-                Case EventType.刷新帮助
-                    RunInUiWait(Sub() PageOtherLeft.RefreshHelp())
-                    If String.IsNullOrEmpty(Arg) Then Hint("已刷新！", HintType.Green)
-
-                Case EventType.今日人品
-                    PageOtherTest.Jrrp()
-
-                Case EventType.内存优化
-                    RunInThread(Sub() PageOtherTest.MemoryOptimize(True))
-
-                Case EventType.清理垃圾
-                    RunInThread(Sub() PageOtherTest.RubbishClear())
 
                 Case EventType.弹出窗口
                     If Args.Length = 1 Then Throw New Exception($"EventType {Type} 需要至少 2 个以 | 分割的参数，例如 弹窗标题|弹窗内容")
@@ -296,29 +273,6 @@ Public Class CustomEvent
                 Case EventType.导入整合包, EventType.安装整合包
                     RunInUi(Sub() ModpackInstall())
 
-                Case EventType.下载文件
-                    Arg0 = Arg0.Replace("\", "/")
-                    If Not (Arg0.StartsWithF("http://", True) OrElse Arg0.StartsWithF("https://", True)) Then
-                        MyMsgBox("EventData 必须为以 http:// 或 https:// 开头的网址。" & vbCrLf & "RMCL 不支持其他乱七八糟的下载协议。", "事件执行失败")
-                        Return
-                    End If
-                    If Not EventSafetyConfirm("即将从该网址下载文件：" & vbCrLf & Arg0) Then Return
-                    RunInUi(
-                    Sub()
-                        Try
-                            Select Case Args.Length
-                                Case 1
-                                    PageOtherTest.StartCustomDownload(Arg0, PathUtils.GetLastPart(Arg0))
-                                Case 2
-                                    PageOtherTest.StartCustomDownload(Arg0, Arg1)
-                                Case Else
-                                    PageOtherTest.StartCustomDownload(Arg0, Args(1), Args(2))
-                            End Select
-                        Catch
-                            PageOtherTest.StartCustomDownload(Arg0, "未知")
-                        End Try
-                    End Sub)
-
                 Case EventType.修改设置, EventType.写入设置
                     If Args.Length = 1 Then Throw New Exception($"EventType {Type} 需要至少 2 个以 | 分割的参数，例如 UiLauncherTransparent|400")
                     Settings.SetSafe(Arg0, Args(1), Instance:=McInstanceSelected)
@@ -344,9 +298,6 @@ Public Class CustomEvent
                         End If
                     End Sub)
 
-                Case EventType.检查更新
-                    UpdateCheckByButton()
-
                 Case Else
                     MyMsgBox("未知的事件类型：" & Type & vbCrLf & "请检查事件类型填写是否正确，或者 RMCL 是否为最新版本。", "事件执行失败")
             End Select
@@ -361,42 +312,14 @@ Public Class CustomEvent
     ''' </summary>
     Public Shared Function GetAbsoluteUrls(RelativeUrl As String, Type As EventType) As String()
 
-        '网页确认
+        '网页地址不支持本地打开类事件
         If RelativeUrl.StartsWithF("http", True) Then
-            If RunInUi() Then
-                Throw New Exception("能打开联网帮助页面的 MyListItem 必须手动设置 Title、Info 属性！")
-            End If
-            '获取文件名
-            Dim RawFileName As String
-            Try
-                RawFileName = PathUtils.GetLastPart(RelativeUrl)
-                If Not PathUtils.GetExtension(RawFileName) = "json" Then Throw New Exception("未指向 .json 后缀的文件")
-            Catch ex As Exception
-                Throw New Exception("联网帮助页面须指向一个帮助 JSON 文件，并在同路径下包含相应 XAML 文件！" & vbCrLf &
-                                    "例如：" & vbCrLf &
-                                    " - https://www.baidu.com/test.json（填写这个路径）" & vbCrLf &
-                                    " - https://www.baidu.com/test.xaml（同时也需要包含这个文件）", ex)
-            End Try
-            '下载文件
-            Dim LocalTemp As String = RequestTaskTempFolder() & RawFileName
-            Logger.Info($"转换网络资源：{RelativeUrl} -> {LocalTemp}")
-            Try
-                NetDownloadByClient(RelativeUrl, LocalTemp)
-                NetDownloadByClient(RelativeUrl.Replace(".json", ".xaml"), LocalTemp.Replace(".json", ".xaml"))
-            Catch ex As Exception
-                Throw New Exception("下载指定的文件失败！" & vbCrLf &
-                                    "注意，联网帮助页面须指向一个帮助 JSON 文件，并在同路径下包含相应 XAML 文件！" & vbCrLf &
-                                    "例如：" & vbCrLf &
-                                    " - https://www.baidu.com/test.json（填写这个路径）" & vbCrLf &
-                                    " - https://www.baidu.com/test.xaml（同时也需要包含这个文件）", ex)
-            End Try
-            RelativeUrl = LocalTemp
+            Throw New Exception("打开文件、执行命令类事件不支持网址，请将 EventType 改为 打开网页。")
         End If
         RelativeUrl = RelativeUrl.Replace("/", "\").Lower.TrimStart("\")
 
         '确认实际路径
         Dim Location As String, WorkingDir As String = Paths.Base & "RMCL"
-        HelpTryExtract()
         If RelativeUrl.Contains(":\") Then
             '绝对路径
             Location = RelativeUrl
@@ -405,23 +328,13 @@ Public Class CustomEvent
             '相对 RMCL 文件夹的路径
             Location = Paths.Base & "RMCL\" & RelativeUrl
             Logger.Info($"自定义事件中由相对 RMCL 文件夹的路径{Type}：{Location}")
-        ElseIf FileUtils.Exists(Paths.Base & "RMCL\Help\" & RelativeUrl) Then
-            '相对 RMCL 本地帮助文件夹的路径
-            Location = Paths.Base & "RMCL\Help\" & RelativeUrl
-            WorkingDir = Paths.Base & "RMCL\Help\"
-            Logger.Info($"自定义事件中由相对 RMCL 本地帮助文件夹的路径{Type}：{Location}")
-        ElseIf Type = EventType.打开帮助 AndAlso FileUtils.Exists(PathTemp & "Help\" & RelativeUrl) Then
-            '相对 RMCL 自带帮助文件夹的路径
-            Location = PathTemp & "Help\" & RelativeUrl
-            WorkingDir = PathTemp & "Help\"
-            Logger.Info($"自定义事件中由相对 RMCL 自带帮助文件夹的路径{Type}：{Location}")
         ElseIf Type = EventType.打开文件 OrElse Type = EventType.执行命令 Then
             '直接使用原有路径启动程序
             Location = RelativeUrl
             Logger.Info($"自定义事件中直接{Type}：{Location}")
         Else
-            '打开帮助，但是格式不对劲
-            Throw New FileNotFoundException("未找到 EventData 指向的本地 xaml 文件：" & RelativeUrl, RelativeUrl)
+            '格式不对劲
+            Throw New FileNotFoundException("未找到 EventData 指向的本地文件：" & RelativeUrl, RelativeUrl)
         End If
 
         Return {Location, WorkingDir}

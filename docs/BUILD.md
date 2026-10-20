@@ -1,6 +1,6 @@
 # 构建说明（RMCL 2.14.0.0）
 
-RMCL 基于 PCL 2.14.0.0 正式版重构，技术栈与上游一致：**.NET Framework 4.8 + WPF + VB.NET**（主工程为传统 vbproj，`RMCLCS` 与 `MeloongCore` 为 SDK 风格 csproj）。
+RMCL 基于上游 2.14.0.0 开源基线重构，技术栈与上游一致：**.NET Framework 4.8 + WPF + VB.NET**（主工程为传统 vbproj，`RMCLCS` 与 `MeloongCore` 为 SDK 风格 csproj）。
 
 ## 一、环境要求
 
@@ -39,7 +39,7 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 
 `RMCL.exe` 为**单文件分发**：Newtonsoft.Json、Ookii.Dialogs.Wpf、CacheCow、NAudio、Imazen.WebP、ThrottleDebounce、RMCLCS、MeloongCore 等依赖通过 `Application.xaml.vb` 中的 `AppDomain.AssemblyResolve` + `My.Resources` 内嵌加载，运行时不需要额外 DLL（`bin` 下出现的 DLL/PDB 只是编译副产物）。仅需随包附带 `RMCL.exe.config`（程序集绑定重定向）。
 
-`RMCL\Resources\Help.zip` 为内置帮助文档，上游 CI 会从 `LTCatt/PCL2Help` 重新克隆覆盖；仓库内已包含一份可用副本，本地编译无需额外步骤。
+产物为单文件 `RMCL.exe`，运行时不需要额外 DLL（`bin` 下出现的 DLL/PDB 只是编译副产物）。仅需随包附带 `RMCL.exe.config`（程序集绑定重定向）。
 
 ## 四、已知提示
 

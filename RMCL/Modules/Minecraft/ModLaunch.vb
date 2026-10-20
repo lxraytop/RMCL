@@ -1,4 +1,4 @@
-Public Module ModLaunch
+﻿Public Module ModLaunch
 
 #Region "开始"
 
@@ -162,9 +162,6 @@ Public Module ModLaunch
                     Hint(McInstanceSelected.Name & " 启动成功！", HintType.Green)
                     '上报
                     If Not IsSavingBatch Then
-                        Telemetry("Minecraft 启动成功",
-                              "Version", McInstanceSelected.VersionDisplayName,
-                              "LoginType", Settings.Get(Of McLoginType)("LoginType").ToString)
                     End If
                 Case LoadState.Canceled
                     If CanceledHint Is Nothing Then
@@ -195,10 +192,6 @@ NextInner:
                 Logger.Error(ex, If(IsSavingBatch, "导出启动脚本失败", "Minecraft 启动失败"), LogBehavior.Alert)
                 '上报
                 If Not IsSavingBatch Then
-                    Telemetry("Minecraft 启动失败",
-                              "Version", McInstanceSelected.VersionDisplayName,
-                              "LoginType", Settings.Get(Of McLoginType)("LoginType").ToString,
-                              "Exception", FilterUserName(FilterAccessToken(ex.GetDisplay(True), "*"), "*"))
                 End If
                 Throw
             End If
@@ -214,7 +207,13 @@ NextInner:
         Dim Finished As Boolean = False
         RunInNewThread(
         Sub()
-            PageOtherTest.MemoryOptimize(False)
+            Try
+                GC.Collect()
+                GC.WaitForPendingFinalizers()
+                GC.Collect()
+            Catch ex As Exception
+                McLaunchLog("内存优化失败：" & ex.Message)
+            End Try
             Finished = True
         End Sub, "Launch Memory Optimize")
         Do While Not Finished AndAlso Not Loader.IsCanceled
@@ -244,21 +243,6 @@ NextInner:
         Dim CheckResult As String = ""
         RunInUiWait(Sub() CheckResult = McLoginAble(McLoginInput()))
         If CheckResult <> "" Then Throw New ArgumentException(CheckResult)
-        '求赞助
-        If BuildType = BuildTypes.Release AndAlso CurrentLaunchOptions?.SaveBatch Is Nothing Then '保存脚本时不提示
-            RunInNewThread(
-            Sub()
-                Select Case Settings.Get(Of Integer)("SystemLaunchCount")
-                    Case 10, 20, 40, 60, 80, 100, 120, 150, 200, 250, 300, 350, 400, 500, 600, 700, 800, 900, 1000, 1200, 1400, 1600, 1800, 2000
-                        If MyMsgBox("RMCL 已经为你启动了 " & Settings.Get(Of Integer)("SystemLaunchCount") & " 次游戏啦！" & vbCrLf &
-                                    "如果 RMCL 还算好用的话，能不能考虑赞助一下 RMCL……" & vbCrLf &
-                                    "如果没有大家的支持，RMCL 很难在免费、无任何广告的情况下维持数年的更新（磕头）……！",
-                                    Settings.Get(Of Integer)("SystemLaunchCount") & " 次启动！", "支持 RMCL！", "但是我拒绝") = 1 Then
-                            OpenWebsite("https://meloong.com/afd/a/LTCat")
-                        End If
-                End Select
-            End Sub, "Donate")
-        End If
         '正版购买提示
         If CurrentLaunchOptions?.SaveBatch Is Nothing AndAlso '保存脚本时不提示
            Not Settings.Get(Of Boolean)("HintBuy") AndAlso Settings.Get(Of McLoginType)("LoginType") <> McLoginType.Ms Then
@@ -606,7 +590,6 @@ Relogin:
 SkipLogin:
         McLaunchLog($"微软登录结束，AccessToken 将在 {DateTimeOffset.FromUnixTimeSeconds(ExpiresAt).LocalDateTime} 过期")
         Settings.Set("HintBuy", True) '关闭正版购买提示
-        If ThemeUnlock(10, False) Then MyMsgBox("感谢你对正版游戏的支持！" & vbCrLf & "隐藏主题 跳票红 已解锁！", "提示")
     End Sub
     Private Sub McLoginServerStart(Data As LoaderTask(Of McLoginServer, McLoginResult))
         Dim Input As McLoginServer = Data.Input

@@ -49,7 +49,7 @@ public enum ModLoaders {
 }
 
 /// <summary>
-/// 在爱发电中的赞助等级。
+/// 账号等级。
 /// </summary>
 public enum DonationRank {
     None = 0,

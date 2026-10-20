@@ -30,7 +30,7 @@ public abstract class TestWithFolder : TestBase {
     public readonly string tempFolder;
     public TestWithFolder() : base() {
         tempFolder = Path.Combine(
-            Path.GetTempPath(), "PCL", "Tests",
+            Path.GetTempPath(), "RMCL", "Tests",
             $"{GetType().Name}-{Guid.NewGuid()}",
             "文件夹 Dir_!@#$%^&()_+={}[];',_",
             new string('X', 200), new string('X', 200)) + @"\";

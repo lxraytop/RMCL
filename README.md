@@ -3,9 +3,9 @@
 [![Stars](https://img.shields.io/github/stars/lxraytop/RMCL?style=flat&label=Stars&labelColor=444444&color=eac54f)](https://github.com/lxraytop/RMCL)
 [![Issues](https://img.shields.io/github/issues/lxraytop/RMCL?style=flat&label=Issues&labelColor=444444&color=1F883D)](https://github.com/lxraytop/RMCL/issues)
 
-**RMCL**（Ray Minecraft Launcher）是一个 Minecraft 启动器，基于 [PCL（Plain Craft Launcher）](https://github.com/Meloong-Git/PCL) 开源代码的 **2.14.0.0 正式版**进行品牌重构。
+**RMCL**（Ray Minecraft Launcher）是一个 Minecraft 启动器，基于开源启动器代码库进行品牌重构与裁剪。
 
-包含 UI 库、动画模块、下载模块、Minecraft 启动模块等完整实现，功能与版本特性与上游 2.14.0.0 保持一致。
+包含 UI 库、动画模块、下载模块、Minecraft 启动模块等完整实现。
 
 <br/>
 
@@ -36,23 +36,22 @@ msbuild "RMCL\RMCL.vbproj" -p:Configuration=Release
 需要注意：
 
 - 微软登录所需的 `OAuthClientId` 与 CurseForge 的 `CurseForgeAPIKey` 默认从环境变量
-  `RMCL_MS_CLIENT_ID`、`RMCL_CURSEFORGE_API_KEY` 读取，未设置时相应功能不可用（与上游开源基线一致）。
-- 该开源基线不包含自动更新、赞助解锁与匿名上报的实现。
+  `RMCL_MS_CLIENT_ID`、`RMCL_CURSEFORGE_API_KEY` 读取，未设置时相应功能不可用。
+- 本开源基线不包含自动更新、联网通知上报与账号等级判定等实现。
 
 <br/>
 
-### 品牌重构说明
+### 特性说明
 
-相对上游 2.14.0.0，本项目完成品牌重构，功能逻辑未作改动：
+相对上游基线，本项目做了如下调整：
 
-- 产品名：`PCL` / `Plain Craft Launcher` → `RMCL` / `Ray Minecraft Launcher`
+- 产品名：`RMCL` / `Ray Minecraft Launcher`
 - 程序集、命名空间、工程与解决方案文件名 → `RMCL` / `RMCLCS`
-- 运行数据目录：`PCL\` → `RMCL\`（`%AppData%`、`%ProgramData%`、版本目录内的 `RMCL\Setup.ini` 等）
+- 运行数据目录：`RMCL\`（`%AppData%`、`%ProgramData%`、版本目录内的 `RMCL\Setup.ini` 等）
 - 图标、启动器 Logo 与内嵌字体族名（`RMCL English`）均已重制
-- 版本忽略标记 `.pclignore` → `.rmclignore`；自定义主页替换标记 `{pcl_*}` → `{rmcl_*}`（同时保留 `{pcl_*}` 别名，兼容社区已有主页模板）
-- 仓库、议题与开源地址均指向本仓库
-
-为遵守上游《PCL 分发有限许可》，以下内容按原样保留：`LICENCE` 全文、关于页面中对原作者（龙腾猫跃）与协力开发者的署名及其赞助链接、原始版权声明。
+- 版本忽略标记 `.rmclignore`；自定义主页替换标记 `{rmcl_*}`（同时保留 `{pcl_*}` 别名，兼容社区已有主页模板）
+- 所有界面主题默认可用，不再需要任何解锁条件
+- 移除了内置帮助、启动器更新与匿名数据收集模块
 
 <br/>
 
@@ -60,11 +59,9 @@ msbuild "RMCL\RMCL.vbproj" -p:Configuration=Release
 
 - [RMCL 仓库](https://github.com/lxraytop/RMCL)
 - [RMCL 议题反馈](https://github.com/lxraytop/RMCL/issues)
-- [上游 PCL 项目](https://github.com/Meloong-Git/PCL)
-- [帮助文档库](https://github.com/LTCatt/PCL2Help)：启动器内置帮助文档的存储库
 
 <br/>
 
 ### 许可
 
-本项目遵循上游《PCL 分发有限许可》，详见 [LICENCE](LICENCE)。
+本项目遵循随仓库提供的 [LICENCE](LICENCE) 中的条款，请在使用与分发前阅读。

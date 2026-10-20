@@ -1,4 +1,4 @@
-<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -307,9 +307,6 @@
     <Compile Include="Pages\PageLink\PageLinkMain.xaml.vb">
       <DependentUpon>PageLinkMain.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Pages\PageOther\PageOtherHelpDetail.xaml.vb">
-      <DependentUpon>PageOtherHelpDetail.xaml</DependentUpon>
-    </Compile>
     <Compile Include="Pages\PageInstance\PageInstanceExport.xaml.vb">
       <DependentUpon>PageInstanceExport.xaml</DependentUpon>
     </Compile>
@@ -335,9 +332,6 @@
     <Compile Include="Modules\Minecraft\ModDownload.vb" />
     <Compile Include="Modules\Minecraft\ModLaunch.vb" />
     <Compile Include="Modules\Minecraft\ModMinecraft.vb" />
-    <Compile Include="Pages\PageOther\PageOtherTest.xaml.vb">
-      <DependentUpon>PageOtherTest.xaml</DependentUpon>
-    </Compile>
     <Compile Include="Pages\PageLaunch\MySkin.xaml.vb">
       <DependentUpon>MySkin.xaml</DependentUpon>
     </Compile>
@@ -359,17 +353,8 @@
     <Compile Include="Pages\PageLaunch\PageLaunchRight.xaml.vb">
       <DependentUpon>PageLaunchRight.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Pages\PageOther\PageOtherAbout.xaml.vb">
-      <DependentUpon>PageOtherAbout.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="Pages\PageOther\PageOtherHelp.xaml.vb">
-      <DependentUpon>PageOtherHelp.xaml</DependentUpon>
-    </Compile>
     <Compile Include="Pages\PageDownload\PageDownloadLeft.xaml.vb">
       <DependentUpon>PageDownloadLeft.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="Pages\PageOther\PageOtherLeft.xaml.vb">
-      <DependentUpon>PageOtherLeft.xaml</DependentUpon>
     </Compile>
     <Compile Include="Pages\PageSetup\PageSetupLeft.xaml.vb">
       <DependentUpon>PageSetupLeft.xaml</DependentUpon>
@@ -568,15 +553,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="Pages\PageOther\PageOtherHelpDetail.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
     <Page Include="Pages\PageInstance\PageInstanceExport.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="Pages\PageOther\PageOtherTest.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -608,21 +585,9 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="Pages\PageOther\PageOtherAbout.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
-    <Page Include="Pages\PageOther\PageOtherHelp.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
     <Page Include="Pages\PageDownload\PageDownloadLeft.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="Pages\PageOther\PageOtherLeft.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
     </Page>
     <Page Include="Pages\PageSetup\PageSetupLeft.xaml">
       <SubType>Designer</SubType>
@@ -754,11 +719,9 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Resources\Font.ttf" />
-    <None Include="Resources\Help.zip" />
     <None Include="Resources\NAudio.dll" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\Heads\LTCat.jpg" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\Newtonsoft.Json.dll" />
@@ -777,7 +740,6 @@
     <Resource Include="Images\Blocks\Egg.png" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\Heads\Hao_Tian.jpg" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Images\Skins\Steve.png" />
@@ -804,7 +766,6 @@
     <Resource Include="Images\Themes\10.png" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\Heads\Patrick.png" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Images\Themes\11.png" />
@@ -835,7 +796,6 @@
     <None Include="Resources\forge-installer.jar" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\Heads\Logo.png" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\transformer.jar" />
@@ -849,16 +809,12 @@
     <Resource Include="Images\Icons\NoIcon.png" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\Heads\RMCL.png" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\Heads\00ll00.png" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\Heads\bangbang93.png" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\Heads\wiki.png" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Images\Blocks\OptiFabric.png" />
@@ -879,13 +835,11 @@
     <Resource Include="Images\Icons\Disabled.png" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\Heads\MCBBS.png" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Images\Blocks\NeoForge.png" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\Heads\z0z0r4.png" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\Imazen.WebP.dll" />
@@ -907,7 +861,6 @@
     <None Include="Resources\System.Net.Http.Formatting.dll" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\Heads\EasyTier.png" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\lwjgl-unsafe-agent.jar" />
@@ -946,8 +899,6 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\Heads\ChongQing.png" />
-    <Resource Include="Images\Heads\HerobrineXia.png" />
 
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />

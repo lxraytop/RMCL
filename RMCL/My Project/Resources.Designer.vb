@@ -123,16 +123,6 @@ Namespace My.Resources
         '''<summary>
         '''  查找 System.Byte[] 类型的本地化资源。
         '''</summary>
-        Friend ReadOnly Property Help() As Byte()
-            Get
-                Dim obj As Object = ResourceManager.GetObject("Help", resourceCulture)
-                Return CType(obj,Byte())
-            End Get
-        End Property
-        
-        '''<summary>
-        '''  查找 System.Byte[] 类型的本地化资源。
-        '''</summary>
         Friend ReadOnly Property Imazen_WebP() As Byte()
             Get
                 Dim obj As Object = ResourceManager.GetObject("Imazen.WebP", resourceCulture)

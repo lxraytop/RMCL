@@ -1,4 +1,4 @@
-Imports System.Windows.Threading
+﻿Imports System.Windows.Threading
 
 Public Class PageLaunchRight
     Implements IRefreshable, IDispatcherUnhandledException
@@ -245,7 +245,7 @@ Public Class PageLaunchRight
                     Return
                 End If
                 Dim LoadStartTime As Date = Date.Now
-                '修改时应同时修改 PageOtherHelpDetail.Init
+                '修改时请同步调整相关页面的初始化逻辑
                 Content = ArgumentReplace(Content, AddressOf StringUtils.XmlEscape)
                 Do While Content.Contains("xmlns")
                     Content = Content.RegexReplace("xmlns[^""']*(""|')[^""']*(""|')", "").Replace("xmlns", "") '禁止声明命名空间

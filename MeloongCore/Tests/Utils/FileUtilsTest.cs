@@ -51,7 +51,7 @@ public class FileUtilsTest : TestWithFolder {
     }
 
     [Test]
-    [Arguments("GZ.gz", "LTCat")]
+    [Arguments("GZ.gz", "RMCL")]
     public async Task 解压_ReadGz(string testFile, string containsText) {
         string output = Path.Combine(tempFolder, "Extracted");
         var p = new ProgressProvider();

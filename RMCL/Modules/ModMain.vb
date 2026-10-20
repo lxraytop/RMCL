@@ -1,4 +1,4 @@
-Imports System.Collections.ObjectModel
+﻿Imports System.Collections.ObjectModel
 Imports System.Windows.Interop
 Imports System.Windows.Threading
 
@@ -392,12 +392,6 @@ EndHint:
     Public FrmSetupSystem As PageSetupSystem
     Public FrmSetupLink As PageSetupLink
 
-    '其他页面声明
-    Public FrmOtherLeft As PageOtherLeft
-    Public FrmOtherHelp As PageOtherHelp
-    Public FrmOtherAbout As PageOtherAbout
-    Public FrmOtherTest As PageOtherTest
-
     '登录页面声明
     Public FrmLoginLegacy As PageLoginLegacy
     Public FrmLoginNide As PageLoginNide
@@ -418,238 +412,6 @@ EndHint:
 
     '资源信息分页声明
     Public FrmDownloadResourceDetail As PageDownloadResourceDetail
-
-#End Region
-
-#Region "帮助"
-
-    Public Class HelpEntry
-        ''' <summary>
-        ''' 原始信息路径。用于刷新。
-        ''' </summary>
-        Public RawPath As String
-
-        '基础
-
-        ''' <summary>
-        ''' 显示标题。
-        ''' </summary>
-        Public Title As String
-        ''' <summary>
-        ''' 显示描述。
-        ''' </summary>
-        Public Desc As String
-        ''' <summary>
-        ''' 检索关键字。
-        ''' </summary>
-        Public Search As String
-        ''' <summary>
-        ''' 用于分类的标签列表。
-        ''' </summary>
-        Public Types As List(Of String)
-
-        '显示（可选）
-
-        ''' <summary>
-        ''' 帮助项的自定义图标。可能为 Nothing。
-        ''' </summary>
-        Public Logo As String = Nothing
-        ''' <summary>
-        ''' 是否显示在搜索结果。默认为 True。
-        ''' </summary>
-        Public ShowInSearch As Boolean = True
-        ''' <summary>
-        ''' 是否在公开版的 RMCL 中显示（这会影响主页与搜索）。默认为 True。
-        ''' </summary>
-        Public ShowInPublic As Boolean = True
-        ''' <summary>
-        ''' 是否在快照版的 RMCL 中显示（这会影响主页与搜索）。默认为 True。
-        ''' </summary>
-        Public ShowInSnapshot As Boolean = True
-
-        '动作
-
-        ''' <summary>
-        ''' 是否为 “执行事件”。
-        ''' </summary>
-        Public IsEvent As Boolean
-        Public EventType As CustomEvent.EventType
-        Public EventData As String
-        ''' <summary>
-        ''' 若非执行事件，其对应的 .xaml 本地文件内容。
-        ''' </summary>
-        Public XamlContent As String
-
-        '转换
-
-        ''' <summary>
-        ''' 从文件初始化 HelpEntry 对象，失败会抛出异常。
-        ''' </summary>
-        Public Sub New(FilePath As String)
-            RawPath = FilePath
-            If Not FileUtils.Exists(FilePath) Then Throw New FileNotFoundException("未找到帮助文件：" & FilePath, FilePath)
-            Dim JsonData As JObject = ArgumentReplace(FileUtils.ReadAsString(FilePath), AddressOf StringUtils.XmlEscape).DeserializeJson()
-            '加载常规信息
-            If JsonData("Title") IsNot Nothing Then
-                Title = JsonData("Title")
-            Else
-                Throw New ArgumentException("未找到 Title 项")
-            End If
-            Desc = If(JsonData("Description"), "")
-            Search = If(JsonData("Keywords"), "")
-            Logo = JsonData("Logo") '为保持 Nothing，不要加 If
-            ShowInSearch = If(JsonData("ShowInSearch"), ShowInSearch)
-            ShowInPublic = If(JsonData("ShowInPublic"), ShowInPublic)
-            ShowInSnapshot = If(JsonData("ShowInSnapshot"), ShowInSnapshot)
-            Types = New List(Of String)
-            For Each NameOfType In If(JsonData("Types"), New JArray)
-                Types.Add(NameOfType)
-            Next
-            '加载事件信息
-            If If(JsonData("IsEvent"), False) Then
-                EventType = JsonData("EventType").ToObject(Of CustomEvent.EventType)
-                EventData = If(JsonData("EventData"), "")
-                IsEvent = True
-            Else
-                Dim XamlAddress As String = Path.ChangeExtension(FilePath, ".xaml")
-                If FileUtils.Exists(XamlAddress) Then
-                    XamlContent = FileUtils.ReadAsString(XamlAddress)
-                    IsEvent = False
-                Else
-                    Throw New FileNotFoundException("未找到帮助条目 .json 对应的 .xaml 文件（" & XamlAddress & "）")
-                End If
-            End If
-        End Sub
-        ''' <summary>
-        ''' 获取该 HelpEntry 对应的 MyListItem。
-        ''' </summary>
-        Public Function ToListItem() As MyListItem
-            Return SetToListItem(New MyListItem)
-        End Function
-        ''' <summary>
-        ''' 将属性设置入一个现有的 ListItem。
-        ''' </summary>
-        Public Function SetToListItem(Item As MyListItem) As MyListItem
-            Dim Logo As String
-            If IsEvent Then
-                If EventType = CustomEvent.EventType.弹出窗口 Then
-                    Logo = PathImage & "Blocks/GrassPath.png"
-                Else
-                    Logo = PathImage & "Blocks/CommandBlock.png"
-                End If
-            Else
-                Logo = PathImage & "Blocks/Grass.png"
-            End If
-            '设置属性
-            With Item
-                .SnapsToDevicePixels = True
-                .Title = Title
-                .Info = Desc
-                .Logo = If(Me.Logo, Logo)
-                .Height = 42
-                .Type = MyListItem.CheckType.Clickable
-                .Tag = Me
-            End With
-            CustomEventService.SetEventType(Item, CustomEvent.EventType.None) '清空自定义事件属性，它们会被下面的点击事件处理
-            CustomEventService.SetEventData(Item, Nothing)
-            '项目的点击事件
-            AddHandler Item.Click, Sub(sender, e) PageOtherHelp.OnItemClick(sender.Tag)
-            Return Item
-        End Function
-
-    End Class
-
-    Public HelpLoader As New LoaderTask(Of Integer, List(Of HelpEntry))("Help Page", AddressOf HelpLoad,, ThreadPriority.BelowNormal)
-    Private ReadOnly HelpLoadLock As New Object
-    ''' <summary>
-    ''' 初始化帮助列表对象。
-    ''' </summary>
-    Private Sub HelpLoad(Loader As LoaderTask(Of Integer, List(Of HelpEntry)))
-        SyncLock HelpLoadLock '避免重复解压文件导致出错
-            Try
-
-                '解压内置文件
-                HelpTryExtract()
-
-                '遍历文件
-                Dim FileList As New List(Of String)
-                Try
-                    Dim IgnoreList As New List(Of String)
-                    '读取自定义文件
-                    If DirectoryUtils.Exists(Paths.Base & "RMCL\Help\") Then
-                        For Each File In DirectoryUtils.EnumerateFiles(Paths.Base & "RMCL\Help\", True)
-                            Select Case PathUtils.GetExtension(File)
-                                Case "helpignore"
-                                    '加载忽略列表
-                                    Logger.Info($"发现 .helpignore 文件：{File}")
-                                    For Each Line In FileUtils.ReadAsLines(File, True)
-                                        Dim RealString As String = Line.BeforeFirst("#").Trim
-                                        If String.IsNullOrWhiteSpace(RealString) Then Continue For
-                                        IgnoreList.Add(RealString)
-                                        Logger.Trace($"> {RealString}")
-                                    Next
-                                Case "json"
-                                    FileList.Add(File)
-                            End Select
-                        Next
-                    End If
-                    Logger.Info($"已扫描 RMCL 文件夹下的帮助文件，目前总计 {FileList.Count} 条")
-                    '读取自带文件
-                    For Each File In DirectoryUtils.EnumerateFiles(PathTemp & "Help", True)
-                        '跳过非 json 文件与以 . 开头的文件夹
-                        If PathUtils.RemoveLastPart(File).Substring((PathTemp & "Help").Length).Contains("\.") OrElse PathUtils.GetExtension(File) <> "json" Then Continue For
-                        '检查忽略列表
-                        Dim RealPath As String = File.Substring((PathTemp & "Help\").Length)
-                        For Each Ignore In IgnoreList
-                            If RealPath.RegexCheck(Ignore) Then
-                                Logger.Trace($"已忽略 {RealPath}：{Ignore}")
-                                GoTo NextFile
-                            End If
-                        Next
-                        FileList.Add(File)
-NextFile:
-                    Next
-                    Logger.Info($"已扫描缓存文件夹下的帮助文件，目前总计 {FileList.Count} 条")
-                Catch ex As Exception
-                    Logger.Error(ex, "检查帮助文件夹失败", LogBehavior.Alert)
-                End Try
-                If Loader.IsCanceled Then Return
-
-                '将文件实例化
-                Dim Dict As New List(Of HelpEntry)
-                For Each FilePath As String In FileList
-                    Try
-                        Dim Entry As New HelpEntry(FilePath)
-                        Dict.Add(Entry)
-                        Logger.Trace($"已加载的帮助条目：{Entry.Title} ← {FilePath}")
-                    Catch ex As Exception
-                        Logger.Error(ex, $"初始化帮助条目失败（{FilePath}）", LogBehavior.Alert)
-                    End Try
-                Next
-
-                '回设
-                If Not Dict.Any() Then Throw New Exception("未找到可用的帮助；若不需要帮助页面，可以在 设置 → 个性化 → 功能隐藏 中将其隐藏")
-                If Loader.IsCanceled Then Return
-                Loader.Output = Dict
-
-            Catch ex As Exception
-                Logger.Warn(ex, "帮助列表初始化失败")
-                Throw
-            End Try
-        End SyncLock
-    End Sub
-    ''' <summary>
-    ''' 尝试解压内置帮助文件。
-    ''' </summary>
-    Public Sub HelpTryExtract()
-        If Settings.Get(Of Integer)("SystemHelpVersion") <> VersionCode OrElse Not FileUtils.Exists(PathTemp & "Help\启动器\备份设置.xaml") Then
-            DirectoryUtils.Delete(PathTemp & "Help")
-            ExtractResources(PathTemp & "Cache\Help.zip", "Help")
-            FileUtils.ExtractToDirectory(PathTemp & "Cache\Help.zip", PathTemp & "Help")
-            Settings.Set("SystemHelpVersion", VersionCode)
-            Logger.Info($"已解压内置帮助文件，目前状态：{FileUtils.Exists(PathTemp + "Help\启动器\备份设置.xaml")}")
-        End If
-    End Sub
 
 #End Region
 
@@ -901,8 +663,6 @@ NextFile:
             Text = Text.Replace("{login}", Replacer(Nothing))
         End If
         '高级
-        Text = Text.RegexReplace("\{hint\}", Function() Replacer(PageOtherTest.GetRandomHint()))
-        Text = Text.RegexReplace("\{cave\}", Function() Replacer(PageOtherTest.GetRandomCave()))
         Text = Text.RegexReplace("\{setup:([a-zA-Z0-9]+)\}", Function(m) Replacer(Settings.GetSafe(m.Groups(1).Value, McInstanceSelected)))
         Text = Text.RegexReplace("\{varible:([^:\}]+)(?::([^\}]+))?\}", Function(m) Replacer(RegistryUtils.TryRead($"HKEY_CURRENT_USER\Software\{RegFolder}", $"CustomEvent{m.Groups(1).Value}", m.Groups(2).Value)))
         Text = Text.RegexReplace("\{variable:([^:\}]+)(?::([^\}]+))?\}", Function(m) Replacer(RegistryUtils.TryRead($"HKEY_CURRENT_USER\Software\{RegFolder}", $"CustomEvent{m.Groups(1).Value}", m.Groups(2).Value)))
@@ -989,26 +749,6 @@ NextFile:
             "DPI：" & DPI & "（" & Math.Round(DPI / 96, 2) * 100 & "%）" & vbCrLf &
             "MC 文件夹：" & If(McFolderSelected, "Nothing") & vbCrLf &
             "文件位置：" & Paths.Base)
-    End Sub
-
-    '遥测
-    Public Sub Telemetry([Event] As String, ParamArray Datas As String())
-        If BuildType = BuildTypes.Debug Then Return '开发版不上传遥测
-        If Not Settings.Get(Of Boolean)("SystemSystemTelemetry") Then Return '用户关闭了遥测
-        If Not ClsBaseUrl.StartsWithF("http") Then Return '开源版没有设置遥测地址
-        RunInNewThread(
-        Sub()
-            Try
-                Logger.Info($"匿名数据上报：{[Event]}")
-                Dim Url As String = $"{ClsBaseUrl}&Event={StringUtils.UrlEscape([Event])}"
-                For i = 0 To Datas.Length - 1 Step 2
-                    Url &= "&" & StringUtils.UrlEscape(Datas(i)) & "=" & StringUtils.UrlEscape(Datas(i + 1).ReplaceLineEndings(vbLf, mergeMultiple:=True))
-                Next
-                NetRequestByClient(Url, MakeLog:=False)
-            Catch ex As Exception
-                Logger.Warn(ex, "匿名数据上报失败")
-            End Try
-        End Sub, "Telemetry", ThreadPriority.Lowest)
     End Sub
 
 #End Region

@@ -7,13 +7,13 @@ public class CryptographyUtilsTest : TestBase {
 
     [Test]
     [Arguments("")]
-    [Arguments("PCL")]
+    [Arguments("RMCL")]
     [Arguments("中文内容 Test 123 !@#$%^&*()")]
     public async Task 对称加密_往返(string sourceString) {
-        string encryptedString = CryptographyUtils.AesEncrypt(sourceString, "PCL-Key-中文");
+        string encryptedString = CryptographyUtils.AesEncrypt(sourceString, "RMCL-Key-中文");
         if (!string.IsNullOrEmpty(sourceString))
             await Assert.That(encryptedString != sourceString).IsTrue();
-        await Assert.That(CryptographyUtils.AesDecrypt(encryptedString, "PCL-Key-中文")).IsEqualTo(sourceString);
+        await Assert.That(CryptographyUtils.AesDecrypt(encryptedString, "RMCL-Key-中文")).IsEqualTo(sourceString);
     }
 
     [Test]

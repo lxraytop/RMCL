@@ -640,16 +640,6 @@ Public Class MyListItem
             SetResourceReference(ForegroundProperty, "ColorBrush1")
         End If
         ColumnPaddingRight.Width = New GridLength(MinPaddingRight)
-        If CustomEventService.GetEventType(Me) = CustomEvent.EventType.打开帮助 AndAlso Not (Title <> "" AndAlso Info <> "") Then '#3266
-            Try
-                Dim Entry As New HelpEntry(CustomEvent.GetAbsoluteUrls(CustomEventService.GetEventData(Me), CustomEventService.GetEventType(Me))(0))
-                Entry.SetToListItem(Me)
-            Catch ex As Exception
-                Logger.Error(ex, "设置帮助 MyListItem 失败", LogBehavior.Alert)
-                CustomEventService.SetEventType(Me, CustomEvent.EventType.None)
-                CustomEventService.SetEventData(Me, "")
-            End Try
-        End If
     End Sub
     Public Overrides Function ToString() As String
         Return Title

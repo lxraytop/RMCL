@@ -1,4 +1,4 @@
-Imports System.Windows.Threading
+﻿Imports System.Windows.Threading
 
 Public Class PageLaunchLeft
 
@@ -95,8 +95,6 @@ Public Class PageLaunchLeft
                         Thread.Sleep(500)
                         RunInUi(Sub() FrmMain.PageChange(FormMain.PageType.Setup))
                         Thread.Sleep(500)
-                        RunInUi(Sub() FrmMain.PageChange(FormMain.PageType.Other))
-                        Thread.Sleep(500)
                         RunInUi(Sub() BtnVersion_Click())
                         Thread.Sleep(500)
                         RunInUi(Sub() BtnMore_Click())
@@ -154,7 +152,7 @@ Public Class PageLaunchLeft
         McLaunchProcess = Nothing
         McLaunchWatcher = Nothing
         '获取 “你知道吗” 提示
-        LabLaunchingHint.Text = PageOtherTest.GetRandomHint()
+        LabLaunchingHint.Text = "正在启动 Minecraft，请稍候……"
         '初始化其他页面
         PanInput.IsHitTestVisible = False
         PanLaunching.IsHitTestVisible = False
@@ -613,7 +611,6 @@ Finish:
             (FrmMain.PageRight IsNot Nothing AndAlso FrmMain.PageRight.PageState <> MyPageRight.PageStates.ContentStay AndAlso FrmMain.PageRight.PageState <> MyPageRight.PageStates.ContentEnter) Then Return
         '愚人节处理
         If IsAprilEnabled AndAlso Not IsAprilGiveup Then
-            ThemeUnlock(12, False, "隐藏主题 滑稽彩 已解锁！")
             IsAprilGiveup = True
             Settings.Set("AprilYear", Date.Now.Year)
             FrmLaunchLeft.AprilScaleTrans.ScaleX = 1

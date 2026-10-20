@@ -1,4 +1,4 @@
-<local:MyPageRight
+﻿<local:MyPageRight
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="clr-namespace:RMCL" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
@@ -114,53 +114,28 @@
                         <RowDefinition Height="28" />
                         <RowDefinition Height="9" />
                         <RowDefinition Height="28" />
-                        <RowDefinition Height="9" />
-                        <RowDefinition Height="28" />
-                        <RowDefinition Height="5" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left" Text="启动器更新" Margin="0,0,25,0" />
-                    <local:MyComboBox x:Name="ComboSystemUpdate" local:SettingService.Key="SystemSystemUpdate" Grid.Column="1">
-                        <local:MyComboBoxItem Content="在有新版本时自动下载" x:Name="ItemSystemUpdateDownload" />
-                        <local:MyComboBoxItem Content="在有新版本时显示提示" />
-                        <local:MyComboBoxItem Content="仅在有重大漏洞更新时显示提示" />
-                        <local:MyComboBoxItem Content="关闭更新提示" />
-                    </local:MyComboBox>
-                    <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left" Text="启动器公告" Margin="0,0,25,0" Grid.Row="2" />
-                    <local:MyComboBox x:Name="ComboSystemActivity" local:SettingService.Key="SystemSystemActivity" Grid.Column="1" Grid.Row="2">
+                    <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left" Text="启动器公告" Margin="0,0,25,0" />
+                    <local:MyComboBox x:Name="ComboSystemActivity" local:SettingService.Key="SystemSystemActivity" Grid.Column="1">
                         <local:MyComboBoxItem Content="显示所有公告" ToolTip="显示包括启动器功能调查、活动等在内的全部公告" />
                         <local:MyComboBoxItem Content="仅在有重要通知时显示公告" />
                         <local:MyComboBoxItem Content="关闭所有公告" />
                     </local:MyComboBox>
-                    <TextBlock Grid.Row="4" VerticalAlignment="Center" HorizontalAlignment="Left" Text="缓存文件夹" Margin="0,0,25,0" />
-                    <local:MyTextBox x:Name="TextSystemCache" Grid.Row="4" Grid.ColumnSpan="2" local:SettingService.Key="SystemSystemCache" Grid.Column="1" ToolTip="RMCL 的下载、皮肤等缓存文件的存储位置。&#xa;不推荐路径中带有空格。&#xa;留空即为默认值，重启 RMCL 后生效。" HintText="默认">
+                    <TextBlock Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Left" Text="缓存文件夹" Margin="0,0,25,0" />
+                    <local:MyTextBox x:Name="TextSystemCache" Grid.Row="2" Grid.ColumnSpan="2" local:SettingService.Key="SystemSystemCache" Grid.Column="1" ToolTip="RMCL 的下载、皮肤等缓存文件的存储位置。&#xa;不推荐路径中带有空格。&#xa;留空即为默认值，重启 RMCL 后生效。" HintText="默认">
                         <local:MyTextBox.ValidateRules>
                             <local:ValidateNullable />
                             <local:ValidateFolderPath UseMinecraftCharCheck="False" />
                         </local:MyTextBox.ValidateRules>
                     </local:MyTextBox>
-                    <local:MyCheckBox Margin="0,5,0,4" Text="匿名数据收集" Grid.Row="6" Height="22" Grid.ColumnSpan="2"
-                        x:Name="CheckSystemTelemetry" local:SettingService.Key="SystemSystemTelemetry" 
-                        ToolTip="当下载失败、RMCL 出错、游戏崩溃等事件时，RMCL 会匿名上报情况，以便更快地定位与修复问题……&#xa;你可以关闭上报。&#13;RMCL 不会上传或收集任何个人信息，包括上报的东西里面也没有！&#xa;详情：https://github.com/lxraytop/RMCL" />
-                    <Grid Height="35" Grid.Row="7" Grid.ColumnSpan="5" Margin="0,12,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
-                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
-                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
-                        </Grid.ColumnDefinitions>
-                        <local:MyButton Grid.Column="0" x:Name="BtnSystemUpdate" MinWidth="140" Text="检查更新" Padding="13,0" Margin="0,0,20,0" />
-                        <local:MyButton Grid.Column="1" x:Name="BtnSystemSettingExp" MinWidth="140" Text="导出设置" Padding="13,0" Margin="0,0,20,0" />
-                        <local:MyButton Grid.Column="2" x:Name="BtnSystemSettingImp" MinWidth="140" Text="导入设置" Padding="13,0" Margin="0,0,20,0" />
-                    </Grid>
-                    <Grid Height="35" Grid.Row="8" Grid.ColumnSpan="5" Margin="0,12,0,0" x:Name="PanDonate">
+                    <Grid Height="35" Grid.Row="3" Grid.ColumnSpan="2" Margin="0,12,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
                             <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
                         </Grid.ColumnDefinitions>
-                        <local:MyButton Grid.Column="0" x:Name="BtnSystemIdentify" MinWidth="140" Text="复制识别码" Padding="13,0" Margin="0,0,20,0" />
-                        <local:MyButton Grid.Column="1" x:Name="BtnSystemUnlock" MinWidth="140" Text="输入土豆码" Padding="13,0" Margin="0,0,20,0" />
+                        <local:MyButton Grid.Column="0" x:Name="BtnSystemSettingExp" MinWidth="140" Text="导出设置" Padding="13,0" Margin="0,0,20,0" />
+                        <local:MyButton Grid.Column="1" x:Name="BtnSystemSettingImp" MinWidth="140" Text="导入设置" Padding="13,0" Margin="0,0,20,0" />
                     </Grid>
                 </Grid>
             </local:MyCard>
