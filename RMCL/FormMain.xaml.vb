@@ -435,7 +435,7 @@ Public Class FormMain
             '上报
             '开源版本提示
             If VersionBranchMain = "OpenSource" Then
-                MyMsgBox($"该版本中无法使用以下特性：{vbCrLf}- 正版登录：需要自行向微软申请 Client ID，然后添加到 ModSecret.vb 的开头{vbCrLf}- 联网通知：需要自行部署配置服务端，避免滥用隐患", "开源版本说明")
+                MyMsgBox($"该版本中无法使用以下特性：{vbCrLf}- 联网通知：需要自行部署配置服务端，避免滥用隐患", "开源版本说明")
             End If
         End Sub, "初始化", ThreadPriority.Lowest)
 
@@ -447,10 +447,6 @@ Public Class FormMain
         If BuildType = BuildTypes.Snapshot AndAlso Settings.Get(Of Integer)("SystemCount") = 1 Then
             MyMsgBox("欢迎使用 RMCL 快照版！" & vbCrLf &
                      "快照版包含尚未在正式版发布的测试性功能，请不要用于制作整合包。", "快照版使用说明")
-        End If
-        '启动后内存优化
-        If Settings.Get(Of Boolean)("FeatureMemoryOnStart") Then
-            RunInNewThread(Sub() MemoryOptimize(), "启动内存优化", ThreadPriority.BelowNormal)
         End If
     End Sub
     '升级与降级事件

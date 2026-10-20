@@ -1160,10 +1160,19 @@ Public Module ModDownload
         Sub(Task As LoaderTask(Of Integer, List(Of ResourceVersion))) Task.Output = ResourceVersion.FromProjectId("fabric-api", ResourcePlatforms.Modrinth, LoadDependencies:=False))
 
     ''' <summary>
-    ''' OptiFabric 列表，官方源。
+    ''' OptiFabric 列表。
+    ''' 该项目只发布在 CurseForge，而 RMCL 只保留 Modrinth 源，因此这里改为尽力从 Modrinth 获取；
+    ''' 获取失败时返回空列表，避免因为一个可选组件让整个「修改」页面加载失败。
     ''' </summary>
     Public DlOptiFabricLoader As New LoaderTask(Of Integer, List(Of ResourceVersion))("OptiFabric List Loader",
-        Sub(Task As LoaderTask(Of Integer, List(Of ResourceVersion))) Task.Output = ResourceVersion.FromProjectId("322385", ResourcePlatforms.CurseForge, LoadDependencies:=False))
+        Sub(Task As LoaderTask(Of Integer, List(Of ResourceVersion)))
+            Try
+                Task.Output = ResourceVersion.FromProjectId("optifabric", ResourcePlatforms.Modrinth, LoadDependencies:=False)
+            Catch ex As Exception
+                Logger.Warn(ex, "获取 OptiFabric 列表失败，已跳过该组件")
+                Task.Output = New List(Of ResourceVersion)()
+            End Try
+        End Sub)
 
 #End Region
 

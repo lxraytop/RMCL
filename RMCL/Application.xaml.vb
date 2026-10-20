@@ -47,6 +47,20 @@ Public Class Application
                         Environment.Exit(ProcessReturnValues.Fail)
                     End Try
                 End If
+                If e.Args(0) = "--memory" Then
+                    '内存优化（由主程序以管理员权限调用），返回清理的内存量（KB）
+                    Dim RamBefore As ULong = My.Computer.Info.AvailablePhysicalMemory
+                    Try
+                        MemoryOptimizeInternal(False)
+                    Catch ex As Exception
+                        Environment.Exit(-1)
+                    End Try
+                    If My.Computer.Info.AvailablePhysicalMemory < RamBefore Then
+                        Environment.Exit(0)
+                    Else
+                        Environment.Exit((My.Computer.Info.AvailablePhysicalMemory - RamBefore) / 1024)
+                    End If
+                End If
             End If
             '初始化文件结构
             Try

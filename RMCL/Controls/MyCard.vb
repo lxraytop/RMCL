@@ -62,18 +62,28 @@ Public Class MyCard
     Public Shared ReadOnly TitleProperty As DependencyProperty = DependencyProperty.Register("Title", GetType(String), GetType(MyCard), New PropertyMetadata(""))
 
     'UI 建立
-    Private Const GlassRadius As Double = 14
+    Private Const GlassRadius As Double = 16
     Public Sub New()
         MainChrome = New MyDropShadow With {
-            .Margin = New Thickness(-6, -4, -6, -4 - GetWPFSize(1)), .ShadowRadius = 9, .Opacity = DropShadowIdleOpacity, .CornerRadius = New CornerRadius(GlassRadius)}
+            .Margin = New Thickness(-9, -7, -9, -7 - GetWPFSize(1)), .ShadowRadius = 13, .Opacity = DropShadowIdleOpacity, .CornerRadius = New CornerRadius(GlassRadius)}
         MainChrome.SetResourceReference(MyDropShadow.ColorProperty, "ColorObject1")
         MainBorder = New Border With {.CornerRadius = New CornerRadius(GlassRadius), .IsHitTestVisible = False,
                                       .BorderThickness = New Thickness(1)}
         MainBorder.SetResourceReference(Border.BackgroundProperty, "ColorBrushGlassCard")
         MainBorder.SetResourceReference(Border.BorderBrushProperty, "ColorBrushGlassRim")
+        '玻璃表面高光：自上而下由亮到透，形成镜面反射的层次感
+        Dim Sheen As New Border With {
+            .CornerRadius = New CornerRadius(GlassRadius - 1), .IsHitTestVisible = False,
+            .Background = New LinearGradientBrush With {
+                .StartPoint = New Point(0, 0), .EndPoint = New Point(0.15, 1),
+                .GradientStops = New GradientStopCollection From {
+                    New GradientStop(Color.FromArgb(88, 255, 255, 255), 0),
+                    New GradientStop(Color.FromArgb(26, 255, 255, 255), 0.4),
+                    New GradientStop(Color.FromArgb(0, 255, 255, 255), 0.72)}}}
         Children.Insert(0, MainChrome)
         Children.Insert(1, MainBorder)
         MainGrid = New Grid
+        MainGrid.Children.Add(Sheen)
         Children.Add(MainGrid)
     End Sub
     Private IsLoad As Boolean = False
@@ -139,8 +149,8 @@ Public Class MyCard
     End Sub
 
     '动画
-    Private Const DropShadowIdleOpacity As Double = 0.1
-    Private Const DropShadowHoverOpacity As Double = 0.26
+    Private Const DropShadowIdleOpacity As Double = 0.14
+    Private Const DropShadowHoverOpacity As Double = 0.3
     Public Property HasMouseAnimation As Boolean = True
     Private Sub MyCard_MouseEnter(sender As Object, e As MouseEventArgs) Handles Me.MouseEnter
         If Not HasMouseAnimation Then Return

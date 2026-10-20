@@ -14,7 +14,7 @@
         Reload()
         AniControlEnabled -= 1
 
-        ScanJunk(False)
+        RefreshJunkInfo()
     End Sub
     Public Sub Reload()
         SettingService.RefreshSettings(Me)
@@ -37,7 +37,8 @@
             Dim Available As Long = CLng(Math.Round(My.Computer.Info.AvailablePhysicalMemory / 1024 / 1024))
             Dim Total As Long = CLng(Math.Round(My.Computer.Info.TotalPhysicalMemory / 1024 / 1024))
             LabMemoryInfo.Text = $"启动器当前占用：{MemoryUsedMb()} MB" & vbCrLf &
-                                 $"系统可用内存：{Available} MB / 共 {Total} MB"
+                                 $"系统可用内存：{Available} MB / 共 {Total} MB" & vbCrLf &
+                                 $"管理员权限：{If(WindowsUtils.HasAdminRole(), "已获取", "未获取（优化时会弹出 UAC 提示）")}"
         Catch ex As Exception
             Logger.Warn(ex, "读取内存信息失败")
             LabMemoryInfo.Text = "无法读取内存信息。"
@@ -51,13 +52,12 @@
 
     Private Sub BtnMemoryOptimize_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnMemoryOptimize.Click
         If Not BtnMemoryOptimize.IsEnabled Then Return
-        Dim Before As Long = MemoryUsedMb()
         BtnMemoryOptimize.IsEnabled = False
         BtnMemoryOptimize.Text = "正在优化……"
         RunInNewThread(
         Sub()
             Try
-                MemoryOptimize()
+                MemoryOptimize(True)
             Catch ex As Exception
                 Logger.Warn(ex, "内存优化失败")
             Finally
@@ -66,8 +66,6 @@
                     BtnMemoryOptimize.Text = "立即优化内存"
                     BtnMemoryOptimize.IsEnabled = True
                     RefreshMemoryInfo()
-                    Dim Freed As Long = Math.Max(0L, Before - MemoryUsedMb())
-                    Hint($"内存优化完成，释放约 {Freed} MB", HintType.Green)
                 End Sub)
             End Try
         End Sub, "内存优化")
@@ -77,58 +75,47 @@
 
 #Region "清理游戏垃圾"
 
-    ''' <summary>
-    ''' 统计各清理位置占用的空间。
-    ''' </summary>
-    Private Sub ScanJunk(Optional ShowHint As Boolean = True)
-        Dim Details As New List(Of String)
-        Dim Total As Long = 0
-        For Each Target In GetCleanTargets()
-            Dim Size As Long = GetCleanTargetSize(Target)
-            Total += Size
-            Details.Add($"{Target.Name}：{FormatSize(Size)}")
-        Next
-        LabJunkInfo.Text = $"可释放空间合计：{FormatSize(Total)}" & vbCrLf & Details.Join(vbCrLf)
-        If ShowHint Then Hint("扫描完成", HintType.Green, False)
+    Private Sub RefreshJunkInfo()
+        Try
+            Dim Summary = GetRubbishSummary()
+            LabJunkInfo.Text = $"可清理空间合计：{FormatSize(Summary.Total)}" & vbCrLf & Summary.Details.Join(vbCrLf)
+        Catch ex As Exception
+            Logger.Warn(ex, "统计垃圾文件失败")
+            LabJunkInfo.Text = "无法统计垃圾文件。"
+        End Try
     End Sub
 
-    Private Sub BtnJunkScan_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnJunkScan.Click
-        If Not BtnJunkScan.IsEnabled Then Return
-        BtnJunkScan.IsEnabled = False
+    Private Sub BtnJunkRefresh_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnJunkRefresh.Click
+        If Not BtnJunkRefresh.IsEnabled Then Return
+        BtnJunkRefresh.IsEnabled = False
         RunInNewThread(
         Sub()
             Try
-                ScanJunk()
+                RefreshJunkInfo()
             Finally
-                RunInUi(Sub() BtnJunkScan.IsEnabled = True)
+                RunInUi(Sub() BtnJunkRefresh.IsEnabled = True)
             End Try
-        End Sub, "扫描垃圾")
+        End Sub, "统计垃圾")
     End Sub
 
     Private Sub BtnJunkClean_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnJunkClean.Click
         If Not BtnJunkClean.IsEnabled Then Return
-        If Not (Settings.Get(Of Boolean)("FeatureCleanTemp") OrElse Settings.Get(Of Boolean)("FeatureCleanCache") OrElse
-                Settings.Get(Of Boolean)("FeatureCleanLog")) Then
-            Hint("请先勾选至少一项要清理的内容！", HintType.Red)
-            Return
-        End If
-        If MyMsgBox("确定要清理勾选的内容吗？该操作不可撤销。", "清理确认", "清理", "取消", IsWarn:=True) <> 1 Then Return
+        If MyMsgBox("即将清理临时文件、下载缓存与启动器日志。" & vbCrLf &
+                    "清理不会影响已安装的 Minecraft 版本、Mod 与存档，该操作不可撤销。", "清理游戏垃圾", "清理", "取消") <> 1 Then Return
         BtnJunkClean.IsEnabled = False
         BtnJunkClean.Text = "正在清理……"
         RunInNewThread(
         Sub()
-            Dim Freed As Long = 0
             Try
-                Freed = CleanCheckedJunk()
+                RubbishClear(True)
             Catch ex As Exception
-                Logger.Warn(ex, "清理垃圾失败")
+                Logger.Warn(ex, "清理游戏垃圾失败")
             Finally
                 RunInUi(
                 Sub()
-                    BtnJunkClean.Text = "立即清理"
+                    BtnJunkClean.Text = "清理垃圾"
                     BtnJunkClean.IsEnabled = True
-                    ScanJunk(False)
-                    Hint($"清理完成，释放约 {FormatSize(Freed)}", HintType.Green)
+                    RefreshJunkInfo()
                 End Sub)
             End Try
         End Sub, "清理垃圾")

@@ -7,7 +7,7 @@ Friend Module ModSecret
     '在开源版的注册表与常规版的注册表隔离，以防数据冲突
     Public Const RegFolder As String = "RMCLDebug"
     '用于微软登录的 ClientId
-    Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("RMCL_MS_CLIENT_ID"), "")
+    Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("RMCL_MS_CLIENT_ID"), "ab25b229-f826-46db-b646-01035c3a3e52")
     'CurseForge API Key
     Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("RMCL_CURSEFORGE_API_KEY"), "")
 
@@ -149,30 +149,72 @@ Friend Module ModSecret
         RunInUi(
         Sub()
             If Not FrmMain.IsLoaded Then Return
-            Dim Deltas = ColorHueTopbarDelta.Switch(Function(d) New Integer() {-d, 0, d}, Function(d) d)
-            '顶部条：半透明彩色玻璃（斜向渐变形成高光层次）
-            Dim BarBrush As New LinearGradientBrush With {.EndPoint = New Point(1, 1), .StartPoint = New Point(0, 0)}
-            BarBrush.GradientStops.Add(New GradientStop With {.Offset = 0, .Color = New MyColor(224, New MyColor().FromHSL2(ColorHue + Deltas(0), ColorSat * 0.92, 56 + ColorLightAdjust))})
-            BarBrush.GradientStops.Add(New GradientStop With {.Offset = 0.45, .Color = New MyColor(216, New MyColor().FromHSL2(ColorHue + Deltas(1), ColorSat, 54 + ColorLightAdjust))})
-            BarBrush.GradientStops.Add(New GradientStop With {.Offset = 1, .Color = New MyColor(228, New MyColor().FromHSL2(ColorHue + Deltas(2), ColorSat, 47 + ColorLightAdjust))})
+            '顶部条：浅色半透明玻璃，只保留极淡的主题色调，避免高饱和色块压住内容
+            Dim BarBrush As New LinearGradientBrush With {.EndPoint = New Point(0, 1), .StartPoint = New Point(0, 0)}
+            BarBrush.GradientStops.Add(New GradientStop With {.Offset = 0, .Color = New MyColor(250, New MyColor().FromHSL2(ColorHue, ColorSat * 0.35, 98))})
+            BarBrush.GradientStops.Add(New GradientStop With {.Offset = 0.55, .Color = New MyColor(242, New MyColor().FromHSL2(ColorHue, ColorSat * 0.5, 96))})
+            BarBrush.GradientStops.Add(New GradientStop With {.Offset = 1, .Color = New MyColor(232, New MyColor().FromHSL2(ColorHue, ColorSat * 0.65, 93))})
             FrmMain.PanTitle.Background = BarBrush
             FrmMain.PanTitle.Background.Freeze()
-            '主页面：低饱和彩色薄雾底，让半透明玻璃卡片有可辨识的折射层次
-            Dim BackBrush As New LinearGradientBrush With {.EndPoint = New Point(1, 1), .StartPoint = New Point(0, 0)}
-            If Settings.Get(Of Boolean)("UiBackgroundColorful") Then
-                BackBrush.GradientStops.Add(New GradientStop With {.Offset = -0.15, .Color = New MyColor().FromHSL2(ColorHue - 18, ColorSat * 0.75, 94)})
-                BackBrush.GradientStops.Add(New GradientStop With {.Offset = 0.45, .Color = New MyColor().FromHSL2(ColorHue, ColorSat * 0.45, 97)})
-                BackBrush.GradientStops.Add(New GradientStop With {.Offset = 1.15, .Color = New MyColor().FromHSL2(ColorHue + 22, ColorSat * 0.8, 93)})
-            Else
-                BackBrush.GradientStops.Add(New GradientStop With {.Offset = 0, .Color = New MyColor(247, 248, 250)})
-                BackBrush.GradientStops.Add(New GradientStop With {.Offset = 1, .Color = New MyColor(240, 242, 246)})
-            End If
-            FrmMain.PanForm.Background = BackBrush
-            FrmMain.PanForm.Background.Freeze()
+            '主区域：底色 + 多层柔光光斑，给半透明玻璃提供可折射的层次
+            FrmMain.PanForm.Background = BuildMeshBackground()
             '侧栏玻璃色
-            Application.Current.Resources("ColorBrushGlassSidebar") = New SolidColorBrush(New MyColor(190, New MyColor().FromHSL2(ColorHue, ColorSat * 0.5, 98)))
+            Application.Current.Resources("ColorBrushGlassSidebar") = New SolidColorBrush(New MyColor(122, New MyColor().FromHSL2(ColorHue, ColorSat * 0.22, 99)))
         End Sub)
     End Sub
+
+    ''' <summary>
+    ''' 生成「极光」式背景：一层柔和的底色，叠加多个相对坐标的径向光斑。
+    ''' 相比单条线性渐变，这种多层柔光能让上方的半透明玻璃卡片呈现出明显的折射与层次。
+    ''' </summary>
+    Private Function BuildMeshBackground() As DrawingBrush
+        Dim Group As New DrawingGroup
+        '底色
+        Dim Base As New LinearGradientBrush With {.StartPoint = New Point(0, 0), .EndPoint = New Point(1, 1)}
+        If Settings.Get(Of Boolean)("UiBackgroundColorful") Then
+            Base.GradientStops.Add(New GradientStop With {.Offset = 0, .Color = New MyColor().FromHSL2(ColorHue - 8, ColorSat * 0.72, 95)})
+            Base.GradientStops.Add(New GradientStop With {.Offset = 0.5, .Color = New MyColor().FromHSL2(ColorHue + 4, ColorSat * 0.5, 93)})
+            Base.GradientStops.Add(New GradientStop With {.Offset = 1, .Color = New MyColor().FromHSL2(ColorHue + 22, ColorSat * 0.78, 95)})
+        Else
+            Base.GradientStops.Add(New GradientStop With {.Offset = 0, .Color = New MyColor(247, 248, 250)})
+            Base.GradientStops.Add(New GradientStop With {.Offset = 1, .Color = New MyColor(236, 238, 242)})
+        End If
+        Group.Children.Add(New GeometryDrawing(Base, Nothing, New RectangleGeometry(New Rect(0, 0, 1, 1))))
+        '柔光光斑
+        If Settings.Get(Of Boolean)("UiBackgroundColorful") Then
+            Group.Children.Add(New GeometryDrawing(BlobBrush(0.04, -0.02, 1.05, ColorHue - 18, ColorSat * 0.85, 84, 190), Nothing, New RectangleGeometry(New Rect(0, 0, 1, 1))))
+            Group.Children.Add(New GeometryDrawing(BlobBrush(0.92, 0.06, 0.95, ColorHue + 42, ColorSat * 0.7, 86, 148), Nothing, New RectangleGeometry(New Rect(0, 0, 1, 1))))
+            Group.Children.Add(New GeometryDrawing(BlobBrush(0.55, 1.08, 1.0, ColorHue + 12, ColorSat * 0.6, 88, 116), Nothing, New RectangleGeometry(New Rect(0, 0, 1, 1))))
+        Else
+            Group.Children.Add(New GeometryDrawing(BlobBrush(0.08, -0.05, 1.0, ColorHue, 0, 92, 130), Nothing, New RectangleGeometry(New Rect(0, 0, 1, 1))))
+            Group.Children.Add(New GeometryDrawing(BlobBrush(0.95, 1.0, 0.95, ColorHue, 0, 88, 96), Nothing, New RectangleGeometry(New Rect(0, 0, 1, 1))))
+        End If
+        Dim Brush As New DrawingBrush(Group) With {
+            .Stretch = Stretch.Fill,
+            .Viewbox = New Rect(0, 0, 1, 1),
+            .Viewport = New Rect(0, 0, 1, 1),
+            .ViewportUnits = BrushMappingMode.RelativeToBoundingBox,
+            .TileMode = TileMode.None}
+        Brush.Freeze()
+        Return Brush
+    End Function
+
+    ''' <summary>
+    ''' 单个柔光光斑。
+    ''' </summary>
+    Private Function BlobBrush(CenterX As Double, CenterY As Double, Radius As Double,
+                               Hue As Integer, Sat As Double, Light As Integer, Alpha As Integer) As RadialGradientBrush
+        Dim Color As MyColor = New MyColor().FromHSL2(Hue, Sat, Light)
+        Dim Brush As New RadialGradientBrush With {
+            .MappingMode = BrushMappingMode.RelativeToBoundingBox,
+            .Center = New Point(CenterX, CenterY),
+            .GradientOrigin = New Point(CenterX, CenterY),
+            .RadiusX = Radius, .RadiusY = Radius}
+        Brush.GradientStops.Add(New GradientStop With {.Offset = 0, .Color = New MyColor(Alpha, Color)})
+        Brush.GradientStops.Add(New GradientStop With {.Offset = 0.55, .Color = New MyColor(CInt(Alpha * 0.42), Color)})
+        Brush.GradientStops.Add(New GradientStop With {.Offset = 1, .Color = New MyColor(0, Color)})
+        Return Brush
+    End Function
 #End Region
 
 #Region "更新"
