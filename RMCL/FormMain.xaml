@@ -88,7 +88,7 @@
         </Rectangle>
         <Border Margin="8" x:Name="BorderForm">
             <Border.Clip>
-                <RectangleGeometry x:Name="RectForm" RadiusX="6" RadiusY="6" />
+                <RectangleGeometry x:Name="RectForm" RadiusX="12" RadiusY="12" />
             </Border.Clip>
             <Grid x:Name="PanForm" SnapsToDevicePixels="False" UseLayoutRounding="False">
                 <Grid.RowDefinitions>
@@ -114,7 +114,7 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="1*" />
                         </Grid.ColumnDefinitions>
-                        <Path x:Name="ShapeTitleLogo" Data="M26,29 v-25 h6 a7,7 180 0 1 0,14 h-6 M62.5,6.5 a10,11.5 180 1 0 0,18 M71,2.5 v24.5 h13.5" SnapsToDevicePixels="False" UseLayoutRounding="False" IsHitTestVisible="False" HorizontalAlignment="Left" Margin="19,15.5,0,15.5" Stretch="fill" Stroke="White" StrokeThickness="2.2" Width="39" />
+                        <Path x:Name="ShapeTitleLogo" Data="M0,5 V29 M0,5 H6 A6,6 0 0 1 6,17 H0 M6,17 L11,29 M16,29 V5 L24,22 L32,5 V29 M56,9 A9,10 0 1 0 56,25 M62,5 V29 H74" SnapsToDevicePixels="False" UseLayoutRounding="False" IsHitTestVisible="False" HorizontalAlignment="Left" Margin="19,15.5,0,15.5" Stretch="Uniform" Stroke="White" StrokeThickness="2.2" Width="54" />
                         <TextBlock x:Name="LabTitleLogo" Visibility="Collapsed" SnapsToDevicePixels="False" UseLayoutRounding="False" IsHitTestVisible="False" HorizontalAlignment="Left" Margin="18,0,0,0" Foreground="White" FontSize="17" VerticalAlignment="Center" />
                         <local:MyImage x:Name="ImageTitleLogo" SnapsToDevicePixels="False" UseLayoutRounding="False" IsHitTestVisible="False" HorizontalAlignment="Left" Margin="7" VerticalAlignment="Center" Visibility="Collapsed" />
                         <StackPanel Grid.Column="1" x:Name="PanTitleSelect" HorizontalAlignment="Left" Height="27" VerticalAlignment="Center" Orientation="Horizontal" Margin="13,0">
@@ -133,13 +133,23 @@
                                              LogoScale="0.87" Logo="M1097 584 250 584 562 896C591 925 591 972 562 1001 533 1030 487 1030 458 1001L21 565C6 550-0 531 0 511L0 511 0 511C-0 492 6 472 21 457L458 21C487-7 533-7 562 21 591 50 591 97 562 126L250 438 1097 438C1137 438 1170 471 1170 511 1170 551 1137 584 1097 584L1097 584Z" />
                         <TextBlock SnapsToDevicePixels="False" IsHitTestVisible="False" Name="LabTitleInner" VerticalAlignment="Center" Margin="47,1,60,0" HorizontalAlignment="Left" Foreground="{DynamicResource ColorBrush8}" FontSize="15" />
                     </Grid>
+                    <!-- 玻璃高光：顶栏顶部提亮 + 底部分隔发丝线 -->
+                    <Rectangle Height="18" VerticalAlignment="Top" IsHitTestVisible="False">
+                        <Rectangle.Fill>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#33FFFFFF" Offset="0" />
+                                <GradientStop Color="#00FFFFFF" Offset="1" />
+                            </LinearGradientBrush>
+                        </Rectangle.Fill>
+                    </Rectangle>
+                    <Rectangle Height="1" VerticalAlignment="Bottom" IsHitTestVisible="False" Fill="{DynamicResource ColorBrushGlassHairline}" />
                 </Grid>
                 <Grid x:Name="PanLeft" Grid.Row="1" HorizontalAlignment="Left" SnapsToDevicePixels="True">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="1*"/>
                     </Grid.ColumnDefinitions>
-                    <Rectangle x:Name="RectLeftBackground" Width="0" Fill="{DynamicResource ColorBrushBackgroundTransparentSidebar}" IsHitTestVisible="False" />
+                    <Rectangle x:Name="RectLeftBackground" Width="0" Fill="{DynamicResource ColorBrushGlassSidebar}" IsHitTestVisible="False" />
                     <Rectangle x:Name="RectLeftShadow" Width="4" HorizontalAlignment="Left" IsHitTestVisible="False" Grid.Column="1" >
                         <Rectangle.Fill>
                             <LinearGradientBrush EndPoint="1,0" StartPoint="0,0" Opacity="0.04">

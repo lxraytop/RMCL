@@ -62,19 +62,60 @@ Friend Module ModSecret
     Public ColorHue As Integer = 210, ColorSat As Integer = 85, ColorLightAdjust As Integer = 0, ColorHueTopbarDelta As OneOf(Of Integer, Integer()) = 0
     Public ThemeDontClick As Integer = 0
 
+    ''' <summary>
+    ''' 可用主题：编号 → {色相, 饱和度, 亮度偏移, 顶栏渐变差}。
+    ''' 仅保留蓝、青、绿、黄、红五种预设颜色，其余由“自定义”提供。
+    ''' </summary>
+    Public ReadOnly ThemePresets As New Dictionary(Of Integer, Integer()) From {
+        {0, New Integer() {210, 85, 0, 0}},   ' 蓝
+        {1, New Integer() {186, 76, 0, 0}},   ' 青
+        {2, New Integer() {142, 62, 0, 0}},   ' 绿
+        {3, New Integer() {45, 82, 0, 0}},    ' 黄
+        {10, New Integer() {356, 74, 0, 0}}   ' 红
+    }
+    Public Const ThemeCustom As Integer = 14
+
+    ''' <summary>
+    ''' 将数值限制在指定区间内（.NET Framework 4.8 无 Math.Clamp）。
+    ''' </summary>
+    Private Function ClampInt(Value As Integer, Min As Integer, Max As Integer) As Integer
+        If Value < Min Then Return Min
+        If Value > Max Then Return Max
+        Return Value
+    End Function
+
+    ''' <summary>
+    ''' 根据当前主题编号刷新全局配色。
+    ''' </summary>
     Public Sub ThemeRefresh(Optional NewTheme As Integer = -1)
         Try
-            If ThemeNow = NewTheme AndAlso NewTheme >= 0 Then Return
             If NewTheme >= 0 Then ThemeNow = NewTheme
+            If ThemeNow < 0 Then ThemeNow = Settings.Get(Of Integer)("UiLauncherTheme")
+
+            '解析主题参数
+            If ThemeNow = ThemeCustom Then
+                '自定义：直接读取 HSL 滑块
+                ColorHue = ClampInt(Settings.Get(Of Integer)("UiLauncherHue"), 0, 360)
+                ColorSat = ClampInt(Settings.Get(Of Integer)("UiLauncherSat"), 0, 100)
+                ColorLightAdjust = ClampInt(Settings.Get(Of Integer)("UiLauncherLight"), 0, 40) - 20
+                ColorHueTopbarDelta = CInt(ClampInt(Settings.Get(Of Integer)("UiLauncherDelta"), 0, 180) * 0.3)
+            Else
+                Dim Preset As Integer() = Nothing
+                If Not ThemePresets.TryGetValue(ThemeNow, Preset) Then Preset = ThemePresets(0) '未知主题回退为蓝色
+                ColorHue = Preset(0)
+                ColorSat = Preset(1)
+                ColorLightAdjust = Preset(2)
+                ColorHueTopbarDelta = Preset(3)
+            End If
 
             Color1 = New MyColor().FromHSL2(ColorHue, ColorSat * 0.2, 25 + ColorLightAdjust * 0.3)
             Color2 = New MyColor().FromHSL2(ColorHue, ColorSat, 45 + ColorLightAdjust)
             Color3 = New MyColor().FromHSL2(ColorHue, ColorSat, 55 + ColorLightAdjust)
             Color4 = New MyColor().FromHSL2(ColorHue, ColorSat, 65 + ColorLightAdjust)
             Color5 = New MyColor().FromHSL2(ColorHue, ColorSat, 80 + ColorLightAdjust * 0.4)
-            Color6 = New MyColor().FromHSL2(ColorHue, ColorSat, 91 + ColorLightAdjust * 0.1)
-            Color7 = New MyColor().FromHSL2(ColorHue, ColorSat, 95)
-            Color8 = New MyColor().FromHSL2(ColorHue, ColorSat, 97)
+            Color6 = New MyColor(236, New MyColor().FromHSL2(ColorHue, ColorSat, 91 + ColorLightAdjust * 0.1))
+            Color7 = New MyColor(216, New MyColor().FromHSL2(ColorHue, ColorSat, 95))
+            Color8 = New MyColor(190, New MyColor().FromHSL2(ColorHue, ColorSat, 97))
             ColorBg0 = Color4 * 0.4 + Color5 * 0.4 + ColorGray4 * 0.2
             ColorBg1 = New MyColor(190, Color7)
 
@@ -108,25 +149,28 @@ Friend Module ModSecret
         RunInUi(
         Sub()
             If Not FrmMain.IsLoaded Then Return
-            '顶部条背景
-            Dim Brush = New LinearGradientBrush With {.EndPoint = New Point(1, 0), .StartPoint = New Point(0, 0)}
             Dim Deltas = ColorHueTopbarDelta.Switch(Function(d) New Integer() {-d, 0, d}, Function(d) d)
-            Brush.GradientStops.Add(New GradientStop With {.Offset = 0, .Color = New MyColor().FromHSL2(ColorHue + Deltas(0), ColorSat, 48 + ColorLightAdjust)})
-            Brush.GradientStops.Add(New GradientStop With {.Offset = 0.5, .Color = New MyColor().FromHSL2(ColorHue + Deltas(1), ColorSat, 54 + ColorLightAdjust)})
-            Brush.GradientStops.Add(New GradientStop With {.Offset = 1, .Color = New MyColor().FromHSL2(ColorHue + Deltas(2), ColorSat, 48 + ColorLightAdjust)})
-            FrmMain.PanTitle.Background = Brush
+            '顶部条：半透明彩色玻璃（斜向渐变形成高光层次）
+            Dim BarBrush As New LinearGradientBrush With {.EndPoint = New Point(1, 1), .StartPoint = New Point(0, 0)}
+            BarBrush.GradientStops.Add(New GradientStop With {.Offset = 0, .Color = New MyColor(224, New MyColor().FromHSL2(ColorHue + Deltas(0), ColorSat * 0.92, 56 + ColorLightAdjust))})
+            BarBrush.GradientStops.Add(New GradientStop With {.Offset = 0.45, .Color = New MyColor(216, New MyColor().FromHSL2(ColorHue + Deltas(1), ColorSat, 54 + ColorLightAdjust))})
+            BarBrush.GradientStops.Add(New GradientStop With {.Offset = 1, .Color = New MyColor(228, New MyColor().FromHSL2(ColorHue + Deltas(2), ColorSat, 47 + ColorLightAdjust))})
+            FrmMain.PanTitle.Background = BarBrush
             FrmMain.PanTitle.Background.Freeze()
-            '主页面背景
+            '主页面：低饱和彩色薄雾底，让半透明玻璃卡片有可辨识的折射层次
+            Dim BackBrush As New LinearGradientBrush With {.EndPoint = New Point(1, 1), .StartPoint = New Point(0, 0)}
             If Settings.Get(Of Boolean)("UiBackgroundColorful") Then
-                Brush = New LinearGradientBrush With {.EndPoint = New Point(0.1, 1), .StartPoint = New Point(0.9, 0)}
-                Brush.GradientStops.Add(New GradientStop With {.Offset = -0.1, .Color = New MyColor().FromHSL2(ColorHue - 15, ColorSat * 0.8, 91)})
-                Brush.GradientStops.Add(New GradientStop With {.Offset = 0.4, .Color = New MyColor().FromHSL2(ColorHue, ColorSat * 0.8, 91)})
-                Brush.GradientStops.Add(New GradientStop With {.Offset = 1.1, .Color = New MyColor().FromHSL2(ColorHue + 15, ColorSat * 0.8, 91)})
-                FrmMain.PanForm.Background = Brush
+                BackBrush.GradientStops.Add(New GradientStop With {.Offset = -0.15, .Color = New MyColor().FromHSL2(ColorHue - 18, ColorSat * 0.75, 94)})
+                BackBrush.GradientStops.Add(New GradientStop With {.Offset = 0.45, .Color = New MyColor().FromHSL2(ColorHue, ColorSat * 0.45, 97)})
+                BackBrush.GradientStops.Add(New GradientStop With {.Offset = 1.15, .Color = New MyColor().FromHSL2(ColorHue + 22, ColorSat * 0.8, 93)})
             Else
-                FrmMain.PanForm.Background = New MyColor(245, 245, 245)
+                BackBrush.GradientStops.Add(New GradientStop With {.Offset = 0, .Color = New MyColor(247, 248, 250)})
+                BackBrush.GradientStops.Add(New GradientStop With {.Offset = 1, .Color = New MyColor(240, 242, 246)})
             End If
+            FrmMain.PanForm.Background = BackBrush
             FrmMain.PanForm.Background.Freeze()
+            '侧栏玻璃色
+            Application.Current.Resources("ColorBrushGlassSidebar") = New SolidColorBrush(New MyColor(190, New MyColor().FromHSL2(ColorHue, ColorSat * 0.5, 98)))
         End Sub)
     End Sub
 #End Region

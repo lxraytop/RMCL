@@ -36,5 +36,13 @@
                 </x:Array>
             </local:MyListItem.Buttons>
         </local:MyListItem>
+        <local:MyListItem x:Name="ItemFeature" IsScaleAnimationEnabled="False" Tag="4" MinPaddingRight="35" Height="36" VerticalAlignment="Top" Title="功能" Type="RadioBox"
+            LogoScale="0.85" Logo="M320,0 L48,570 H236 L118,1024 L952,412 H572 L806,0 Z">
+            <local:MyListItem.Buttons>
+                <x:Array Type="{x:Type local:MyIconButton}">
+                    <local:MyIconButton Tag="4" ToolTip="初始化本页设置" ToolTipService.InitialShowDelay="200" Click="Reset" Logo="M530 0c287 0 521 229 521 511s-233 511-521 511c-233 0-436-151-500-368a63 63 0 0 1 44-79 65 65 0 0 1 80 43c48 162 200 276 375 276 215 0 390-171 390-383s-174-383-390-383c-103 0-199 39-270 106l21-5a63 63 0 0 1 33 123l-157 42a65 65 0 0 1-90-42l-49-183a65 65 0 1 1 126-33l6 26A524 524 0 0 1 530 0z" LogoScale="0.9" />
+                </x:Array>
+            </local:MyListItem.Buttons>
+        </local:MyListItem>
     </StackPanel>
 </local:MyPageLeft>

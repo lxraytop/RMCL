@@ -361,10 +361,6 @@ Public Class FormMain
         Resizer.addResizerRightDown(ResizerRB)
         Resizer.addResizerRightUp(ResizerRT)
         Resizer.addResizerUp(ResizerT)
-        'PLC 彩蛋
-        If RandomInteger(1, 1000) = 233 Then
-            ShapeTitleLogo.Data = New GeometryConverter().ConvertFromString("M26,29 v-25 h6 a7,7 180 0 1 0,14 h-6 M83,6.5 a10,11.5 180 1 0 0,18 M48,2.5 v24.5 h13.5")
-        End If
         '加载窗口
         ThemeRefreshMain()
         Try
@@ -439,7 +435,7 @@ Public Class FormMain
             '上报
             '开源版本提示
             If VersionBranchMain = "OpenSource" Then
-                MyMsgBox($"该版本中无法使用以下特性：{vbCrLf}- CurseForge API 调用：需要自行申请 API Key，然后添加到 ModSecret.vb 的开头{vbCrLf}- 正版登录：需要自行向微软申请 Client ID，然后添加到 ModSecret.vb 的开头{vbCrLf}- 联网通知：需要自行部署配置服务端，避免滥用隐患", "开源版本说明")
+                MyMsgBox($"该版本中无法使用以下特性：{vbCrLf}- 正版登录：需要自行向微软申请 Client ID，然后添加到 ModSecret.vb 的开头{vbCrLf}- 联网通知：需要自行部署配置服务端，避免滥用隐患", "开源版本说明")
             End If
         End Sub, "初始化", ThreadPriority.Lowest)
 
@@ -451,6 +447,10 @@ Public Class FormMain
         If BuildType = BuildTypes.Snapshot AndAlso Settings.Get(Of Integer)("SystemCount") = 1 Then
             MyMsgBox("欢迎使用 RMCL 快照版！" & vbCrLf &
                      "快照版包含尚未在正式版发布的测试性功能，请不要用于制作整合包。", "快照版使用说明")
+        End If
+        '启动后内存优化
+        If Settings.Get(Of Boolean)("FeatureMemoryOnStart") Then
+            RunInNewThread(Sub() MemoryOptimize(), "启动内存优化", ThreadPriority.BelowNormal)
         End If
     End Sub
     '升级与降级事件
@@ -1205,6 +1205,7 @@ Public Class FormMain
         SetupLink = 1
         SetupUI = 2
         SetupSystem = 3
+        SetupFeature = 4
         LinkMain = 0
         InstanceOverall = 0
         InstanceSetup = 1

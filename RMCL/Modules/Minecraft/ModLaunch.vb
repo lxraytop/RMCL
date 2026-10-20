@@ -208,9 +208,7 @@ NextInner:
         RunInNewThread(
         Sub()
             Try
-                GC.Collect()
-                GC.WaitForPendingFinalizers()
-                GC.Collect()
+                MemoryOptimize()
             Catch ex As Exception
                 McLaunchLog("内存优化失败：" & ex.Message)
             End Try

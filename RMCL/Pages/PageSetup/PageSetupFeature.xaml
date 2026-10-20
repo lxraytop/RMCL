@@ -1,0 +1,42 @@
+﻿<local:MyPageRight
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:RMCL" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+    mc:Ignorable="d" x:Class="PageSetupFeature"
+    PanScroll="PanBack">
+    <local:MyScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" x:Name="PanBack">
+        <StackPanel x:Name="PanMain" Margin="25,10">
+            <local:MyCard Margin="0,15" Title="内存优化">
+                <StackPanel Margin="25,40,25,18">
+                    <TextBlock Text="强制回收启动器的闲置内存并交还给系统，可缓解长时间使用后界面卡顿的问题。Minecraft 运行期间不要频繁执行，以免影响游戏性能。"
+                               TextWrapping="Wrap" Margin="0,0,0,12" />
+                    <Border Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="10" Padding="14,10" Margin="0,0,0,12">
+                        <TextBlock x:Name="LabMemoryInfo" TextWrapping="Wrap" LineHeight="19" Text="正在读取内存信息……" />
+                    </Border>
+                    <local:MyCheckBox local:SettingService.Key="LaunchArgumentRam" Text="启动游戏前自动优化内存（与「启动」页共用同一开关）" Margin="-1,0,0,7" Height="22" />
+                    <local:MyCheckBox local:SettingService.Key="FeatureMemoryOnStart" Text="启动器启动后自动优化一次内存" Margin="-1,0,0,11" Height="22" />
+                    <StackPanel Orientation="Horizontal">
+                        <local:MyButton x:Name="BtnMemoryOptimize" Text="立即优化内存" MinWidth="140" Padding="13,0" ColorType="Highlight" Margin="0,0,20,0" />
+                        <local:MyButton x:Name="BtnMemoryRefresh" Text="刷新信息" MinWidth="110" Padding="13,0" />
+                    </StackPanel>
+                </StackPanel>
+            </local:MyCard>
+            <local:MyCard Margin="0,0,0,15" Title="清理游戏垃圾">
+                <StackPanel Margin="25,40,25,18">
+                    <TextBlock Text="清理安装与下载过程中产生的临时文件、日志与缓存。清理不会影响已经安装的 Minecraft 版本与存档。"
+                               TextWrapping="Wrap" Margin="0,0,0,12" />
+                    <local:MyCheckBox local:SettingService.Key="FeatureCleanTemp" Text="临时文件（安装、解压产生的中间文件）" Margin="-1,0,0,7" Height="22" />
+                    <local:MyCheckBox local:SettingService.Key="FeatureCleanCache" Text="下载缓存（已下载的资源与版本文件）" Margin="-1,0,0,7" Height="22" />
+                    <local:MyCheckBox local:SettingService.Key="FeatureCleanLog" Text="启动器日志（RMCL 目录下的 Log*.txt）" Margin="-1,0,0,11" Height="22" />
+                    <Border Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="10" Padding="14,10" Margin="0,0,0,12">
+                        <TextBlock x:Name="LabJunkInfo" TextWrapping="Wrap" LineHeight="19" Text="点击「扫描」以统计可释放的空间。" />
+                    </Border>
+                    <StackPanel Orientation="Horizontal">
+                        <local:MyButton x:Name="BtnJunkScan" Text="扫描" MinWidth="110" Padding="13,0" Margin="0,0,20,0" />
+                        <local:MyButton x:Name="BtnJunkClean" Text="立即清理" MinWidth="140" Padding="13,0" ColorType="Red" />
+                    </StackPanel>
+                </StackPanel>
+            </local:MyCard>
+        </StackPanel>
+    </local:MyScrollViewer>
+</local:MyPageRight>

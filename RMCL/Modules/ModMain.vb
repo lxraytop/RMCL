@@ -386,11 +386,12 @@ EndHint:
     Public FrmDownloadResourcePack As PageDownloadResourcePack
 
     '设置页面声明
-    Public FrmSetupLeft As PageSetupLeft
-    Public FrmSetupLaunch As PageSetupLaunch
-    Public FrmSetupUI As PageSetupUI
-    Public FrmSetupSystem As PageSetupSystem
-    Public FrmSetupLink As PageSetupLink
+Public FrmSetupLeft As PageSetupLeft
+Public FrmSetupLaunch As PageSetupLaunch
+Public FrmSetupUI As PageSetupUI
+Public FrmSetupSystem As PageSetupSystem
+Public FrmSetupLink As PageSetupLink
+Public FrmSetupFeature As PageSetupFeature
 
     '登录页面声明
     Public FrmLoginLegacy As PageLoginLegacy

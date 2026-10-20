@@ -79,7 +79,41 @@
 - 联机节点列表接口 `easytier.meloong.com` 与 Minecraft 新闻源 `mcnews.meloong.com` 为外部服务地址，
   不属于品牌文案，保留以保证功能可用。
 
-## 八、构建与推送
+## 八、第三轮：液态玻璃 UI 与功能页（当前 HEAD）
+
+### 8.1 新增「设置 → 功能」子页
+
+| 位置 | 说明 |
+| --- | --- |
+| `Pages/PageSetup/PageSetupFeature.xaml(.vb)` | 新建页面：内存优化 + 清理游戏垃圾两块卡片 |
+| `Modules/ModFeature.vb` | 通用实现：`MemoryUsedMb` / `MemoryOptimize` / `CleanItem` / `GetCleanTargets` / `CleanCheckedJunk` / `FormatSize` |
+| `PageSetupLeft.xaml(.vb)` | 新增第 5 个导航项 `ItemFeature`（Tag=4），路由到 `PageSubType.SetupFeature` |
+| `FormMain.xaml.vb` | `PageSubType.SetupFeature = 4` |
+| `Settings.vb` | 新设置：`FeatureMemoryOnStart`、`FeatureCleanTemp`、`FeatureCleanCache`、`FeatureCleanLog` |
+| `ModLaunch.vb` | 启动前内存优化改用 `MemoryOptimize()`（GC + `SetProcessWorkingSetSize`） |
+
+「启动游戏前自动优化内存」与「设置 → 启动」页的 `LaunchArgumentRam` 共用同一开关，避免两处配置互相打架。
+
+### 8.2 液态玻璃视觉
+
+- `Application.xaml` 新增玻璃令牌：`ColorBrushGlassCard` / `GlassPanel` / `GlassRim` / `GlassInner` /
+  `GlassSidebar` / `GlassHairline` / `GlassShade`。
+- `ModSecret.ThemeRefreshMain()` 重写：顶栏为斜向半透明彩色玻璃（高光 → 深色过渡），
+  主区域为随主题色变化的低饱和薄雾底，侧栏为半透明白玻璃，使半透明卡片能透出底色、形成层级。
+- 卡片 / 按钮 / 输入框 / 提示 / 下拉框 / 滚动条圆角统一提升（3 → 9/10/14），并配 1px 高光描边。
+
+### 8.3 主题切换
+
+- 仅保留 蓝 / 青 / 绿 / 黄 / 红 五个预设（`0/1/2/3/10`）与「自定义颜色」（`14`）。
+- 自定义模式才显示 色调 / 饱和度 / 亮度 滑条；拖动即时调用 `ThemeRefresh(ThemeCustom)`，
+  修复了「点主题没反应」的问题。
+
+### 8.4 其它
+
+- 资源搜索源仅保留 Modrinth（`PageResource` 下拉框只剩一项，`ResourceSearcher` 错误文案同步）。
+- 标题栏字标由 `PCL` 笔画路径改为 `RMCL` 字形，默认 `UiLogoText` 改为 `RMCL`。
+
+## 九、构建与推送
 
 ```bash
 # 构建（Windows + VS2022 / MSBuild + .NET Framework 4.8 开发工具包）

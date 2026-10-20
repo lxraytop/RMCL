@@ -15,7 +15,7 @@ Public Class MyTextBox
         End Set
     End Property
     Public Shared ReadOnly CornerRadiusProperty As DependencyProperty =
-        DependencyProperty.Register("CornerRadius", GetType(CornerRadius), GetType(MyTextBox), New PropertyMetadata(New CornerRadius(3)))
+        DependencyProperty.Register("CornerRadius", GetType(CornerRadius), GetType(MyTextBox), New PropertyMetadata(New CornerRadius(9)))
 
     '额外控件初始化
 

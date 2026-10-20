@@ -19,6 +19,8 @@
         AniControlEnabled += 1
         Refresh() '#4826
         AniControlEnabled -= 1
+        '同步自定义主题滑块的显示状态
+        RefreshThemeSliderVisibility()
 
         '非重复加载部分
         Static Reloaded As Boolean = False
@@ -344,32 +346,21 @@ Refresh:
 
     '主题自定义
     Private Sub RadioLauncherTheme14_Change(sender As Object, e As RouteEventArgs) Handles RadioLauncherTheme14.Changed
-        If RadioLauncherTheme14.Checked Then
-            If LabLauncherHue.Visibility = Visibility.Visible Then Return
-            LabLauncherHue.Visibility = Visibility.Visible
-            SliderLauncherHue.Visibility = Visibility.Visible
-            LabLauncherSat.Visibility = Visibility.Visible
-            SliderLauncherSat.Visibility = Visibility.Visible
-            LabLauncherDelta.Visibility = Visibility.Visible
-            SliderLauncherDelta.Visibility = Visibility.Visible
-            LabLauncherLight.Visibility = Visibility.Visible
-            SliderLauncherLight.Visibility = Visibility.Visible
-        Else
-            If LabLauncherHue.Visibility = Visibility.Collapsed Then Return
-            LabLauncherHue.Visibility = Visibility.Collapsed
-            SliderLauncherHue.Visibility = Visibility.Collapsed
-            LabLauncherSat.Visibility = Visibility.Collapsed
-            SliderLauncherSat.Visibility = Visibility.Collapsed
-            LabLauncherDelta.Visibility = Visibility.Collapsed
-            SliderLauncherDelta.Visibility = Visibility.Collapsed
-            LabLauncherLight.Visibility = Visibility.Collapsed
-            SliderLauncherLight.Visibility = Visibility.Collapsed
-        End If
+        RefreshThemeSliderVisibility()
+    End Sub
+    ''' <summary>
+    ''' 仅在选中「自定义」时显示 HSL 滑块。
+    ''' </summary>
+    Private Sub RefreshThemeSliderVisibility()
+        Dim Show As Boolean = RadioLauncherTheme14.Checked
+        For Each Control In New FrameworkElement() {LabLauncherHue, SliderLauncherHue, LabLauncherSat, SliderLauncherSat, LabLauncherDelta, SliderLauncherDelta, LabLauncherLight, SliderLauncherLight}
+            Control.Visibility = Show.ToVisibility
+        Next
         CardLauncher.TriggerForceResize()
     End Sub
     Private Sub HSL_Change() Handles SliderLauncherHue.Change, SliderLauncherLight.Change, SliderLauncherSat.Change, SliderLauncherDelta.Change
         If AniControlEnabled <> 0 OrElse SliderLauncherSat Is Nothing OrElse Not SliderLauncherSat.IsLoaded Then Return
-        ThemeRefresh()
+        ThemeRefresh(ThemeCustom)
     End Sub
 
 #Region "功能隐藏"

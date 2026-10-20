@@ -127,7 +127,7 @@ Public Class PageResource
             .GameVersion = GameVersion
             .Tag = ComboSearchTag.SelectedItem.Tag
             .ModLoaders = If(PageType = ResourceTypes.Mod, Val(ComboSearchLoader.SelectedItem.Tag), ModLoaders.None)
-            .Sources = CType(Val(ComboSearchSource.SelectedItem.Tag), ResourcePlatforms)
+            .Sources = ResourcePlatforms.Modrinth '仅使用 Modrinth 来源
         End With
         Return Request
     End Function

@@ -45,6 +45,7 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 
 - `warning MSB3884: 无法找到规则集文件 BasicDesignGuidelineRules.ruleset`：仅代码分析规则集缺失，不影响编译与运行；如需消除，在项目属性关闭「启用代码分析」即可。
 - 未配置密钥时，正版登录与 CurseForge API 不可用（`Modules/ModSecret.vb` 中通过环境变量 `RMCL_MS_CLIENT_ID`、`RMCL_CURSEFORGE_API_KEY` 注入），启动时会弹出「开源版本说明」提示，属上游既有行为。
+- 资源搜索页的搜索源只保留 **Modrinth**（CurseForge 入口已从下拉框与错误文案中移除，底层 API 分支仍保留以便整合包链路使用）。
 - 单例检查使用互斥体 `RMCL_SingletonMutex`：已有实例在运行时再次启动会**以退出码 4 直接退出**，这是正常行为，不是崩溃。
 
 ## 五、本地已产出的成品
