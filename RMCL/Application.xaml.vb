@@ -9,7 +9,10 @@ Public Class Application
             '核心初始化
             MeloongCore.Main.Init("RMCL")
             MeloongCore.Wpf.Main.Init()
-            If Not e.Args.Contains("--gpu") Then '若是通过命令行调用，则不检查单例、不轮换日志（#9137）
+            '若是通过命令行调用（--gpu / --memory），则不检查单例、不轮换日志（#9137）
+            '注意 --memory 必须放行：它是在启动器已经运行时由提权进程调用的，
+            '若走单例检查会直接被已有实例挡掉，父进程收到的退出码会被当成「释放了 4 KB」这种假结果
+            If Not (e.Args.Contains("--gpu") OrElse e.Args.Contains("--memory")) Then
                 WaitingMutex(e)
                 Logger.Instance = New RmclLogger With {.logFolder = Paths.BaseThenName, .MinLevel = If(ModeDebug, LogLevel.Trace, LogLevel.Info)}
             End If
@@ -48,18 +51,16 @@ Public Class Application
                     End Try
                 End If
                 If e.Args(0) = "--memory" Then
-                    '内存优化（由主程序以管理员权限调用），返回清理的内存量（KB）
-                    Dim RamBefore As ULong = My.Computer.Info.AvailablePhysicalMemory
+                    '内存优化（由主程序以管理员权限调用），退出码为释放的内存量（KB），负数为失败。
+                    '没拿到管理员权限时必须明确失败，不能假装优化过
+                    If Not WindowsUtils.HasAdminRole() Then Environment.Exit(-2)
+                    Dim FreedBytes As Long
                     Try
-                        MemoryOptimizeInternal(False)
+                        FreedBytes = MemoryOptimizeInternal(False)
                     Catch ex As Exception
                         Environment.Exit(-1)
                     End Try
-                    If My.Computer.Info.AvailablePhysicalMemory < RamBefore Then
-                        Environment.Exit(0)
-                    Else
-                        Environment.Exit((My.Computer.Info.AvailablePhysicalMemory - RamBefore) / 1024)
-                    End If
+                    Environment.Exit(CInt(Math.Min(FreedBytes \ 1024, CLng(Integer.MaxValue))))
                 End If
             End If
             '初始化文件结构

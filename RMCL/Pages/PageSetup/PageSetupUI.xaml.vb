@@ -304,13 +304,11 @@ Refresh:
         If FrmSetupUI Is Nothing Then Return
         Select Case CInt(Settings.Get(Of Integer)("UiCustomType"))
             Case 0 '无
-                FrmSetupUI.PanCustomPreset.Visibility = Visibility.Collapsed
                 FrmSetupUI.PanCustomLocal.Visibility = Visibility.Collapsed
                 FrmSetupUI.PanCustomNet.Visibility = Visibility.Collapsed
                 FrmSetupUI.HintCustom.Visibility = Visibility.Collapsed
                 FrmSetupUI.HintCustomWarn.Visibility = Visibility.Collapsed
             Case 1 '本地
-                FrmSetupUI.PanCustomPreset.Visibility = Visibility.Collapsed
                 FrmSetupUI.PanCustomLocal.Visibility = Visibility.Visible
                 FrmSetupUI.PanCustomNet.Visibility = Visibility.Collapsed
                 FrmSetupUI.HintCustom.Visibility = Visibility.Visible
@@ -318,16 +316,13 @@ Refresh:
                 FrmSetupUI.HintCustom.Text = $"从 RMCL 文件夹下的 Custom.xaml 读取主页内容。{vbCrLf}你可以手动编辑该文件，向主页添加文本、图片、常用网站、快捷启动等功能。"
                 CustomEventService.SetEventType(FrmSetupUI.HintCustom, CustomEvent.EventType.None)
             Case 2 '联网
-                FrmSetupUI.PanCustomPreset.Visibility = Visibility.Collapsed
                 FrmSetupUI.PanCustomLocal.Visibility = Visibility.Collapsed
                 FrmSetupUI.PanCustomNet.Visibility = Visibility.Visible
                 FrmSetupUI.HintCustom.Visibility = Visibility.Visible
                 FrmSetupUI.HintCustomWarn.Visibility = If(Settings.Get(Of Boolean)("HintCustomWarn"), Visibility.Collapsed, Visibility.Visible)
-                FrmSetupUI.HintCustom.Text = $"从指定网址联网获取主页内容。服主也可以用于动态更新服务器公告。{vbCrLf}如果你制作了稳定运行的联网主页，可以点击这条提示投稿，若合格即可加入预设！"
-                CustomEventService.SetEventType(FrmSetupUI.HintCustom, CustomEvent.EventType.打开网页)
-                CustomEventService.SetEventData(FrmSetupUI.HintCustom, "https://github.com/lxraytop/RMCL/discussions/2528")
-            Case 3 '预设
-                FrmSetupUI.PanCustomPreset.Visibility = Visibility.Visible
+                FrmSetupUI.HintCustom.Text = $"从指定网址联网获取主页内容。服主也可以用于动态更新服务器公告。"
+                CustomEventService.SetEventType(FrmSetupUI.HintCustom, CustomEvent.EventType.None)
+            Case Else '未知取值（含已移除的预设模式）一律按空白处理
                 FrmSetupUI.PanCustomLocal.Visibility = Visibility.Collapsed
                 FrmSetupUI.PanCustomNet.Visibility = Visibility.Collapsed
                 FrmSetupUI.HintCustom.Visibility = Visibility.Collapsed
@@ -358,6 +353,12 @@ Refresh:
         Next
         CardLauncher.TriggerForceResize()
     End Sub
+    '炫目程度对所有主题（含预设色）都生效，所以这里不能像 HSL 那样强制切到自定义主题
+    Private Sub SliderLauncherGradient_Change(sender As Object, user As Boolean) Handles SliderLauncherGradient.Change
+        If AniControlEnabled <> 0 OrElse SliderLauncherGradient Is Nothing OrElse Not SliderLauncherGradient.IsLoaded Then Return
+        ThemeRefresh()
+    End Sub
+
     Private Sub HSL_Change() Handles SliderLauncherHue.Change, SliderLauncherLight.Change, SliderLauncherSat.Change, SliderLauncherDelta.Change
         If AniControlEnabled <> 0 OrElse SliderLauncherSat Is Nothing OrElse Not SliderLauncherSat.IsLoaded Then Return
         ThemeRefresh(ThemeCustom)
@@ -387,11 +388,11 @@ Refresh:
         Try
             '顶部栏
             If Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenPageDownload") AndAlso Settings.Get(Of Boolean)("UiHiddenPageLink") AndAlso Settings.Get(Of Boolean)("UiHiddenPageSetup") Then
-                '顶部栏已被全部隐藏
-                FrmMain.PanTitleSelect.Visibility = Visibility.Collapsed
+                '顶部栏已被全部隐藏（连同玻璃胶囊容器一起隐藏，避免留下空壳）
+                FrmMain.BorderTitleDock.Visibility = Visibility.Collapsed
             Else
                 '顶部栏未被全部隐藏
-                FrmMain.PanTitleSelect.Visibility = Visibility.Visible
+                FrmMain.BorderTitleDock.Visibility = Visibility.Visible
                 FrmMain.BtnTitleSelect1.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenPageDownload"), Visibility.Collapsed, Visibility.Visible)
                 FrmMain.BtnTitleSelect2.Visibility = Visibility.Collapsed 'If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenPageLink"), Visibility.Collapsed, Visibility.Visible)
                 FrmMain.BtnTitleSelect3.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenPageSetup"), Visibility.Collapsed, Visibility.Visible)
@@ -470,8 +471,10 @@ Refresh:
     Private Sub SliderLoad()
         SliderMusicVolume.GetHintText = Function(v) Math.Ceiling(v * 0.1) & "%"
         SliderLauncherTransparent.GetHintText = Function(v) Math.Round(40 + v * 0.1) & "%"
+        SliderSidebarOpacity.GetHintText = Function(v) Math.Round(v * 0.1) & "%"
         SliderLauncherHue.GetHintText = Function(v) v & "°"
         SliderLauncherSat.GetHintText = Function(v) v & "%"
+        SliderLauncherGradient.GetHintText = Function(v) v & "%"
         SliderLauncherDelta.GetHintText =
         Function(Value As Integer) As String
             If Value > 90 Then

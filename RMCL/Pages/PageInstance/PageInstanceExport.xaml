@@ -300,8 +300,9 @@
                             </Grid.ColumnDefinitions>
                             <local:MyButton Grid.Column="0" x:Name="BtnAdvancedImport" MinWidth="140" Text="读取配置" Padding="13,0" Margin="0,0,20,0" ColorType="Highlight" />
                             <local:MyButton Grid.Column="1" x:Name="BtnAdvancedExport" MinWidth="140" Text="保存配置" Padding="13,0" Margin="0,0,20,0" />
-                            <local:MyButton Grid.Column="2" MinWidth="140" Text="整合包制作指南" Padding="13,0" Margin="0,0,20,0" x:Name="BtnAdvancedHelp"
-                                            local:CustomEventService.EventType="打开帮助" />
+                            <local:MyButton Grid.Column="2" MinWidth="140" Text="什么是整合包" Padding="13,0" Margin="0,0,20,0" x:Name="BtnAdvancedHelp"
+                                            local:CustomEventService.EventType="弹出提示"
+                                            local:CustomEventService.EventData="整合包把 Minecraft 版本、Mod 与配置文件打包成一个压缩包，其他人导入后即可获得同样的游戏环境。导出完成后会得到一个 zip 文件，用 RMCL 打开它即可安装。" />
                         </Grid>
                     </StackPanel>
                 </local:MyCard>

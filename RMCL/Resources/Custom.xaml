@@ -68,16 +68,16 @@
 		<local:MyTextButton Margin="0,8,0,0" HorizontalAlignment="Center"
                     Text="点击打开哔哩哔哩" EventType="打开网页" EventData="https://www.bilibili.com/" />
 		<TextBlock TextWrapping="Wrap" Margin="0,30,0,0"
-                    Text="自定义事件的详细用法请参考下方的页面。" />
-		<local:MyListItem Margin="-5,4,-5,5"
-		                  EventType="打开帮助" EventData="个性化/自定义事件.json" />
+                    Text="全部可用的 EventType：打开网页、打开文件、执行命令、启动游戏、复制文本、刷新主页、刷新页面、弹出窗口、弹出提示、切换页面、导入整合包、安装整合包、修改设置、写入设置、修改变量、写入变量、加入房间。&#xA;每种事件的 EventData 格式不同，例如 打开网页 填网址，弹出窗口 填 “标题|内容”，弹出提示 只需填提示文本。" />
 	</StackPanel>
 </local:MyCard>
 
 <local:MyCard Title="替换标记" Margin="0,0,0,15" CanSwap="True" IsSwapped="True">
-	<StackPanel Margin="25,40,23,10">
-		<local:MyListItem Margin="-5,0,-5,8"
-		                  EventType="打开帮助" EventData="个性化/替换标记.json" />
+	<StackPanel Margin="25,40,23,15">
+		<TextBlock TextWrapping="Wrap"
+                    Text="替换标记是一段用花括号包起来的关键字，RMCL 在加载主页时会先把它替换成实际内容，因此可以直接写在 Text、EventData 等文本属性里。" />
+		<TextBlock TextWrapping="Wrap" Margin="0,8,0,0"
+                    Text="常用标记（使用时在两边各加一个花括号）：rmcl_version 版本号、rmcl_version_code 版本编号、rmcl_build_type 构建类型、identify 识别码、path 启动器文件夹、path_temp 缓存文件夹、date 日期、time 时间、minecraft 游戏文件夹、version 当前版本名、java 当前 Java 路径、user 当前玩家名。旧版的 pcl_version 等写法同样可用。" />
 	</StackPanel>
 </local:MyCard>
 
@@ -130,7 +130,7 @@
             <local:MyButton Margin="0,0,10,0" Width="140" Height="35" HorizontalAlignment="Left" Padding="13,0,13,0" ColorType="Red"
                         Text="复制召唤命令" EventType="复制文本" EventData="/execute as @a at @s run summon Creeper ~ ~2 ~" ToolTip="这条 Minecraft 命令会在每个玩家头顶召唤一只苦力怕！" />
             <local:MyButton Margin="0,0,10,0" Width="140" Height="35" HorizontalAlignment="Left" Padding="13,0,13,0"
-                        Text="内存优化" EventType="内存优化" />
+                        Text="清理垃圾提示" EventType="弹出提示" EventData="清理游戏垃圾可以在 设置 → 功能 中手动执行" ToolTip="这条按钮使用 弹出提示 事件，只会弹出一条提示" />
             <local:MyButton Margin="0,0,10,0" Width="140" Height="35" HorizontalAlignment="Left" Padding="13,0,13,0"
                         Text="下载百度的 Logo" EventType="下载文件" EventData="https://www.baidu.com/img/flexible/logo/pc/result.png" />
         </StackPanel>
@@ -147,10 +147,10 @@
         <TextBlock TextWrapping="Wrap" Margin="0,0,0,4"
                     Text="Logo 属性为列表项的图标，指定的可以是链接也可以是文件路径；Title 是大标题，Info 是可选的小标题（详细信息）；Type 如果省略，该列表项则单纯只展示信息，仅当 Type 为 Clickable 才能触发点击效果。"/>
         <local:MyListItem Margin="-5,2,-5,8"
-                    Logo="pack://application:,,,/images/Blocks/Grass.png"
-                    EventType="打开帮助" EventData="帮助/自定义帮助.json" Type="Clickable" />
+                    Logo="pack://application:,,,/images/Blocks/Grass.png" Title="Minecraft Wiki"
+                    EventType="打开网页" EventData="https://zh.minecraft.wiki/" Type="Clickable" />
         <TextBlock TextWrapping="Wrap" Margin="0,0,0,4"
-                    Text="EventType、EventData 与按钮几乎一致。唯一不同的是，列表项不支持联网加载帮助文件。" />
+                    Text="EventType、EventData 与按钮完全一致，直接照抄按钮的写法即可。" />
     </StackPanel>
 </local:MyCard>
 
@@ -188,7 +188,8 @@
                     Text="使用时，将上方对应行的 Source 复制到 MyListItem 的 Logo 属性处即可。"/>
         <local:MyListItem Margin="-5,0,-5,8"
             Logo="pack://application:,,,/images/Blocks/CommandBlock.png"
-            Title="清理垃圾" Info="使用内置的命令方块图片作为 Logo" EventType="清理垃圾" Type="Clickable" />
+            Title="清理垃圾" Info="使用内置的命令方块图片作为 Logo" EventType="弹出提示"
+            EventData="内置图片可以直接填在 Logo 属性里" Type="Clickable" />
     </StackPanel>
 </local:MyCard>
 

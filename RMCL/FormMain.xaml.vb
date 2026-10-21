@@ -283,7 +283,12 @@ Public Class FormMain
         Dim LastVersion As Integer = Settings.Get(Of Integer)("SystemLastVersionReg")
         If LastVersion < VersionCode Then
             '触发升级
-            UpgradeSub(LastVersion)
+            '兼容 PCL 时代遗留的 Setup 时，个别迁移项可能引用了已删除的设置项，不能让启动直接失败
+            Try
+                UpgradeSub(LastVersion)
+            Catch ex As Exception
+                Logger.Warn(ex, "旧版本设置迁移失败，已跳过")
+            End Try
         ElseIf LastVersion > VersionCode Then
             '触发降级
             DowngradeSub(LastVersion)
@@ -433,10 +438,7 @@ Public Class FormMain
                 Logger.Warn(ex, "清理自动更新文件失败")
             End Try
             '上报
-            '开源版本提示
-            If VersionBranchMain = "OpenSource" Then
-                MyMsgBox($"该版本中无法使用以下特性：{vbCrLf}- 联网通知：需要自行部署配置服务端，避免滥用隐患", "开源版本说明")
-            End If
+            '注：开源版本说明弹窗已移除（联网通知暂未启用，不再提示）
         End Sub, "初始化", ThreadPriority.Lowest)
 
         Logger.Info($"第三阶段加载用时：{GetTimeMs() - ApplicationStartTick} ms")
@@ -495,11 +497,6 @@ Public Class FormMain
             FileUtils.Copy(PathTemp & "CustomSkin.png", Paths.AppDataThenName & "CustomSkin.png")
             Logger.Info("已移动离线自定义皮肤 (264)")
         End If
-        '解除帮助页面的隐藏
-        If LastVersionCode <= 205 Then
-            Settings.Set("UiHiddenOtherHelp", False)
-            Logger.Info("已解除帮助页面的隐藏")
-        End If
         '单向迁移微软登录结果（#4836）
         If Not Settings.Get(Of Boolean)("CacheMsV2Migrated") Then
             Settings.Set("CacheMsV2Migrated", True)
@@ -514,6 +511,11 @@ Public Class FormMain
         If Settings.HasSaved("ToolDownloadTranslate") AndAlso Not Settings.HasSaved("ToolDownloadTranslateV2") Then
             Settings.Set("ToolDownloadTranslateV2", Settings.Get(Of Integer)("ToolDownloadTranslate") + 1)
             Logger.Info("已从老版本迁移 Mod 命名设置")
+        End If
+        '主页预设模式已移除：把旧的预设主页设置重置为空白，避免主页一片空白且无处可改
+        If Settings.Get(Of Integer)("UiCustomType") = 3 Then
+            Settings.Set("UiCustomType", 0)
+            Logger.Info("已把旧的主页预设设置重置为空白主页")
         End If
         '重置 JVM 参数设置
         If LastVersionCode <= 381 AndAlso Settings.HasSaved("LaunchAdvanceJvm") AndAlso
@@ -558,6 +560,8 @@ Public Class FormMain
         End If
         '关闭联机？
         If FrmLinkMain?.TryExit(Not SendWarning, True) Then Return
+        '把合并中的 ini 写入落盘，避免最后几毫秒内的改动丢失
+        FlushIniWrites()
         '关闭
         RunInUiWait(
         Sub()
@@ -641,6 +645,59 @@ Public Class FormMain
     '最小化
     Private Sub BtnTitleMin_Click() Handles BtnTitleMin.Click
         WindowState = WindowState.Minimized
+    End Sub
+
+    '外观模式快捷切换
+    Private Const ThemeLogoLight As String = "M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z"
+    Private Const ThemeLogoDark As String = "M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"
+
+    ''' <summary>
+    ''' 外观模式的显示名称。
+    ''' </summary>
+    Public Shared Function ColorModeName(Mode As Integer) As String
+        Select Case Mode
+            Case ColorModeLight
+                Return "浅色"
+            Case ColorModeDark
+                Return "深色"
+            Case Else
+                Return "跟随系统"
+        End Select
+    End Function
+
+    ''' <summary>
+    ''' 按当前外观模式刷新标题栏的日 / 月图标与提示。
+    ''' </summary>
+    Public Sub RefreshTitleThemeButton()
+        Try
+            Dim Mode As Integer = CInt(Settings.Get(Of Integer)("UiColorMode"))
+            Select Case Mode
+                Case ColorModeLight
+                    BtnTitleTheme.Logo = ThemeLogoLight
+                    BtnTitleTheme.ToolTip = "外观：浅色（点击切换为深色）"
+                Case ColorModeDark
+                    BtnTitleTheme.Logo = ThemeLogoDark
+                    BtnTitleTheme.ToolTip = "外观：深色（点击切换为跟随系统）"
+                Case Else
+                    BtnTitleTheme.Logo = If(IsDark, ThemeLogoDark, ThemeLogoLight)
+                    BtnTitleTheme.ToolTip = $"外观：跟随系统（当前{If(IsDark, "深色", "浅色")}，点击切换为浅色）"
+            End Select
+        Catch ex As Exception
+            Logger.Warn(ex, "刷新外观切换按钮失败")
+        End Try
+    End Sub
+
+    Private Sub BtnTitleTheme_Click() Handles BtnTitleTheme.Click
+        Try
+            Dim Mode As Integer = CInt(Settings.Get(Of Integer)("UiColorMode"))
+            Dim NextMode As Integer = If(Mode = ColorModeSystem, ColorModeLight, If(Mode = ColorModeLight, ColorModeDark, ColorModeSystem))
+            'OnChanged 会触发 ThemeRefresh，标题栏与背景随之更新
+            Settings.Set("UiColorMode", NextMode)
+            If FrmSetupUI IsNot Nothing Then FrmSetupUI.Refresh()
+            Hint($"外观已切换为{ColorModeName(NextMode)}", HintType.Green, False)
+        Catch ex As Exception
+            Logger.Error(ex, "切换外观模式失败")
+        End Try
     End Sub
 
     '背景图片与标题栏
@@ -867,6 +924,12 @@ Public Class FormMain
             End If
         Catch ex As Exception
             Logger.Error(ex, "切回窗口时出错")
+        End Try
+        '跟随系统外观：切回窗口时检查系统是否切换了浅色 / 深色
+        Try
+            If CInt(Settings.Get(Of Integer)("UiColorMode")) = ColorModeSystem AndAlso IsSystemDark() <> IsDark Then ThemeRefresh()
+        Catch ex As Exception
+            Logger.Warn(ex, "同步系统外观模式失败")
         End Try
         '读取剪贴板，自动加入联机房间
         Return 'TODO: 联机复活赛

@@ -156,6 +156,59 @@ CurseForge 项目 `322385`。移除 CurseForge 后请求返回 403，异常把�
 现改为 Modrinth 的 `optifabric` 并包 `Try/Catch`，失败时返回空列表 —— 页面正常打开，
 只是没有 OptiFabric 可选组件。日志中已从 `状态改变：Failed` 变为 `Finished`。
 
+## 十一、第五轮：外观一致性、死引用清理与深色适配
+
+### 11.1 标题字标放大到上游尺寸
+
+第四轮重绘的 RMCL 字标字高只有 16.6（上游 PCL 为 18），视觉上比原版小一圈。
+现保留路径本身，加 `LayoutTransform` 等比放大 `1.0843` 倍（16.6 → 18），
+`StrokeThickness` 同步由 2.2 调为 2.03，放大后的实际笔宽仍为 2.2，与上游字重一致。
+
+### 11.2 移除「主页 → 预设」
+
+- `PageSetupUI.xaml`：删除「预设」单选与整个 `PanCustomPreset` 下拉，四列布局改三列。
+- `PageSetupUI.OnMainPageTypeChanged`：删除 `Case 3`，未知取值统一按空白处理。
+- `PageLaunchRight.RefreshReal`：删除 `Case 3` 下 90 余行的预设清单（含 20 多个第三方主页地址）。
+- `Settings.vb`：删除 `UiCustomPreset` 设置项；`FormMain` 启动迁移把遗留的 `UiCustomType = 3` 重置为 0。
+
+### 11.3 清理教学文件中的死引用
+
+`Resources/Custom.xaml` 会被 `ExtractResources` 原样释放给用户，其中引用了本版本并不存在的功能：
+
+| 原内容 | 问题 | 处理 |
+| --- | --- | --- |
+| `EventType="打开帮助"` ×3 | 枚举中已无该成员（内置帮助已移除），主页加载会失败 | 换成 `打开网页` / 改为文字说明 |
+| `EventType="内存优化"` | 同上 | 改为 `弹出提示` |
+| `EventType="清理垃圾"` | 同上 | 改为 `弹出提示` |
+
+同时把 `EventType` 全部取值、常用替换标记改为正文文字列举（不写花括号，避免被 `ArgumentReplace` 提前替换），
+并把 `PageSetupUI` / `PageSetupLaunch` / `PageInstanceSetup` 中 11 处「在 更多 → 帮助 中搜索替换标记」
+的说明改为指向「设置 → 个性化」生成的 `Custom.xaml`；`PageInstanceExport` 中同样引用帮助 JSON 的
+「整合包制作指南」按钮改为「什么是整合包」+ 提示条。
+
+### 11.4 修复「清理游戏垃圾 → 重新统计」
+
+`RefreshJunkInfo` 会写 `LabJunkInfo.Text`，却被 `RunInNewThread` 直接调用，触发跨线程访问异常；
+异常又被 `Catch` 里同样跨线程的写操作再次抛出，于是文本停在「正在统计垃圾文件……」。
+现拆分为 `GetRubbishText()`（纯计算，可后台调用）与 `RefreshJunkInfoAsync()`（后台统计 + `RunInUi` 回写），
+按钮在统计期间显示「统计中……」并禁用。
+
+### 11.5 功能页按钮尺寸
+
+「设置 → 功能」两处按钮原先放在无高度约束的 `StackPanel` 里，且第二个按钮 `MinWidth="110"`，
+与个性化页的 `MinWidth="140" Height="35"` 不一致。现统一为 `MinWidth="140" Height="35" Padding="13,0"`，
+外层改用固定 `Height="35"` 的 `Grid` + `SharedSizeGroup="Button"`。
+
+### 11.6 深色模式补全
+
+| 组件 | 问题 | 处理 |
+| --- | --- | --- |
+| `MyIconButton.Theme = Black` | 填充固定为 `ARGB(160,0,0,0)`，深色顶栏上完全看不见 | 新增 `MonoColor()`：浅色 `160,0,0,0` / 深色 `190,255,255,255`，指向态再提亮；替换全部 4 处分支 |
+| `ThemeRefreshMain` | 原先在深色下把最小化 / 关闭切成 `Themes.White`，而 `White` 用的是 `ColorBrush8`（深色下是深蓝），同样不可见 | 删除该切换，改为 `RefreshMonoIcons()` 递归刷新整窗单色图标 |
+| 错误弹窗等（`MyMsgText/Input/Select`、`MyMsgLogin`） | 底色写死 `#FBFBFB`、正文写死 `#FF5C5C5C` | 新增 `ColorBrushDialogBackground` / `ColorBrushDialogText` 动态资源，随外观重算 |
+
+由于 `Themes.Black` 由固定黑改为随外观反转，返回、清空、恢复等 20 余个图标按钮一并得到修正。
+
 ## 九、构建与推送
 
 ```bash

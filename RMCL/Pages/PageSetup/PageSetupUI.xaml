@@ -9,6 +9,19 @@
             <local:MyCard Margin="0,15" Title="基础" x:Name="CardLauncher">
                 <Grid Margin="25,40,25,17">
                     <StackPanel>
+                        <Grid Height="28" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="Name1" />
+                                <ColumnDefinition />
+                                <ColumnDefinition />
+                                <ColumnDefinition />
+                                <ColumnDefinition />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left" Text="外观" Margin="0,0,20,0" />
+                            <local:MyRadioBox local:SettingService.Key="UiColorMode" local:SettingService.Value="0" Grid.Column="1" Text="跟随系统" ToolTip="跟随 Windows 的「应用模式」设置，在系统切换深色时一并切换" />
+                            <local:MyRadioBox local:SettingService.Key="UiColorMode" local:SettingService.Value="1" Grid.Column="2" Text="浅色" />
+                            <local:MyRadioBox local:SettingService.Key="UiColorMode" local:SettingService.Value="2" Grid.Column="3" Text="深色" />
+                        </Grid>
                         <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" SharedSizeGroup="Name1" />
@@ -21,22 +34,39 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left" Text="不透明度" Margin="0,0,20,0" />
                             <local:MySlider local:SettingService.Key="UiLauncherTransparent" 
                                             MaxValue="600" ValueByKey="10" Grid.ColumnSpan="5" x:Name="SliderLauncherTransparent" Grid.Column="1" />
-                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Name="LabLauncherHue" Visibility="Collapsed" HorizontalAlignment="Left" Text="色调" Margin="0,10,20,0" />
+                            <!-- 炫目程度与不透明度同级：始终可见，不随「自定义颜色」折叠 -->
+                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Name="LabLauncherGradient" HorizontalAlignment="Left" Text="炫目程度" Margin="0,10,20,0"
+                                       ToolTip="控制顶部栏渐变的强烈程度：同时影响左右两端的色相跨度、饱和度对比与明度落差。" />
+                            <local:MySlider local:SettingService.Key="UiLauncherGradient" 
+                                            Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="4" x:Name="SliderLauncherGradient" MaxValue="100" ValueByKey="5" Margin="0,10,0,0"
+                                            ToolTip="控制顶部栏渐变的强烈程度：同时影响左右两端的色相跨度、饱和度对比与明度落差。&#13;0% 几乎平色，100% 为高饱和的鲜明色带。" />
+                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Name="LabLauncherHue" Visibility="Collapsed" HorizontalAlignment="Left" Text="色调" Margin="0,10,20,0" />
                             <local:MySlider local:SettingService.Key="UiLauncherHue" 
-                                            Grid.Row="1" Grid.Column="1" x:Name="SliderLauncherHue" Visibility="Collapsed" MaxValue="360" ValueByKey="10" Margin="0,10,0,0" />
-                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Name="LabLauncherDelta" Visibility="Collapsed" HorizontalAlignment="Left" Text="色调渐变" Margin="0,10,20,0" />
+                                            Grid.Row="2" Grid.Column="1" x:Name="SliderLauncherHue" Visibility="Collapsed" MaxValue="360" ValueByKey="10" Margin="0,10,0,0" />
+                            <TextBlock Grid.Row="3" VerticalAlignment="Center" Name="LabLauncherDelta" Visibility="Collapsed" HorizontalAlignment="Left" Text="色调渐变" Margin="0,10,20,0" />
                             <local:MySlider local:SettingService.Key="UiLauncherDelta" 
-                                            Grid.Row="2" Grid.Column="1" x:Name="SliderLauncherDelta" Visibility="Collapsed" MaxValue="180" ValueByKey="5" Margin="0,10,0,0" />
-                            <TextBlock Grid.Row="1" Grid.Column="3" VerticalAlignment="Center" Name="LabLauncherSat" Visibility="Collapsed" HorizontalAlignment="Left" Text="饱和度" Margin="0,10,20,0" />
+                                            Grid.Row="3" Grid.Column="1" x:Name="SliderLauncherDelta" Visibility="Collapsed" MaxValue="180" ValueByKey="5" Margin="0,10,0,0" />
+                            <TextBlock Grid.Row="2" Grid.Column="3" VerticalAlignment="Center" Name="LabLauncherSat" Visibility="Collapsed" HorizontalAlignment="Left" Text="饱和度" Margin="0,10,20,0" />
                             <local:MySlider local:SettingService.Key="UiLauncherSat" 
-                                            Grid.Row="1" Grid.Column="4" x:Name="SliderLauncherSat" Visibility="Collapsed" MaxValue="100" ValueByKey="5" Margin="0,10,0,0" />
-                            <TextBlock Grid.Row="2" Grid.Column="3" VerticalAlignment="Center" Name="LabLauncherLight" Visibility="Collapsed" HorizontalAlignment="Left" Text="亮度" Margin="0,10,20,0" />
+                                            Grid.Row="2" Grid.Column="4" x:Name="SliderLauncherSat" Visibility="Collapsed" MaxValue="100" ValueByKey="5" Margin="0,10,0,0" />
+                            <TextBlock Grid.Row="3" Grid.Column="3" VerticalAlignment="Center" Name="LabLauncherLight" Visibility="Collapsed" HorizontalAlignment="Left" Text="亮度" Margin="0,10,20,0" />
                             <local:MySlider local:SettingService.Key="UiLauncherLight" 
-                                            Grid.Row="2" Grid.Column="4" x:Name="SliderLauncherLight" Visibility="Collapsed" MaxValue="40" ValueByKey="5" Margin="0,10,0,0" />
+                                            Grid.Row="3" Grid.Column="4" x:Name="SliderLauncherLight" Visibility="Collapsed" MaxValue="40" ValueByKey="5" Margin="0,10,0,0" />
+                        </Grid>
+                        <Grid Height="22" Margin="0,6,0,7" x:Name="PanSidebarOpacity">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="Name1" />
+                                <ColumnDefinition />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left" Text="侧边栏透明度" Margin="0,0,20,0"
+                                       ToolTip="统一控制左侧栏玻璃背景的透明度。&#13;导航、启动页的账号与启动区、实例与资源列表共用这一块玻璃。" />
+                            <local:MySlider local:SettingService.Key="UiSidebarOpacity" x:Name="SliderSidebarOpacity" Grid.Column="1" MaxValue="1000" ValueByKey="10"
+                                            ToolTip="统一控制左侧栏玻璃背景的透明度。&#13;导航、启动页的账号与启动区、实例与资源列表共用这一块玻璃。&#13;0% 为完全透明，100% 为完全不透明。" />
                         </Grid>
                         <Grid x:Name="PanLauncherTheme" Height="62" Margin="0,0,0,7">
                             <Grid.ColumnDefinitions>
@@ -193,15 +223,13 @@
                             <ColumnDefinition Width="1*" />
                             <ColumnDefinition Width="1*" />
                             <ColumnDefinition Width="1*" />
-                            <ColumnDefinition Width="1*" />
                             <ColumnDefinition Width="0.2*" />
                         </Grid.ColumnDefinitions>
                         <local:MyRadioBox Text="空白" x:Name="RadioCustomType0" Height="22" local:SettingService.Key="UiCustomType" local:SettingService.Value="0" Grid.Column="0" />
-                        <local:MyRadioBox Text="预设" x:Name="RadioCustomType3" Height="22" local:SettingService.Key="UiCustomType" local:SettingService.Value="3" Grid.Column="1" />
-                        <local:MyRadioBox Text="读取本地文件" x:Name="RadioCustomType1" Height="22" local:SettingService.Key="UiCustomType" local:SettingService.Value="1" Grid.Column="2" />
-                        <local:MyRadioBox Text="联网更新" x:Name="RadioCustomType2" Height="22" local:SettingService.Key="UiCustomType" local:SettingService.Value="2" Grid.Column="3" />
+                        <local:MyRadioBox Text="读取本地文件" x:Name="RadioCustomType1" Height="22" local:SettingService.Key="UiCustomType" local:SettingService.Value="1" Grid.Column="1" />
+                        <local:MyRadioBox Text="联网更新" x:Name="RadioCustomType2" Height="22" local:SettingService.Key="UiCustomType" local:SettingService.Value="2" Grid.Column="2" />
                     </Grid>
-                    <local:MyHint Margin="0,15,0,-4" Text="内容见 ModSetup" Theme="Blue" x:Name="HintCustom" />
+                    <local:MyHint Margin="0,15,0,-4" Text="从 RMCL 文件夹下的 Custom.xaml 读取主页内容。" Theme="Blue" x:Name="HintCustom" />
                     <local:MyHint Margin="0,15,0,6" Text="请谨慎使用陌生人提供的主页，恶意代码可能会造成损害！" Theme="Yellow" x:Name="HintCustomWarn" 
                                   CanClose="True" RelativeSetup="HintCustomWarn" />
                     <WrapPanel x:Name="PanCustomLocal" Visibility="Collapsed" Margin="0,0,0,5">
@@ -221,46 +249,12 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left" Text="下载地址" Margin="0,0,25,0" />
                         <local:MyTextBox x:Name="TextCustomNet" local:SettingService.Key="UiCustomNet" Grid.Column="1" MaxHeight="28"
-                                         ToolTip="你可以用替换标记动态改变网址，以传入参数或变量。&#xa;在 更多 → 帮助 中搜索 “替换标记” 以了解用法。">
+                                         ToolTip="你可以用替换标记动态改变网址，以传入参数或变量。&#xa;点击 生成教学文件 后，在主页文件夹的说明中可以查到全部替换标记。">
                             <local:MyTextBox.ValidateRules>
                                 <local:ValidateNullable />
                                 <local:ValidateHttp />
                             </local:MyTextBox.ValidateRules>
                         </local:MyTextBox>
-                    </Grid>
-                    <Grid x:Name="PanCustomPreset" Visibility="Collapsed" Margin="0,12,10,5" Height="28">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" SharedSizeGroup="Name" />
-                            <ColumnDefinition />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left" Text="主页预设" Margin="0,0,25,0" />
-                        <local:MyComboBox local:SettingService.Key="UiCustomPreset" Grid.ColumnSpan="2" Grid.Column="1">
-                            <local:MyComboBoxItem local:SettingService.Value="0" Content="你知道吗？" />
-                            <local:MyComboBoxItem local:SettingService.Value="1" Content="回声洞" />
-                            <local:MyComboBoxItem local:SettingService.Value="2" Content="Minecraft 新闻（作者：最亮的信标）" />
-                            <!--<local:MyComboBoxItem local:SettingService.Value="3" Content="简单主页（作者：MFn233）" />-->
-                            <local:MyComboBoxItem local:SettingService.Value="4" Content="每日整合包推荐（作者：wkea）" />
-                            <local:MyComboBoxItem local:SettingService.Value="5" Content="Minecraft 皮肤推荐（作者：wkea）" />
-                            <local:MyComboBoxItem local:SettingService.Value="6" Content="OpenBMCLAPI 仪表盘 Lite（作者：Silverteal、Mxmilu666）" />
-                            <!--<local:MyComboBoxItem local:SettingService.Value="7" Content="RMCL 主页市场（作者：凌云）" />-->
-                            <!--<local:MyComboBoxItem local:SettingService.Value="8" Content="RMCL 新闻速报（作者：Joker2184）" />-->
-                            <local:MyComboBoxItem local:SettingService.Value="9" Content="RMCL 新功能说明书（作者：WForst-Breeze）" />
-                            <!--<local:MyComboBoxItem local:SettingService.Value="10" Content="OpenMCIM 仪表盘（作者：SALTWOOD）" />-->
-                            <local:MyComboBoxItem local:SettingService.Value="11" Content="杂志主页（作者：CreeperIsASpy）" />
-                            <local:MyComboBoxItem local:SettingService.Value="12" Content="RMCL GitHub 仪表盘（作者：Deep-Dark-Forest）" />
-                            <local:MyComboBoxItem local:SettingService.Value="13" Content="Minecraft 更新摘要（作者：pynickle）" />
-                            <local:MyComboBoxItem local:SettingService.Value="14" Content="今日新闻热点（作者：EYicheng）" />
-                            <local:MyComboBoxItem local:SettingService.Value="15" Content="Minecraft 芝士站（作者：awaEric233）" />
-                            <local:MyComboBoxItem local:SettingService.Value="16" Content="整合包推荐引擎（作者：CHMYGZ）" />
-                            <local:MyComboBoxItem local:SettingService.Value="17" Content="Bangumi 番剧主页（作者：wzyaeu）" />
-                            <local:MyComboBoxItem local:SettingService.Value="18" Content="Bilibili 热门（作者：wzyaeu）" />
-                            <local:MyComboBoxItem local:SettingService.Value="19" Content="Music 云音乐热门（作者：wzyaeu）" />
-                            <local:MyComboBoxItem local:SettingService.Value="20" Content="模组推荐（作者：llsgllsg）" />
-                            <local:MyComboBoxItem local:SettingService.Value="21" Content="每日游戏推荐（作者：llsgllsg）" />
-                            <local:MyComboBoxItem local:SettingService.Value="22" Content="Wallpaper 每日壁纸（作者：wzyaeu）" />
-                            <local:MyComboBoxItem local:SettingService.Value="23" Content="Weather 天气预报（作者：wzyaeu）" />
-                            <local:MyComboBoxItem local:SettingService.Value="24" Content="新一代狗屁王大杂烩主页（作者：llsgllsg）" />
-                        </local:MyComboBox>
                     </Grid>
                 </StackPanel>
             </local:MyCard>

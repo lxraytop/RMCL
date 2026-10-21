@@ -128,8 +128,10 @@ Public Class Settings
         New Setting("UiLauncherHue", 180),
         New Setting("UiLauncherSat", 80),
         New Setting("UiLauncherDelta", 90),
+        New Setting("UiLauncherGradient", 70, OnChanged:=Sub() ThemeRefresh()), '顶栏渐变的炫目程度（0-100），同时影响色相跨度、饱和度对比与明度落差
         New Setting("UiLauncherLight", 20),
         New Setting("UiLauncherTheme", 0, OnChanged:=AddressOf ThemeRefresh),
+        New Setting("UiColorMode", 0, OnChanged:=Sub() ThemeRefresh()), '0 跟随系统，1 浅色，2 深色
         New Setting("UiLauncherThemeHide", "0|1|2|3|4", Source:=Sources.Registry, Encrypted:=True),
         New Setting("UiLauncherThemeHide2", "0|1|2|3|4", Source:=Sources.Registry, Encrypted:=True),
         New Setting("UiLauncherLogo", True),
@@ -138,8 +140,8 @@ Public Class Settings
         New Setting("UiBackgroundOpacity", 1000, OnChanged:=AddressOf FormMain.UpdateBackgroundAndTitleBar),
         New Setting("UiBackgroundBlur", 18, OnChanged:=AddressOf FormMain.UpdateBackgroundAndTitleBar),
         New Setting("UiBackgroundSuit", 0, OnChanged:=AddressOf FormMain.UpdateBackgroundAndTitleBar),
+        New Setting("UiSidebarOpacity", 800, OnChanged:=Sub() ThemeRefresh()), '侧栏玻璃不透明度（千分比），导航、启动页账号区与各类列表共用这一项
         New Setting("UiCustomType", 0, OnChanged:=AddressOf PageSetupUI.OnMainPageTypeChanged),
-        New Setting("UiCustomPreset", 0),
         New Setting("UiCustomNet", ""),
         New Setting("UiLogoType", 1, OnChanged:=AddressOf FormMain.UpdateBackgroundAndTitleBar),
         New Setting("UiLogoText", "RMCL", OnChanged:=AddressOf FormMain.UpdateBackgroundAndTitleBar),

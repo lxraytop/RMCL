@@ -66,20 +66,16 @@ Public Class MyCard
     Public Sub New()
         MainChrome = New MyDropShadow With {
             .Margin = New Thickness(-9, -7, -9, -7 - GetWPFSize(1)), .ShadowRadius = 13, .Opacity = DropShadowIdleOpacity, .CornerRadius = New CornerRadius(GlassRadius)}
-        MainChrome.SetResourceReference(MyDropShadow.ColorProperty, "ColorObject1")
+        MainChrome.SetResourceReference(MyDropShadow.ColorProperty, "ColorObjectShadow")
         MainBorder = New Border With {.CornerRadius = New CornerRadius(GlassRadius), .IsHitTestVisible = False,
                                       .BorderThickness = New Thickness(1)}
         MainBorder.SetResourceReference(Border.BackgroundProperty, "ColorBrushGlassCard")
         MainBorder.SetResourceReference(Border.BorderBrushProperty, "ColorBrushGlassRim")
         '玻璃表面高光：自上而下由亮到透，形成镜面反射的层次感
         Dim Sheen As New Border With {
-            .CornerRadius = New CornerRadius(GlassRadius - 1), .IsHitTestVisible = False,
-            .Background = New LinearGradientBrush With {
-                .StartPoint = New Point(0, 0), .EndPoint = New Point(0.15, 1),
-                .GradientStops = New GradientStopCollection From {
-                    New GradientStop(Color.FromArgb(88, 255, 255, 255), 0),
-                    New GradientStop(Color.FromArgb(26, 255, 255, 255), 0.4),
-                    New GradientStop(Color.FromArgb(0, 255, 255, 255), 0.72)}}}
+            .CornerRadius = New CornerRadius(GlassRadius - 1), .IsHitTestVisible = False}
+        '光泽随浅色 / 深色外观切换，深色下自动减弱，避免卡片发白
+        Sheen.SetResourceReference(Border.BackgroundProperty, "ColorBrushGlassSheen")
         Children.Insert(0, MainChrome)
         Children.Insert(1, MainBorder)
         MainGrid = New Grid
@@ -158,7 +154,7 @@ Public Class MyCard
         If Not IsNothing(MainTextBlock) Then AniList.Add(AaColor(MainTextBlock, TextBlock.ForegroundProperty, "ColorBrush2", 90))
         If Not IsNothing(MainSwap) Then AniList.Add(AaColor(MainSwap, Shapes.Path.FillProperty, "ColorBrush2", 90))
         AniList.AddRange({
-            AaColor(MainChrome, MyDropShadow.ColorProperty, "ColorObject4", 90),
+            AaColor(MainChrome, MyDropShadow.ColorProperty, "ColorObjectShadow", 90),
             AaOpacity(MainChrome, DropShadowHoverOpacity - MainChrome.Opacity, 90)
         })
         AniStart(AniList, "MyCard Mouse " & Uuid)
@@ -169,7 +165,7 @@ Public Class MyCard
         If Not IsNothing(MainTextBlock) Then AniList.Add(AaColor(MainTextBlock, TextBlock.ForegroundProperty, "ColorBrush1", 90))
         If Not IsNothing(MainSwap) Then AniList.Add(AaColor(MainSwap, Shapes.Path.FillProperty, "ColorBrush1", 90))
         AniList.AddRange({
-            AaColor(MainChrome, MyDropShadow.ColorProperty, "ColorObject1", 90),
+            AaColor(MainChrome, MyDropShadow.ColorProperty, "ColorObjectShadow", 90),
             AaOpacity(MainChrome, DropShadowIdleOpacity - MainChrome.Opacity, 90)
         })
         AniStart(AniList, "MyCard Mouse " & Uuid)

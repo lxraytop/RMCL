@@ -6,7 +6,7 @@ Public Module ModBase
 #Region "声明"
 
     '下列版本信息由更新器自动修改
-    Public Const VersionBaseName As String = "2.14.0.0" '显示用版本名
+    Public Const VersionBaseName As String = "2.15.0.0" '显示用版本名
     Public Const CommitHash As String = "" 'Commit Hash，由 GitHub Workflow 自动替换
 #If RELEASE Then
     Public Const VersionCode As Integer = 411 '正式版
@@ -540,8 +540,12 @@ Public Module ModBase
             Key = Key.ReplaceLineEndings("")
             Value = Value?.ReplaceLineEndings("")
             '获取目前文件
+            Dim FullName As String = If(FileName.Contains(":\"), FileName, $"{Paths.Base}RMCL\{FileName}.ini")
             Dim Content = IniGetContent(FileName)
-            If Content Is Nothing Then Content = New ConcurrentDictionary(Of String, String)
+            If Content Is Nothing Then
+                Content = New ConcurrentDictionary(Of String, String)
+                IniCache(FullName) = Content '新文件先放进缓存，落盘时才能读到内容
+            End If
             '更新值
             If Value Is Nothing Then
                 If Not Content.Remove(Key) Then Return '无需处理
@@ -551,6 +555,69 @@ Public Module ModBase
                 Content(Key) = Value
             End If
             '写入文件
+            QueueIniWrite(FullName)
+        Catch ex As Exception
+            Logger.Error(ex, $"写入文件失败（{FileName} → {Key}:{Value}）", LogBehavior.Toast)
+        End Try
+    End Sub
+
+    '待落盘的 ini 文件。拖动主题滑条时每一帧都会写设置，若每次都重写整个文件会明显掉帧，
+    '所以内存缓存立即更新、磁盘写入合并到计时器里（首次改动仍然立即写，只有连续改动才合并）
+    Private ReadOnly IniPendingWrite As New ConcurrentDictionary(Of String, Boolean)(StringComparer.OrdinalIgnoreCase)
+    Private IniFlushTimer As System.Windows.Threading.DispatcherTimer
+    Private LastIniWriteTick As Integer = -10000
+
+    Private Sub QueueIniWrite(FileName As String)
+        Dim Dispatcher As System.Windows.Threading.Dispatcher = Nothing
+        Try
+            Dispatcher = Application.Current?.Dispatcher
+        Catch
+            '启动早期可能还没有 Application
+        End Try
+        If Dispatcher Is Nothing OrElse Dispatcher.HasShutdownStarted Then
+            WriteIniFile(FileName)
+            Return
+        End If
+        IniPendingWrite(FileName) = True
+        Dim Now As Integer = Environment.TickCount
+        If Dispatcher.CheckAccess() AndAlso Now - LastIniWriteTick > 250 Then
+            '间隔足够久，直接写，保证勾选框、下拉框这类单次改动立刻落盘
+            WriteIniFile(FileName)
+            LastIniWriteTick = Now
+            Return
+        End If
+        Dispatcher.BeginInvoke(
+            Sub()
+                If IniFlushTimer Is Nothing Then
+                    IniFlushTimer = New System.Windows.Threading.DispatcherTimer With {.Interval = TimeSpan.FromMilliseconds(250)}
+                    AddHandler IniFlushTimer.Tick, Sub(s, e) FlushIniWrites()
+                    Try
+                        AddHandler Application.Current.Exit, Sub(s, e) FlushIniWrites()
+                    Catch
+                        '没有 Application 时忽略
+                    End Try
+                End If
+                IniFlushTimer.Stop()
+                IniFlushTimer.Start()
+            End Sub)
+    End Sub
+
+    ''' <summary>
+    ''' 把合并中的 ini 写入全部落盘。
+    ''' </summary>
+    Public Sub FlushIniWrites()
+        If IniFlushTimer IsNot Nothing Then IniFlushTimer.Stop()
+        LastIniWriteTick = Environment.TickCount
+        For Each Name As String In New List(Of String)(IniPendingWrite.Keys)
+            Dim Ignored As Boolean
+            If IniPendingWrite.TryRemove(Name, Ignored) Then WriteIniFile(Name)
+        Next
+    End Sub
+
+    Private Sub WriteIniFile(FileName As String)
+        Try
+            Dim Content = IniGetContent(FileName)
+            If Content Is Nothing Then Return
             Dim FileContent As New StringBuilder
             For Each Pair In Content
                 FileContent.Append(Pair.Key)
@@ -558,12 +625,9 @@ Public Module ModBase
                 FileContent.Append(Pair.Value)
                 FileContent.Append(vbCrLf)
             Next
-            If Not FileName.Contains(":\") Then FileName = $"{Paths.Base}RMCL\{FileName}.ini"
-            '处理相对路径
-            FileName = If(FileName.Contains(":\"), FileName, Paths.Base & FileName)
             FileUtils.Write(FileName, FileContent.ToString)
         Catch ex As Exception
-            Logger.Error(ex, $"写入文件失败（{FileName} → {Key}:{Value}）", LogBehavior.Toast)
+            Logger.Error(ex, $"写入文件失败（{FileName}）", LogBehavior.Toast)
         End Try
     End Sub
 

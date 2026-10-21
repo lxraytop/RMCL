@@ -15,10 +15,16 @@
                     </Border>
                     <local:MyCheckBox local:SettingService.Key="LaunchArgumentRam" Text="启动游戏前进行内存优化" Margin="-1,0,0,4" Height="22" />
                     <TextBlock Text="与「设置 → 启动」中的同名选项是同一个开关；开启后每次启动游戏都会请求管理员权限。" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,12" />
-                    <StackPanel Orientation="Horizontal">
-                        <local:MyButton x:Name="BtnMemoryOptimize" Text="立即优化内存" MinWidth="140" Padding="13,0" ColorType="Highlight" Margin="0,0,20,0" />
-                        <local:MyButton x:Name="BtnMemoryRefresh" Text="刷新信息" MinWidth="110" Padding="13,0" />
-                    </StackPanel>
+                    <Grid Height="35" Margin="0,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                        </Grid.ColumnDefinitions>
+                        <local:MyButton x:Name="BtnMemoryOptimize" Text="立即优化内存" MinWidth="140" Height="35" Padding="13,0" ColorType="Highlight" Margin="0,0,20,0" />
+                        <local:MyButton x:Name="BtnMemoryRefresh" Text="刷新信息" MinWidth="140" Height="35" Padding="13,0" Grid.Column="1" />
+                    </Grid>
+                    <TextBlock x:Name="LabMemoryStatus" Margin="1,12,0,0" FontSize="12.5" TextWrapping="Wrap"
+                               Foreground="{DynamicResource ColorBrush3}" Text="尚未执行内存优化。" />
                 </StackPanel>
             </local:MyCard>
             <local:MyCard Margin="0,0,0,15" Title="清理游戏垃圾">
@@ -28,10 +34,14 @@
                     <Border Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,10" Margin="0,0,0,12">
                         <TextBlock x:Name="LabJunkInfo" TextWrapping="Wrap" LineHeight="19" Text="正在统计垃圾文件……" />
                     </Border>
-                    <StackPanel Orientation="Horizontal">
-                        <local:MyButton x:Name="BtnJunkClean" Text="清理垃圾" MinWidth="140" Padding="13,0" ColorType="Highlight" Margin="0,0,20,0" />
-                        <local:MyButton x:Name="BtnJunkRefresh" Text="重新统计" MinWidth="110" Padding="13,0" />
-                    </StackPanel>
+                    <Grid Height="35" Margin="0,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                        </Grid.ColumnDefinitions>
+                        <local:MyButton x:Name="BtnJunkClean" Text="清理垃圾" MinWidth="140" Height="35" Padding="13,0" ColorType="Highlight" Margin="0,0,20,0" />
+                        <local:MyButton x:Name="BtnJunkRefresh" Text="重新统计" MinWidth="140" Height="35" Padding="13,0" Grid.Column="1" />
+                    </Grid>
                 </StackPanel>
             </local:MyCard>
         </StackPanel>

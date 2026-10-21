@@ -48,6 +48,27 @@ Public Class MyButton
         Highlight = 1
         Red = 2
     End Enum
+    ''' <summary>
+    ''' 是否改用卡片材质（ColorBrushGlassCard）作为底色，与同页的 MyCard 保持一致。
+    ''' 默认使用半透明内衬（ColorBrushGlassInner）。
+    ''' </summary>
+    Public Property UseCardBackground As Boolean
+        Get
+            Return GetValue(UseCardBackgroundProperty)
+        End Get
+        Set(value As Boolean)
+            SetValue(UseCardBackgroundProperty, value)
+        End Set
+    End Property
+    Public Shared ReadOnly UseCardBackgroundProperty As DependencyProperty = DependencyProperty.Register("UseCardBackground", GetType(Boolean), GetType(MyButton), New PropertyMetadata(False, New PropertyChangedCallback(
+    Sub(sender As DependencyObject, e As DependencyPropertyChangedEventArgs)
+        If sender Is Nothing Then Return
+        CType(sender, MyButton).RefreshBackColor()
+    End Sub)))
+    Private Sub RefreshBackColor()
+        '卡片材质是渐变画刷，不能参与颜色动画，因此这里直接用资源引用
+        PanFore.SetResourceReference(BackgroundProperty, If(UseCardBackground, "ColorBrushGlassCard", "ColorBrushGlassInner"))
+    End Sub
     '属性穿透
     Public Shared Shadows ReadOnly PaddingProperty As DependencyProperty = DependencyProperty.Register("Padding", GetType(Thickness), GetType(MyButton), New PropertyMetadata(New PropertyChangedCallback(
         Sub(sender As MyButton, e As DependencyPropertyChangedEventArgs) If sender IsNot Nothing Then sender.PanFore.Padding = e.NewValue)))
@@ -157,6 +178,8 @@ Public Class MyButton
                  }, "MyButton Scale " & Uuid)
     End Sub
     Private Sub Button_MouseEnter() Handles Me.MouseEnter
+        '卡片材质是渐变画刷，颜色动画会把它打回单色，因此只保留边框反馈
+        If UseCardBackground Then Return
         AniStart(AaColor(PanFore, BackgroundProperty, If(_ColorType = ColorState.Red, "ColorBrushRedBack", "ColorBrush7"), AnimationColorIn), "MyButton Background " & Uuid)
     End Sub
     Private Sub Button_MouseUp() Handles Me.MouseLeftButtonUp
@@ -167,7 +190,9 @@ Public Class MyButton
            }, "MyButton Scale " & Uuid)
     End Sub
     Private Sub Button_MouseLeave() Handles Me.MouseLeave
-        AniStart(AaColor(PanFore, BackgroundProperty, "ColorBrushHalfWhite", AnimationColorOut), "MyButton Background " & Uuid)
+        If Not UseCardBackground Then
+            AniStart(AaColor(PanFore, BackgroundProperty, "ColorBrushHalfWhite", AnimationColorOut), "MyButton Background " & Uuid)
+        End If
         If Not IsMouseDown Then Return
         IsMouseDown = False
         AniStart(AaScaleTransform(PanFore, 1 - CType(PanFore.RenderTransform, ScaleTransform).ScaleX, 800,, New AniEaseOutFluent(AniEasePower.Strong)), "MyButton Scale " & Uuid)

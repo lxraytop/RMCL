@@ -54,10 +54,24 @@
         If Not BtnMemoryOptimize.IsEnabled Then Return
         BtnMemoryOptimize.IsEnabled = False
         BtnMemoryOptimize.Text = "正在优化……"
+        LabMemoryStatus.Text = "正在申请管理员权限并清理进程工作集，请稍候……"
         RunInNewThread(
         Sub()
+            Dim Freed As Long = -1
+            Dim LastReport As Integer = 0
             Try
-                MemoryOptimize(True)
+                Freed = MemoryOptimize(True,
+                Sub(Current As Integer, Total As Integer)
+                    '总数为 0 表示当前在等待提权子进程完成
+                    If Total <= 0 Then
+                        RunInUi(Sub() LabMemoryStatus.Text = "已请求管理员权限，正在等待提权进程完成优化……")
+                        Return
+                    End If
+                    '限制刷新频率，避免上百个进程逐个跨线程刷新界面
+                    If Current - LastReport < 24 AndAlso Current < Total Then Return
+                    LastReport = Current
+                    RunInUi(Sub() LabMemoryStatus.Text = $"正在清理进程工作集…… {Current} / {Total}")
+                End Sub)
             Catch ex As Exception
                 Logger.Warn(ex, "内存优化失败")
             Finally
@@ -65,6 +79,13 @@
                 Sub()
                     BtnMemoryOptimize.Text = "立即优化内存"
                     BtnMemoryOptimize.IsEnabled = True
+                    If Freed < 0 Then
+                        LabMemoryStatus.Text = $"上次优化：{Now.ToLongTimeString()}，未取得管理员权限，未执行优化"
+                    ElseIf Freed > 0 Then
+                        LabMemoryStatus.Text = $"上次优化：{Now.ToLongTimeString()}，共释放 {FormatSize(Freed)}"
+                    Else
+                        LabMemoryStatus.Text = $"上次优化：{Now.ToLongTimeString()}，未检测到可释放的内存（当前已较为充足）"
+                    End If
                     RefreshMemoryInfo()
                 End Sub)
             End Try
@@ -75,27 +96,56 @@
 
 #Region "清理游戏垃圾"
 
+    ''' <summary>
+    ''' 生成垃圾占用的说明文本。
+    ''' 只做计算、不接触任何控件，因此可以在后台线程安全调用。
+    ''' </summary>
+    Private Function GetRubbishText() As String
+        Dim Summary = GetRubbishSummary()
+        Return $"可清理空间合计：{FormatSize(Summary.Total)}" & vbCrLf & Summary.Details.Join(vbCrLf)
+    End Function
+
+    ''' <summary>
+    ''' 在 UI 线程刷新垃圾统计文本。
+    ''' </summary>
     Private Sub RefreshJunkInfo()
         Try
-            Dim Summary = GetRubbishSummary()
-            LabJunkInfo.Text = $"可清理空间合计：{FormatSize(Summary.Total)}" & vbCrLf & Summary.Details.Join(vbCrLf)
+            LabJunkInfo.Text = GetRubbishText()
         Catch ex As Exception
             Logger.Warn(ex, "统计垃圾文件失败")
             LabJunkInfo.Text = "无法统计垃圾文件。"
         End Try
     End Sub
 
-    Private Sub BtnJunkRefresh_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnJunkRefresh.Click
-        If Not BtnJunkRefresh.IsEnabled Then Return
+    ''' <summary>
+    ''' 在后台线程统计垃圾占用，统计完成后再回到 UI 线程更新文本。
+    ''' 统计需要遍历缓存与临时目录，直接放在 UI 线程会卡顿；但也不能在后台线程直接改控件（会导致跨线程异常）。
+    ''' </summary>
+    Private Sub RefreshJunkInfoAsync()
         BtnJunkRefresh.IsEnabled = False
+        BtnJunkRefresh.Text = "统计中……"
+        LabJunkInfo.Text = "正在统计垃圾文件……"
         RunInNewThread(
         Sub()
+            Dim Text As String
             Try
-                RefreshJunkInfo()
-            Finally
-                RunInUi(Sub() BtnJunkRefresh.IsEnabled = True)
+                Text = GetRubbishText()
+            Catch ex As Exception
+                Logger.Warn(ex, "统计垃圾文件失败")
+                Text = "无法统计垃圾文件。"
             End Try
+            RunInUi(
+            Sub()
+                LabJunkInfo.Text = Text
+                BtnJunkRefresh.Text = "重新统计"
+                BtnJunkRefresh.IsEnabled = True
+            End Sub)
         End Sub, "统计垃圾")
+    End Sub
+
+    Private Sub BtnJunkRefresh_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnJunkRefresh.Click
+        If Not BtnJunkRefresh.IsEnabled Then Return
+        RefreshJunkInfoAsync()
     End Sub
 
     Private Sub BtnJunkClean_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnJunkClean.Click

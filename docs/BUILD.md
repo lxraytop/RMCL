@@ -1,4 +1,4 @@
-# 构建说明（RMCL 2.14.0.0）
+# 构建说明（RMCL 2.15.0.0）
 
 RMCL 基于上游 2.14.0.0 开源基线重构，技术栈与上游一致：**.NET Framework 4.8 + WPF + VB.NET**（主工程为传统 vbproj，`RMCLCS` 与 `MeloongCore` 为 SDK 风格 csproj）。
 
@@ -52,8 +52,8 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 
 | 文件 | 大小 | 说明 |
 | --- | --- | --- |
-| `dist/RMCL 2.14.0.0/RMCL.exe` | 5.36 MB | 主程序，版本信息 `2.14.0.0 / Ray Minecraft Launcher` |
-| `dist/RMCL 2.14.0.0/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
-| `dist/RMCL-2.14.0.0-win.zip` | 2.42 MB | 上述两个文件的压缩包 |
+| `dist/RMCL 2.15.0.0/RMCL.exe` | 5.36 MB | 主程序，版本信息 `2.15.0.0 / Ray Minecraft Launcher` |
+| `dist/RMCL 2.15.0.0/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
+| `dist/RMCL-2.15.0.0-win.zip` | 2.42 MB | 上述两个文件的压缩包 |
 
 冒烟验证：解压后直接运行，主窗口标题为 `Ray Minecraft Launcher　`，初始化日志（`RMCL\Log1.txt`）无异常，Java 探测、Mojang 版本列表加载正常。
