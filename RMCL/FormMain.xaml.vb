@@ -405,24 +405,9 @@ Public Class FormMain
         '加载池
         RunInNewThread(
         Sub()
-            'EULA 提示
-            Const EulaVersion As Integer = 2
-            If Settings.Get(Of Integer)("SystemEulaVersion") < EulaVersion Then
-                Select Case MyMsgBox(
-                    If(Settings.Get(Of Integer)("SystemEulaVersion") = 0,
-                        "在使用 RMCL 前，请先阅读用户协议与免责声明。",
-                        $"RMCL 的用户协议与免责声明已更新。{vbCrLf}请阅读更新后的用户协议与免责声明。"),
-                        "协议授权", "同意", "拒绝", "查看用户协议与免责声明",
-                        Button3Action:=Sub() OpenWebsite("https://shimo.im/docs/rGrd8pY8xWkt6ryW"))
-                    Case 1
-                        Settings.Set("SystemEulaVersion", EulaVersion)
-                    Case 2
-                        EndProgram(False)
-                End Select
-            End If
             '启动加载器池
             Try
-                JavaInit() '延后到同意协议后再执行，避免在初次启动时进行进程操作
+                JavaInit()
                 Thread.Sleep(100)
                 DlClientListMojangLoader.Start(1) 'RMCL 会同时根据这里的加载结果决定是否使用官方源进行下载
                 RunCountSub()

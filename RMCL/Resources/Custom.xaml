@@ -132,7 +132,7 @@
             <local:MyButton Margin="0,0,10,0" Width="140" Height="35" HorizontalAlignment="Left" Padding="13,0,13,0"
                         Text="清理垃圾提示" EventType="弹出提示" EventData="清理游戏垃圾可以在 设置 → 功能 中手动执行" ToolTip="这条按钮使用 弹出提示 事件，只会弹出一条提示" />
             <local:MyButton Margin="0,0,10,0" Width="140" Height="35" HorizontalAlignment="Left" Padding="13,0,13,0"
-                        Text="下载百度的 Logo" EventType="下载文件" EventData="https://www.baidu.com/img/flexible/logo/pc/result.png" />
+                        Text="查看百度的 Logo" EventType="打开网页" EventData="https://www.baidu.com/img/flexible/logo/pc/result.png" />
         </StackPanel>
     </StackPanel>
 </local:MyCard>

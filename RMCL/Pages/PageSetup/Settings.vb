@@ -22,7 +22,6 @@ Public Class Settings
         New Setting("HintIndieSetup", False, Source:=Sources.Registry),
         New Setting("HintExportConfig", False, Source:=Sources.Registry),
         New Setting("HintSnapshot", False, Source:=Sources.Registry),
-        New Setting("SystemEulaVersion", 0, Source:=Sources.Registry),
         New Setting("SystemCount", 0, Source:=Sources.Registry, Encrypted:=True),
         New Setting("SystemLaunchCount", 0, Source:=Sources.Registry, Encrypted:=True),
         New Setting("SystemLastVersionReg", 0, Source:=Sources.Registry, Encrypted:=True),
