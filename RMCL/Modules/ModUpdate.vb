@@ -413,7 +413,6 @@ Friend Module ModUpdate
         SetStatus(UpdateStatus.Downloading, "", Info, 0)
         Try
             Dim LocalPath As String = DownloadUpdate(Info, AddressOf OnDownloadProgress)
-            Settings.Set("ToolLauncherUpdateSkip", Info.Version)
             StageUpdate(LocalPath, False)
             SyncLock StateLock
                 StagedValue = LocalPath
@@ -439,15 +438,20 @@ Friend Module ModUpdate
 
     ''' <summary>
     ''' 启动时自动检查：发现新版本时弹窗展示公告并询问，确认后才下载。
+    ''' 不记忆「已经提示过」，只要还有更新就每次都提示 —— 否则一旦某次安装没落地，
+    ''' 用户会因为「下载过」被永久静音，看起来就是自动更新失效。
     ''' </summary>
     Public Sub AutoCheck()
         RunInNewThread(
         Sub()
             Check()
             Dim Info As UpdateInfo = Latest
-            If Info Is Nothing OrElse Status <> UpdateStatus.Available Then Return
-            If Settings.Get(Of String)("ToolLauncherUpdateSkip") = Info.Version Then
-                Logger.Info($"新版本 {Info.Version} 已经下载过，本次不再提示")
+            If Info Is Nothing Then
+                Logger.Info("自动更新：没有取到版本信息，本次不提示")
+                Return
+            End If
+            If Status <> UpdateStatus.Available Then
+                Logger.Info($"自动更新：当前 {VersionBaseName}，最新 {Info.Version}，无需提示")
                 Return
             End If
             RunInUi(Sub() AskUpdate(Info))

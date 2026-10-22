@@ -1,73 +1,227 @@
-14:55:00.446 I <4 · Logger> [Logger] RmclLogger 日志初始化结束
-14:55:00.506 I [Application] 程序版本：正式版 2.17.0.0 (411)
-14:55:00.506 I [Application] 识别码：0000-0000-0000-0000
-14:55:00.506 I [Application] 程序路径：F:\ProjectAI\浣曟厱鍗縗RMCL.exe
-14:55:00.506 I [Application] 系统编码：gb2312 (936, GBK=True)
-14:55:00.506 I [Application] 管理员权限：False
-14:55:00.506 I [Application] 第一阶段加载用时：78 ms
-14:55:00.798 I [FormMain] 全新的 RMCL，使用新的版本隔离默认值
-14:55:00.858 I [ModLoader] 加载器 LoaderTask`2 Minecraft Folder List 状态改变：Loading
-14:55:00.859 I [FormMain] 第二阶段加载用时：345 ms
-14:55:00.865 I <5 · L/Minecraft Folder List> [ModLoader] 加载器 LoaderTask`2 Minecraft Folder List 状态改变：Finished
-14:55:01.020 I [FormMain] 从设置更新背景图片与标题栏样式
-14:55:01.069 I [FormMain] 窗口已置顶，位置：(510, 301), 900 x 550
-14:55:01.072 I [FormMain] 第三阶段加载用时：55 ms
-14:55:01.072 I <8 · Animation> [ModAnimation] 动画线程开始
-14:55:01.082 I <12 · Version Check> [PageLaunchLeft] 没有已储存的 Minecraft 文件夹
-14:55:01.083 I <12 · Version Check> [ModLoader] 加载器 LoaderTask`2 Minecraft Folder List 状态改变：Loading
-14:55:01.086 I <13 · L/Minecraft Folder List> [ModLoader] 加载器 LoaderTask`2 Minecraft Folder List 状态改变：Finished
-14:55:01.108 I <12 · Version Check> [ModMinecraft] 当前选择的 Minecraft 文件夹：F:\RMCL\.minecraft\
-14:55:01.127 I [ModLoader] 加载器 LoaderTask`2 Loader Skin Legacy 状态改变：Loading
-14:55:01.130 I <15 · L/Loader Skin Legacy> [ModLoader] 加载器 LoaderTask`2 Loader Skin Legacy 状态改变：Finished
-14:55:01.162 I [PageLaunchRight] 实例化：清空主页 UI，来源为空
-14:55:01.171 I [ModBase] 将资源写入到文件：libwebp64 → F:\ProjectAI\RMCL\libwebp.dll
-14:55:01.180 I [MySkin] 载入头像成功：Loader Skin Legacy
-14:55:01.270 I <10 · 初始化> [ModJava] 共有 6 个可用的 Java：
-14:55:01.270 I <10 · 初始化> [ModJava] - Java 25 (25.0.1.0)：C:\Users\******\AppData\Roaming\.minecraft\runtime\java-runtime-epsilon\bin\
-14:55:01.270 I <10 · 初始化> [ModJava] - Java 21 (21.0.3.0)：C:\Users\******\AppData\Roaming\.minecraft\runtime\java-runtime-delta\bin\
-14:55:01.270 I <10 · 初始化> [ModJava] - Java 21 (21.0.7.0)：C:\Users\******\.jdks\ms-21.0.7\bin\
-14:55:01.270 I <10 · 初始化> [ModJava] - Java 21 (21.0.3.0)：C:\Users\******\AppData\Roaming\.hmcl\java\windows-x86_64\mojang-java-runtime-delta\bin\
-14:55:01.270 I <10 · 初始化> [ModJava] - Java 21 (21.0.7.0)：C:\Program Files\Eclipse Adoptium\jdk-21.0.7.6-hotspot\bin\
-14:55:01.270 I <10 · 初始化> [ModJava] - Java 8 (8.0.51.0)：C:\Users\******\AppData\Roaming\.minecraft\runtime\jre-legacy\bin\
-14:55:01.319 I [ModMinecraft] 当前选择的 Minecraft 版本：F:\RMCL\.minecraft\versions\逆转未来2.3.3\
-14:55:01.321 I [PageLaunchLeft] 启动按钮：Minecraft 版本：F:\RMCL\.minecraft\versions\逆转未来2.3.3\
-14:55:01.331 I [ModLoader] 加载器 LoaderTask`2 Loader Skin Auth 状态改变：Loading
-14:55:01.339 I [ModLoader] 加载器 LoaderTask`2 登录 状态改变：Loading
-14:55:01.340 I <5 · L/Loader Skin Auth> [ModLoader] 加载器 LoaderTask`2 Loader Skin Auth 状态改变：Finished
-14:55:01.341 I <14 · L/登录> [ModLaunch] 登录加载已开始
-14:55:01.341 I [MySkin] 载入头像成功：Loader Skin Auth
-14:55:01.341 I <14 · L/登录> [ModLoader] 加载器 LoaderTask`2 Loader Login Auth 状态改变：Loading
-14:55:01.346 I <11 · L/Loader Login Auth> [ModLaunch] 登录方式：Authlib-Injector
-14:55:01.349 I <11 · L/Loader Login Auth> [ModLaunch] 验证登录开始（Validate, Auth）
-14:55:01.354 I <11 · L/Loader Login Auth> [ModNet] 发起网络请求（POST，https://littleskin.cn/api/yggdrasil/authserver/validate），最大超时 10000
-14:55:01.389 I <10 · 初始化> [ModLoader] 加载器 LoaderTask`2 DlClientList Mojang 状态改变：Loading
-14:55:01.391 I <10 · 初始化> [ModLoader] 加载器 LoaderTask`2 RMCL 配置更新 状态改变：Loading
-14:55:01.391 I <20 · L/RMCL 配置更新> [ModSecret] 该版本中不包含更新通知功能……
-14:55:01.392 I <20 · L/RMCL 配置更新> [ModLoader] 加载器 LoaderTask`2 RMCL 配置更新 状态改变：Finished
-14:55:01.392 I <21 · TryClearTaskTemp> [ModMain] 开始清理任务缓存文件夹
-14:55:01.392 I <19 · L/DlClientList Mojang> [ModNet] 发起网络请求（GET，https://launchermeta.mojang.com/mc/game/version_manifest.json），最大超时 10000
-14:55:01.393 I <21 · TryClearTaskTemp> [ModMain] 已清理任务缓存文件夹
-14:55:01.395 I <10 · 初始化> [ModNet] 发起网络请求（GET，https://api.github.com/repos/lxraytop/RMCL/releases/latest），最大超时 10000
-14:55:01.646 I <11 · L/Loader Login Auth> [ModLaunch] 验证登录成功（Validate, Auth）
-14:55:01.646 I <11 · L/Loader Login Auth> [ModLoader] 加载器 LoaderTask`2 Loader Login Auth 状态改变：Finished
-14:55:01.650 I <14 · L/登录> [ModLaunch] 登录加载已结束
-14:55:01.650 I <14 · L/登录> [ModLoader] 加载器 LoaderTask`2 登录 状态改变：Finished
-14:55:01.806 I [FormMain] DPI：96，系统版本：Microsoft Windows NT 10.0.26200.0，RMCL 位置：F:\ProjectAI\浣曟厱鍗縗RMCL.exe
-14:55:01.937 I <19 · L/DlClientList Mojang> [ModDownload] Mojang 官方源加载耗时：545ms，可优先使用官方源
-14:55:01.937 I <19 · L/DlClientList Mojang> [ModLoader] 加载器 LoaderTask`2 DlClientList Mojang 状态改变：Finished
-14:55:02.010 I <10 · 初始化> [ModUpdate] 检查更新：最新版本 2.17.0.0，exe 资产 RMCL.exe
-14:55:02.010 I <10 · 初始化> [ModUpdate] 启动器已是最新版本（2.17.0.0）
-14:55:03.732 I [MyRadioButton] 按下单选按钮：设置
-14:55:03.805 I [FormMain] 切换主要页面：Setup, -1
-14:55:04.580 I [MyListItem] 按下单选列表项：功能
-14:55:07.872 I [MyButton] 按下按钮：检查更新
-14:55:07.873 I <31 · 检查更新> [ModNet] 发起网络请求（GET，https://api.github.com/repos/lxraytop/RMCL/releases/latest），最大超时 10000
-14:55:07.874 I <31 · 检查更新> [ModUpdate] 检查更新：最新版本 2.17.0.0，exe 资产 RMCL.exe
-14:55:07.888 I [ModMain] 弹出提示：启动器已是最新版本
-14:55:40.989 I [ModAnimation] 两个动画帧间隔 126 ms
-14:56:53.408 I [ModAnimation] 两个动画帧间隔 141 ms
-15:02:16.052 I [FormMain] 收到置顶信息：4131012
-15:02:16.062 I [FormMain] 窗口已置顶，位置：(510, 301), 900 x 550
-15:02:17.599 I [MyIconButton] 按下图标按钮：BtnTitleClose
-15:02:17.603 I [FormMain] 收到关闭指令
-15:02:17.825 I [FormMain] 程序已退出，返回值：Success
+15:10:28.236 I <4 · Logger> [Logger] 开始轮转日志文件
+15:10:28.251 I <4 · Logger> [Logger] RmclLogger 日志初始化结束
+15:10:28.288 I [Application] 程序版本：正式版 2.17.0.1 (411)
+15:10:28.288 I [Application] 识别码：0000-0000-0000-0000
+15:10:28.288 I [Application] 程序路径：F:\ProjectAI\浣曟厱鍗縗RMCL.exe
+15:10:28.288 I [Application] 系统编码：gb2312 (936, GBK=True)
+15:10:28.288 I [Application] 管理员权限：False
+15:10:28.288 I [Application] 第一阶段加载用时：66 ms
+15:10:28.573 I [FormMain] 全新的 RMCL，使用新的版本隔离默认值
+15:10:28.633 I [ModLoader] 加载器 LoaderTask`2 Minecraft Folder List 状态改变：Loading
+15:10:28.634 I [FormMain] 第二阶段加载用时：339 ms
+15:10:28.640 I <5 · L/Minecraft Folder List> [ModLoader] 加载器 LoaderTask`2 Minecraft Folder List 状态改变：Finished
+15:10:28.781 I [FormMain] 从设置更新背景图片与标题栏样式
+15:10:28.828 I [FormMain] 窗口已置顶，位置：(510, 301), 900 x 550
+15:10:28.831 I [FormMain] 第三阶段加载用时：54 ms
+15:10:28.831 I <8 · Animation> [ModAnimation] 动画线程开始
+15:10:28.843 I <12 · Version Check> [ModMinecraft] 当前选择的 Minecraft 文件夹：F:\RMCL\.minecraft\
+15:10:28.863 I [ModLoader] 加载器 LoaderTask`2 Loader Skin Auth 状态改变：Loading
+15:10:28.869 I <13 · L/Loader Skin Auth> [ModLoader] 加载器 LoaderTask`2 Loader Skin Auth 状态改变：Finished
+15:10:28.909 I [PageLaunchRight] 实例化：清空主页 UI，来源为空
+15:10:28.922 I [MySkin] 载入头像成功：Loader Skin Auth
+15:10:29.035 I <10 · 初始化> [ModJava] 共有 6 个可用的 Java：
+15:10:29.035 I <10 · 初始化> [ModJava] - Java 25 (25.0.1.0)：C:\Users\******\AppData\Roaming\.minecraft\runtime\java-runtime-epsilon\bin\
+15:10:29.035 I <10 · 初始化> [ModJava] - Java 21 (21.0.3.0)：C:\Users\******\AppData\Roaming\.minecraft\runtime\java-runtime-delta\bin\
+15:10:29.035 I <10 · 初始化> [ModJava] - Java 21 (21.0.7.0)：C:\Users\******\.jdks\ms-21.0.7\bin\
+15:10:29.035 I <10 · 初始化> [ModJava] - Java 21 (21.0.3.0)：C:\Users\******\AppData\Roaming\.hmcl\java\windows-x86_64\mojang-java-runtime-delta\bin\
+15:10:29.035 I <10 · 初始化> [ModJava] - Java 21 (21.0.7.0)：C:\Program Files\Eclipse Adoptium\jdk-21.0.7.6-hotspot\bin\
+15:10:29.035 I <10 · 初始化> [ModJava] - Java 8 (8.0.51.0)：C:\Users\******\AppData\Roaming\.minecraft\runtime\jre-legacy\bin\
+15:10:29.054 I [ModMinecraft] 当前选择的 Minecraft 版本：F:\RMCL\.minecraft\versions\逆转未来2.3.3\
+15:10:29.057 I [PageLaunchLeft] 启动按钮：Minecraft 版本：F:\RMCL\.minecraft\versions\逆转未来2.3.3\
+15:10:29.060 I [ModLoader] 加载器 LoaderTask`2 登录 状态改变：Loading
+15:10:29.062 I <11 · L/登录> [ModLaunch] 登录加载已开始
+15:10:29.063 I <11 · L/登录> [ModLoader] 加载器 LoaderTask`2 Loader Login Auth 状态改变：Loading
+15:10:29.067 I <14 · L/Loader Login Auth> [ModLaunch] 登录方式：Authlib-Injector
+15:10:29.068 I <14 · L/Loader Login Auth> [ModLaunch] 验证登录开始（Validate, Auth）
+15:10:29.071 I <14 · L/Loader Login Auth> [ModNet] 发起网络请求（POST，https://littleskin.cn/api/yggdrasil/authserver/validate），最大超时 10000
+15:10:29.151 I <10 · 初始化> [ModLoader] 加载器 LoaderTask`2 DlClientList Mojang 状态改变：Loading
+15:10:29.153 I <10 · 初始化> [ModLoader] 加载器 LoaderTask`2 RMCL 配置更新 状态改变：Loading
+15:10:29.154 I <20 · L/DlClientList Mojang> [ModNet] 发起网络请求（GET，https://launchermeta.mojang.com/mc/game/version_manifest.json），最大超时 10000
+15:10:29.154 I <21 · L/RMCL 配置更新> [ModSecret] 该版本中不包含更新通知功能……
+15:10:29.154 I <21 · L/RMCL 配置更新> [ModLoader] 加载器 LoaderTask`2 RMCL 配置更新 状态改变：Finished
+15:10:29.155 I <22 · TryClearTaskTemp> [ModMain] 开始清理任务缓存文件夹
+15:10:29.156 I <22 · TryClearTaskTemp> [ModMain] 已清理任务缓存文件夹
+15:10:29.159 I <23 · 自动检查更新> [ModNet] 发起网络请求（GET，https://api.github.com/repos/lxraytop/RMCL/releases/latest），最大超时 10000
+15:10:29.183 I <23 · 自动检查更新> [ModUpdate] 检查更新：最新版本 2.17.0.1，exe 资产 RMCL.exe
+15:10:29.363 I <14 · L/Loader Login Auth> [ModLaunch] 验证登录成功（Validate, Auth）
+15:10:29.364 I <14 · L/Loader Login Auth> [ModLoader] 加载器 LoaderTask`2 Loader Login Auth 状态改变：Finished
+15:10:29.368 I <11 · L/登录> [ModLaunch] 登录加载已结束
+15:10:29.368 I <11 · L/登录> [ModLoader] 加载器 LoaderTask`2 登录 状态改变：Finished
+15:10:29.553 I [FormMain] DPI：96，系统版本：Microsoft Windows NT 10.0.26200.0，RMCL 位置：F:\ProjectAI\浣曟厱鍗縗RMCL.exe
+15:10:29.665 I <20 · L/DlClientList Mojang> [ModDownload] Mojang 官方源加载耗时：511ms，可优先使用官方源
+15:10:29.666 I <20 · L/DlClientList Mojang> [ModLoader] 加载器 LoaderTask`2 DlClientList Mojang 状态改变：Finished
+15:10:29.750 I [MyRadioButton] 按下单选按钮：设置
+15:10:29.827 I [FormMain] 切换主要页面：Setup, -1
+15:10:29.961 I [ModLoader] 加载器 LoaderTask`2 Loader Skin Legacy 状态改变：Loading
+15:10:29.963 I <22 · L/Loader Skin Legacy> [ModLoader] 加载器 LoaderTask`2 Loader Skin Legacy 状态改变：Finished
+15:10:30.610 I [MyListItem] 按下单选列表项：功能
+15:10:33.664 I [MyButton] 按下按钮：检查更新
+15:10:33.665 I <23 · 检查更新> [ModNet] 发起网络请求（GET，https://api.github.com/repos/lxraytop/RMCL/releases/latest），最大超时 10000
+15:10:33.667 I <23 · 检查更新> [ModUpdate] 检查更新：最新版本 2.17.0.1，exe 资产 RMCL.exe
+15:10:34.473 I [MyButton] 按下按钮：打开发布页
+15:10:34.473 I [ModBase] 正在打开网页：https://github.com/lxraytop/RMCL/releases/tag/v2.17.0.1
+15:10:34.477 I [ModBase] 启动进程：https://github.com/lxraytop/RMCL/releases/tag/v2.17.0.1 
+15:10:39.246 I [MyRadioButton] 按下单选按钮：启动
+15:10:39.247 I [FormMain] 切换主要页面：Launch, -1
+15:10:39.954 I [MyRadioButton] 按下单选按钮：设置
+15:10:39.954 I [FormMain] 切换主要页面：Setup, -1
+15:10:48.256 I [MyButton] 按下按钮：检查更新
+15:10:48.256 I <44 · 检查更新> [ModNet] 发起网络请求（GET，https://api.github.com/repos/lxraytop/RMCL/releases/latest），最大超时 10000
+15:10:48.258 I <44 · 检查更新> [ModUpdate] 检查更新：最新版本 2.17.0.1，exe 资产 RMCL.exe
+15:10:58.919 I [MyListItem] 按下单选列表项：启动
+15:10:59.055 I [ModLoader] 加载器 LoaderTask`2 Loader Skin Legacy 状态改变：Loading
+15:10:59.055 I <32 · L/Loader Skin Legacy> [ModLoader] 加载器 LoaderTask`2 Loader Skin Legacy 状态改变：Finished
+15:10:59.514 I [MyRadioButton] 按下单选按钮：启动
+15:10:59.514 I [FormMain] 切换主要页面：Launch, -1
+15:11:00.950 I [MyButton] 按下按钮：版本选择
+15:11:00.959 I [FormMain] 切换主要页面：InstanceSelect, LinkMain
+15:11:01.088 I [ModLoader] 加载器 LoaderTask`2 Minecraft Instance List 状态改变：Loading
+15:11:01.088 I [PageLaunchLeft] 启动按钮：正在加载 Minecraft 版本
+15:11:01.108 I [PageSelectLeft] 有效的 Minecraft 文件夹：RMCL > F:\RMCL\.minecraft\
+15:11:01.125 I [PageSelectLeft] 有效的 Minecraft 文件夹：PCL > F:\PCL\.minecraft\
+15:11:01.134 I <45 · L/Minecraft Instance List> [ModMinecraft] 当前选择的 Minecraft 版本：F:\RMCL\.minecraft\versions\逆转未来2.3.3\
+15:11:01.134 I <45 · L/Minecraft Instance List> [ModMinecraft] 选择该文件夹储存的 Minecraft 版本：F:\RMCL\.minecraft\versions\逆转未来2.3.3\
+15:11:01.174 I <45 · L/Minecraft Instance List> [ModLoader] 加载器 LoaderTask`2 Minecraft Instance List 状态改变：Finished
+15:11:02.075 I [MyIconButton] 按下图标按钮：BtnTitleInner
+15:11:02.076 I [FormMain] 切换主要页面：Launch, -1
+15:11:02.194 I [PageLaunchLeft] 启动按钮：Minecraft 版本：F:\RMCL\.minecraft\versions\逆转未来2.3.3\
+15:11:02.921 I [MyRadioButton] 按下单选按钮：下载
+15:11:02.990 I [ModLoader] 加载器 LoaderTask`2 DlClientList Main 状态改变：Loading
+15:11:02.990 I <51 · ForgeRecommendedRefresh> [ModDownloadLib] 刷新 Forge 推荐版本缓存开始
+15:11:02.990 I <51 · ForgeRecommendedRefresh> [ModNet] 发起网络请求（GET，https://bmclapi2.bangbang93.com/forge/promos），最大超时 10000
+15:11:02.991 I [FormMain] 切换主要页面：Download, -1
+15:11:02.997 I <52 · L/DlClientList Main> [ModLoader] 加载器 LoaderTask`2 DlClientList Mojang 状态改变：Loading
+15:11:02.997 I <53 · L/DlClientList Mojang> [ModNet] 发起网络请求（GET，https://launchermeta.mojang.com/mc/game/version_manifest.json），最大超时 10000
+15:11:03.009 I <53 · L/DlClientList Mojang> [ModLoader] 加载器 LoaderTask`2 DlClientList Mojang 状态改变：Finished
+15:11:03.056 I [ModLoader] 加载器 LoaderTask`2 DlOptiFineList Main 状态改变：Loading
+15:11:03.057 I [ModLoader] 加载器 LoaderTask`2 DlLiteLoaderList Main 状态改变：Loading
+15:11:03.059 I [ModLoader] 加载器 LoaderTask`2 DlFabricList Main 状态改变：Loading
+15:11:03.060 I <56 · L/DlOptiFineList Main> [ModLoader] 加载器 LoaderTask`2 DlOptiFineList Official 状态改变：Loading
+15:11:03.061 I [ModLoader] 加载器 LoaderTask`2 DlNeoForgeList Main 状态改变：Loading
+15:11:03.061 I <57 · L/DlLiteLoaderList Main> [ModLoader] 加载器 LoaderTask`2 DlLiteLoaderList Official 状态改变：Loading
+15:11:03.062 I <52 · L/DlClientList Main> [ModLoader] 加载器 LoaderTask`2 DlClientList Main 状态改变：Finished
+15:11:03.062 I <59 · L/DlOptiFineList Official> [ModNet] 发起网络请求（GET，https://optifine.net/downloads），最大超时 10000
+15:11:03.063 I <58 · L/DlFabricList Main> [ModLoader] 加载器 LoaderTask`2 DlFabricList Official 状态改变：Loading
+15:11:03.064 I <61 · L/DlLiteLoaderList Official> [ModNet] 发起网络请求（GET，https://dl.liteloader.com/versions/versions.json），最大超时 10000
+15:11:03.064 I <62 · L/DlFabricList Official> [ModNet] 发起网络请求（GET，https://meta.fabricmc.net/v2/versions），最大超时 10000
+15:11:03.066 I <60 · L/DlNeoForgeList Main> [ModLoader] 加载器 LoaderTask`2 DlNeoForgeList Official 状态改变：Loading
+15:11:03.066 I <66 · L/DlNeoForgeList Official> [ModNet] 发起网络请求（GET，https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge），最大超时 10000
+15:11:03.140 I <51 · ForgeRecommendedRefresh> [ModDownloadLib] 刷新 Forge 推荐版本缓存成功
+15:11:03.669 I <62 · L/DlFabricList Official> [ModLoader] 加载器 LoaderTask`2 DlFabricList Official 状态改变：Finished
+15:11:03.691 I <58 · L/DlFabricList Main> [ModLoader] 加载器 LoaderTask`2 DlFabricList Main 状态改变：Finished
+15:11:03.844 I <61 · L/DlLiteLoaderList Official> [ModLoader] 加载器 LoaderTask`2 DlLiteLoaderList Official 状态改变：Finished
+15:11:03.845 I <57 · L/DlLiteLoaderList Main> [ModLoader] 加载器 LoaderTask`2 DlLiteLoaderList Main 状态改变：Finished
+15:11:03.848 I <59 · L/DlOptiFineList Official> [ModLoader] 加载器 LoaderTask`2 DlOptiFineList Official 状态改变：Finished
+15:11:03.861 I <56 · L/DlOptiFineList Main> [ModLoader] 加载器 LoaderTask`2 DlOptiFineList Main 状态改变：Finished
+15:11:03.931 I [MyRadioButton] 按下单选按钮：设置
+15:11:03.931 I [FormMain] 切换主要页面：Setup, -1
+15:11:04.046 I [ModLoader] 加载器 LoaderTask`2 Loader Skin Legacy 状态改变：Loading
+15:11:04.046 I <39 · L/Loader Skin Legacy> [ModLoader] 加载器 LoaderTask`2 Loader Skin Legacy 状态改变：Finished
+15:11:08.881 I [MyRadioButton] 按下单选按钮：启动
+15:11:08.882 I [FormMain] 切换主要页面：Launch, -1
+15:11:10.882 I <60 · L/DlNeoForgeList Main> [ModLoader] 加载器 LoaderTask`2 DlNeoForgeList Bmclapi 状态改变：Loading
+15:11:10.883 I <32 · L/DlNeoForgeList Bmclapi> [ModNet] 发起网络请求（GET，https://bmclapi2.bangbang93.com/neoforge/meta/api/maven/details/releases/net/neoforged/neoforge），最大超时 10000
+15:11:10.923 I <32 · L/DlNeoForgeList Bmclapi> [ModNet] 发起网络请求（GET，https://bmclapi2.bangbang93.com/neoforge/meta/api/maven/details/releases/net/neoforged/forge），最大超时 10000
+15:11:10.967 I <32 · L/DlNeoForgeList Bmclapi> [ModLoader] 加载器 LoaderTask`2 DlNeoForgeList Bmclapi 状态改变：Finished
+15:11:10.973 I <60 · L/DlNeoForgeList Main> [ModLoader] 加载器 LoaderTask`2 DlNeoForgeList Official 状态改变：Canceled
+15:11:10.974 I <60 · L/DlNeoForgeList Main> [ModLoader] 加载器 LoaderTask`2 DlNeoForgeList Main 状态改变：Finished
+15:11:10.976 I <66 · L/DlNeoForgeList Official> [ModNet] 操作已取消（网络请求失败（GET，https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge））
+15:11:10.976 I <66 · L/DlNeoForgeList Official> [ModLoader] 操作已取消（加载线程 DlNeoForgeList Official 已取消，当前已完成 100%）
+15:11:11.199 I [MyRadioButton] 按下单选按钮：下载
+15:11:11.200 I [FormMain] 切换主要页面：Download, -1
+15:11:12.280 I [MyListItem] 按下单选列表项：Mod
+15:11:12.459 I [ModLoader] 加载器 LoaderTask`2 社区资源获取：Mod 状态改变：Loading
+15:11:12.472 I <22 · L/社区资源获取：Mod> [ResourceSearcher] 工程列表搜索原始文本：
+15:11:12.475 I <30 · CurseForge Search> [ResourceSearcher] 开始 CurseForge 搜索：https://api.curseforge.com/v1/mods/search?gameId=432&sortField=2&sortOrder=desc&pageSize=40&classId=6
+15:11:12.476 I <29 · Modrinth Search> [ResourceSearcher] 开始 Modrinth 搜索：https://api.modrinth.com/v2/search?limit=40&index=relevance&facets=[["project_type:mod"]]
+15:11:12.478 I <30 · CurseForge Search> [ModNet] 发起网络请求（GET，https://api.curseforge.com/v1/mods/search?gameId=432&sortField=2&sortOrder=desc&pageSize=40&classId=6），最大超时 10000
+15:11:12.478 I <29 · Modrinth Search> [ModNet] 发起网络请求（GET，https://api.modrinth.com/v2/search?limit=40&index=relevance&facets=[["project_type:mod"]]），最大超时 20000
+15:11:12.775 I [MyListItem] 按下单选列表项：整合包
+15:11:12.937 I [ModLoader] 加载器 LoaderTask`2 社区资源获取：整合包 状态改变：Loading
+15:11:12.937 I <23 · L/社区资源获取：整合包> [ResourceSearcher] 工程列表搜索原始文本：
+15:11:12.937 I <27 · CurseForge Search> [ResourceSearcher] 开始 CurseForge 搜索：https://api.curseforge.com/v1/mods/search?gameId=432&sortField=2&sortOrder=desc&pageSize=40&classId=4471
+15:11:12.937 I <27 · CurseForge Search> [ModNet] 发起网络请求（GET，https://api.curseforge.com/v1/mods/search?gameId=432&sortField=2&sortOrder=desc&pageSize=40&classId=4471），最大超时 10000
+15:11:12.937 I <24 · Modrinth Search> [ResourceSearcher] 开始 Modrinth 搜索：https://api.modrinth.com/v2/search?limit=40&index=relevance&facets=[["project_type:modpack"]]
+15:11:12.937 I <24 · Modrinth Search> [ModNet] 发起网络请求（GET，https://api.modrinth.com/v2/search?limit=40&index=relevance&facets=[["project_type:modpack"]]），最大超时 20000
+15:11:13.419 I [ModAnimation] FPS 0, 动画 9, 下载中 0（0 B/s）
+15:11:13.463 I <29 · Modrinth Search> [ResourceSearcher] 从 Modrinth 搜索到了 40 个工程（总计已获取 40 个，共 77528 个）
+15:11:13.929 I <27 · CurseForge Search> [ResourceSearcher] 从 CurseForge 搜索到了 40 个工程（总计已获取 40 个，共 10000 个）
+15:11:14.094 I <30 · CurseForge Search> [ResourceSearcher] 从 CurseForge 搜索到了 40 个工程（总计已获取 40 个，共 10000 个）
+15:11:14.132 I <24 · Modrinth Search> [ResourceSearcher] 从 Modrinth 搜索到了 40 个工程（总计已获取 40 个，共 18898 个）
+15:11:14.136 I <23 · L/社区资源获取：整合包> [ResourceSearcher] 去重、筛选后累计新增结果 80 个（目前已有结果 0 个）
+15:11:14.146 I [PageResource] 开始可视化整合包列表，已储藏 80 个结果，当前在第 1 页
+15:11:14.184 I <23 · L/社区资源获取：整合包> [ModLoader] 加载器 LoaderTask`2 社区资源获取：整合包 状态改变：Finished
+15:11:14.188 I <22 · L/社区资源获取：Mod> [ResourceProject] 将 Balm (balm) 与 Balm (balm) 认定为相似工程
+15:11:14.189 I <22 · L/社区资源获取：Mod> [ResourceProject] 将 Mouse Tweaks (mouse-tweaks) 与 Mouse Tweaks (mouse-tweaks) 认定为相似工程
+15:11:14.189 I <22 · L/社区资源获取：Mod> [ResourceProject] 将 Konkrete (konkrete) 与 Konkrete (konkrete) 认定为相似工程
+15:11:14.190 I <22 · L/社区资源获取：Mod> [ResourceProject] 将 Puzzles Lib (puzzles-lib) 与 Puzzles Lib (puzzles-lib) 认定为相似工程
+15:11:14.190 I <22 · L/社区资源获取：Mod> [ResourceProject] 将 FancyMenu (fancymenu) 与 FancyMenu (fancymenu) 认定为相似工程
+15:11:14.190 I <22 · L/社区资源获取：Mod> [ResourceProject] 将 Collective (collective) 与 Collective (collective) 认定为相似工程
+15:11:14.193 I <22 · L/社区资源获取：Mod> [ResourceProject] 将 Jade 🔍 (jade) 与 Jade 🔍 (jade) 认定为相似工程
+15:11:14.198 I <22 · L/社区资源获取：Mod> [ResourceProject] 将 Xaero's World Map (xaeros-world-map) 与 Xaero's World Map (xaeros-world-map) 认定为相似工程
+15:11:14.199 I <22 · L/社区资源获取：Mod> [ResourceProject] 将 Xaero's Minimap (xaeros-minimap) 与 Xaero's Minimap (xaeros-minimap) 认定为相似工程
+15:11:14.199 I <22 · L/社区资源获取：Mod> [ResourceProject] 将 Fabric API (fabric-api) 与 Fabric API (fabric-api) 认定为相似工程
+15:11:14.199 I <22 · L/社区资源获取：Mod> [ResourceSearcher] 去重、筛选后累计新增结果 70 个（目前已有结果 0 个）
+15:11:14.200 I [PageResource] 开始可视化 Mod 列表，已储藏 70 个结果，当前在第 1 页
+15:11:14.231 I <22 · L/社区资源获取：Mod> [ModLoader] 加载器 LoaderTask`2 社区资源获取：Mod 状态改变：Finished
+15:11:14.318 I <66 · MyImage PicLoader 1293#> [ModLoader] 加载器 LoaderDownload 文件下载 1294# 状态改变：Loading
+15:11:14.325 I <28 · L/下载 1296> [ModNet] 开始清理下载缓存
+15:11:14.329 I <65 · MyImage PicLoader 1300#> [ModLoader] 加载器 LoaderDownload 文件下载 1301# 状态改变：Loading
+15:11:14.329 I <28 · L/下载 1296> [ModNet] 下载缓存已清理
+15:11:14.335 I <63 · MyImage PicLoader 1305#> [ModLoader] 加载器 LoaderDownload 文件下载 1306# 状态改变：Loading
+15:11:14.341 I <69 · MyImage PicLoader 1310#> [ModLoader] 加载器 LoaderDownload 文件下载 1311# 状态改变：Loading
+15:11:14.367 I <28 · 下载 1303/1302/1314#> [ModNet] 13590179735886536878.png：开始，起始点 0，https://cdn.modrinth.com/data/5FFgwNNP/e7f9ee2e9d361623847853fe2ddce42f519ee64f.png
+15:11:14.371 I <72 · 下载 1308/1307/1316#> [ModNet] 6552045285663478188.png：开始，起始点 0，https://cdn.modrinth.com/data/l9m9tuPN/fefe3f67c37744344d100638452c7bf059d586a1_96.webp
+15:11:14.372 I <73 · 下载 1296/1295/1317#> [ModNet] 3205113799589399293.png：开始，起始点 0，https://cdn.modrinth.com/data/Jkb29YJU/581ecf54530972afb18a04660afd820f2f24f6c7.png
+15:11:14.380 I <71 · 下载 1313/1312/1315#> [ModNet] 9902763895344889013.png：开始，起始点 0，https://cdn.modrinth.com/data/1KVo5zza/d8152911f8fd5d7e9a8c499fe89045af81fe816e_96.webp
+15:11:14.831 I [MyListItem] 按下单选列表项：数据包
+15:11:14.951 I <28 · 下载 1303/1302/1314#> [ModNet] 13590179735886536878.png：文件大小 4891（4.78 K）
+15:11:14.959 I <28 · 下载 1303/1302/1314#> [ModNet] 13590179735886536878.png：已完成
+15:11:14.959 I <28 · 下载 1303/1302/1314#> [ModLoader] 加载器 LoaderDownload 文件下载 1301# 状态改变：Finished
+15:11:14.973 I <72 · 下载 1308/1307/1316#> [ModNet] 6552045285663478188.png：文件大小 15526（15.2 K）
+15:11:14.981 I [ModLoader] 加载器 LoaderTask`2 社区资源获取：数据包 状态改变：Loading
+15:11:14.982 I <74 · L/社区资源获取：数据包> [ResourceSearcher] 工程列表搜索原始文本：
+15:11:14.982 I <75 · CurseForge Search> [ResourceSearcher] 开始 CurseForge 搜索：https://api.curseforge.com/v1/mods/search?gameId=432&sortField=2&sortOrder=desc&pageSize=40&classId=6945
+15:11:14.982 I <75 · CurseForge Search> [ModNet] 发起网络请求（GET，https://api.curseforge.com/v1/mods/search?gameId=432&sortField=2&sortOrder=desc&pageSize=40&classId=6945），最大超时 10000
+15:11:14.982 I <76 · Modrinth Search> [ResourceSearcher] 开始 Modrinth 搜索：https://api.modrinth.com/v2/search?limit=40&index=relevance&facets=[["project_type:datapack"]]
+15:11:14.982 I <76 · Modrinth Search> [ModNet] 发起网络请求（GET，https://api.modrinth.com/v2/search?limit=40&index=relevance&facets=[["project_type:datapack"]]），最大超时 20000
+15:11:14.993 I <72 · 下载 1308/1307/1316#> [ModNet] 6552045285663478188.png：已完成
+15:11:14.993 I <72 · 下载 1308/1307/1316#> [ModLoader] 加载器 LoaderDownload 文件下载 1306# 状态改变：Finished
+15:11:14.996 I <73 · 下载 1296/1295/1317#> [ModNet] 3205113799589399293.png：文件大小 7168（7 K）
+15:11:14.997 I <73 · 下载 1296/1295/1317#> [ModNet] 3205113799589399293.png：已完成
+15:11:14.997 I <73 · 下载 1296/1295/1317#> [ModLoader] 加载器 LoaderDownload 文件下载 1294# 状态改变：Finished
+15:11:15.320 I <75 · CurseForge Search> [ResourceSearcher] 从 CurseForge 搜索到了 40 个工程（总计已获取 40 个，共 3879 个）
+15:11:15.450 I <76 · Modrinth Search> [ResourceSearcher] 从 Modrinth 搜索到了 40 个工程（总计已获取 40 个，共 15375 个）
+15:11:15.457 I <74 · L/社区资源获取：数据包> [ResourceSearcher] 去重、筛选后累计新增结果 80 个（目前已有结果 0 个）
+15:11:15.457 I [PageResource] 开始可视化数据包列表，已储藏 80 个结果，当前在第 1 页
+15:11:15.491 I <74 · L/社区资源获取：数据包> [ModLoader] 加载器 LoaderTask`2 社区资源获取：数据包 状态改变：Finished
+15:11:16.241 I <51 · MyImage PicLoader 1423#> [ModLoader] 加载器 LoaderDownload 文件下载 1424# 状态改变：Loading
+15:11:16.248 I <78 · MyImage PicLoader 1430#> [ModLoader] 加载器 LoaderDownload 文件下载 1431# 状态改变：Loading
+15:11:16.254 I <80 · 下载 1426/1425/1435#> [ModNet] 15129955202390384619.png：开始，起始点 0，https://media.forgecdn.net/avatars/thumbnails/1215/433/256/256/638794124151810881.png
+15:11:16.254 I <81 · 下载 1433/1432/1436#> [ModNet] 2642625500513254687.png：开始，起始点 0，https://media.forgecdn.net/avatars/thumbnails/1382/76/256/256/638896474054932351.png
+15:11:16.254 I <82 · MyImage PicLoader 1437#> [ModLoader] 加载器 LoaderDownload 文件下载 1438# 状态改变：Loading
+15:11:16.260 I <84 · MyImage PicLoader 1442#> [ModLoader] 加载器 LoaderDownload 文件下载 1443# 状态改变：Loading
+15:11:16.285 I <87 · 下载 1440/1439/1447#> [ModNet] 9327422170695978920.png：开始，起始点 0，https://media.forgecdn.net/avatars/thumbnails/1271/833/256/256/638827335663640576.png
+15:11:16.285 I <86 · 下载 1445/1444/1446#> [ModNet] 16428046118106642884.png：开始，起始点 0，https://cdn.modrinth.com/data/OhduvhIc/5ea1f538e66ee4d4e5e571ad952cba0e06e0bd5c.png
+15:11:16.335 I [MyRadioButton] 按下单选按钮：设置
+15:11:16.335 I [FormMain] 切换主要页面：Setup, -1
+15:11:16.465 I [ModLoader] 加载器 LoaderTask`2 Loader Skin Legacy 状态改变：Loading
+15:11:16.466 I <83 · L/Loader Skin Legacy> [ModLoader] 加载器 LoaderTask`2 Loader Skin Legacy 状态改变：Finished
+15:11:16.477 I <86 · 下载 1445/1444/1446#> [ModNet] 16428046118106642884.png：文件大小 15583（15.2 K）
+15:11:16.509 I <86 · 下载 1445/1444/1446#> [ModNet] 16428046118106642884.png：已完成
+15:11:16.509 I <86 · 下载 1445/1444/1446#> [ModLoader] 加载器 LoaderDownload 文件下载 1443# 状态改变：Finished
+15:11:16.860 I <81 · 下载 1433/1432/1436#> [ModNet] 2642625500513254687.png：文件大小 8260（8.07 K）
+15:11:16.861 I <81 · 下载 1433/1432/1436#> [ModNet] 2642625500513254687.png：已完成
+15:11:16.861 I <81 · 下载 1433/1432/1436#> [ModLoader] 加载器 LoaderDownload 文件下载 1431# 状态改变：Finished
+15:11:16.917 I <87 · 下载 1440/1439/1447#> [ModNet] 9327422170695978920.png：文件大小 13290（13 K）
+15:11:16.918 I <87 · 下载 1440/1439/1447#> [ModNet] 9327422170695978920.png：已完成
+15:11:16.918 I <87 · 下载 1440/1439/1447#> [ModLoader] 加载器 LoaderDownload 文件下载 1438# 状态改变：Finished
+15:11:17.147 I <80 · 下载 1426/1425/1435#> [ModNet] 15129955202390384619.png：文件大小 80187（78.3 K）
+15:11:17.302 I [MyListItem] 按下单选列表项：功能
+15:11:17.627 I <80 · 下载 1426/1425/1435#> [ModNet] 15129955202390384619.png：已完成
+15:11:17.627 I <80 · 下载 1426/1425/1435#> [ModLoader] 加载器 LoaderDownload 文件下载 1424# 状态改变：Finished
+15:11:19.051 I <71 · 下载 1313/1312/1315#> [ModNet] 9902763895344889013.png：文件大小 9006（8.79 K）
+15:11:19.052 I <71 · 下载 1313/1312/1315#> [ModNet] 9902763895344889013.png：已完成
+15:11:19.052 I <71 · 下载 1313/1312/1315#> [ModLoader] 加载器 LoaderDownload 文件下载 1311# 状态改变：Finished
+15:12:06.693 I [FormMain] 收到关闭指令
+15:12:06.737 I [FormMain] 程序已退出，返回值：Success

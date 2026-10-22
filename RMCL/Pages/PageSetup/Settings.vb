@@ -121,7 +121,6 @@ Public Class Settings
         New Setting("ToolModLocalNameStyle", 0, Source:=Sources.Registry),
         New Setting("ToolUpdateRelease", False, Source:=Sources.Registry),
         New Setting("ToolLauncherUpdateAuto", False, Source:=Sources.Registry), '启动时自动检查并下载启动器更新
-        New Setting("ToolLauncherUpdateSkip", "", Source:=Sources.Registry), '已自动下载过的版本号，避免重复下载
         New Setting("ToolUpdateSnapshot", False, Source:=Sources.Registry),
         New Setting("ToolUpdateReleaseLast", "", Source:=Sources.Registry),
         New Setting("ToolUpdateSnapshotLast", "", Source:=Sources.Registry),

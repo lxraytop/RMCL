@@ -1,0 +1,73 @@
+14:55:00.446 I <4 · Logger> [Logger] RmclLogger 日志初始化结束
+14:55:00.506 I [Application] 程序版本：正式版 2.17.0.0 (411)
+14:55:00.506 I [Application] 识别码：0000-0000-0000-0000
+14:55:00.506 I [Application] 程序路径：F:\ProjectAI\浣曟厱鍗縗RMCL.exe
+14:55:00.506 I [Application] 系统编码：gb2312 (936, GBK=True)
+14:55:00.506 I [Application] 管理员权限：False
+14:55:00.506 I [Application] 第一阶段加载用时：78 ms
+14:55:00.798 I [FormMain] 全新的 RMCL，使用新的版本隔离默认值
+14:55:00.858 I [ModLoader] 加载器 LoaderTask`2 Minecraft Folder List 状态改变：Loading
+14:55:00.859 I [FormMain] 第二阶段加载用时：345 ms
+14:55:00.865 I <5 · L/Minecraft Folder List> [ModLoader] 加载器 LoaderTask`2 Minecraft Folder List 状态改变：Finished
+14:55:01.020 I [FormMain] 从设置更新背景图片与标题栏样式
+14:55:01.069 I [FormMain] 窗口已置顶，位置：(510, 301), 900 x 550
+14:55:01.072 I [FormMain] 第三阶段加载用时：55 ms
+14:55:01.072 I <8 · Animation> [ModAnimation] 动画线程开始
+14:55:01.082 I <12 · Version Check> [PageLaunchLeft] 没有已储存的 Minecraft 文件夹
+14:55:01.083 I <12 · Version Check> [ModLoader] 加载器 LoaderTask`2 Minecraft Folder List 状态改变：Loading
+14:55:01.086 I <13 · L/Minecraft Folder List> [ModLoader] 加载器 LoaderTask`2 Minecraft Folder List 状态改变：Finished
+14:55:01.108 I <12 · Version Check> [ModMinecraft] 当前选择的 Minecraft 文件夹：F:\RMCL\.minecraft\
+14:55:01.127 I [ModLoader] 加载器 LoaderTask`2 Loader Skin Legacy 状态改变：Loading
+14:55:01.130 I <15 · L/Loader Skin Legacy> [ModLoader] 加载器 LoaderTask`2 Loader Skin Legacy 状态改变：Finished
+14:55:01.162 I [PageLaunchRight] 实例化：清空主页 UI，来源为空
+14:55:01.171 I [ModBase] 将资源写入到文件：libwebp64 → F:\ProjectAI\RMCL\libwebp.dll
+14:55:01.180 I [MySkin] 载入头像成功：Loader Skin Legacy
+14:55:01.270 I <10 · 初始化> [ModJava] 共有 6 个可用的 Java：
+14:55:01.270 I <10 · 初始化> [ModJava] - Java 25 (25.0.1.0)：C:\Users\******\AppData\Roaming\.minecraft\runtime\java-runtime-epsilon\bin\
+14:55:01.270 I <10 · 初始化> [ModJava] - Java 21 (21.0.3.0)：C:\Users\******\AppData\Roaming\.minecraft\runtime\java-runtime-delta\bin\
+14:55:01.270 I <10 · 初始化> [ModJava] - Java 21 (21.0.7.0)：C:\Users\******\.jdks\ms-21.0.7\bin\
+14:55:01.270 I <10 · 初始化> [ModJava] - Java 21 (21.0.3.0)：C:\Users\******\AppData\Roaming\.hmcl\java\windows-x86_64\mojang-java-runtime-delta\bin\
+14:55:01.270 I <10 · 初始化> [ModJava] - Java 21 (21.0.7.0)：C:\Program Files\Eclipse Adoptium\jdk-21.0.7.6-hotspot\bin\
+14:55:01.270 I <10 · 初始化> [ModJava] - Java 8 (8.0.51.0)：C:\Users\******\AppData\Roaming\.minecraft\runtime\jre-legacy\bin\
+14:55:01.319 I [ModMinecraft] 当前选择的 Minecraft 版本：F:\RMCL\.minecraft\versions\逆转未来2.3.3\
+14:55:01.321 I [PageLaunchLeft] 启动按钮：Minecraft 版本：F:\RMCL\.minecraft\versions\逆转未来2.3.3\
+14:55:01.331 I [ModLoader] 加载器 LoaderTask`2 Loader Skin Auth 状态改变：Loading
+14:55:01.339 I [ModLoader] 加载器 LoaderTask`2 登录 状态改变：Loading
+14:55:01.340 I <5 · L/Loader Skin Auth> [ModLoader] 加载器 LoaderTask`2 Loader Skin Auth 状态改变：Finished
+14:55:01.341 I <14 · L/登录> [ModLaunch] 登录加载已开始
+14:55:01.341 I [MySkin] 载入头像成功：Loader Skin Auth
+14:55:01.341 I <14 · L/登录> [ModLoader] 加载器 LoaderTask`2 Loader Login Auth 状态改变：Loading
+14:55:01.346 I <11 · L/Loader Login Auth> [ModLaunch] 登录方式：Authlib-Injector
+14:55:01.349 I <11 · L/Loader Login Auth> [ModLaunch] 验证登录开始（Validate, Auth）
+14:55:01.354 I <11 · L/Loader Login Auth> [ModNet] 发起网络请求（POST，https://littleskin.cn/api/yggdrasil/authserver/validate），最大超时 10000
+14:55:01.389 I <10 · 初始化> [ModLoader] 加载器 LoaderTask`2 DlClientList Mojang 状态改变：Loading
+14:55:01.391 I <10 · 初始化> [ModLoader] 加载器 LoaderTask`2 RMCL 配置更新 状态改变：Loading
+14:55:01.391 I <20 · L/RMCL 配置更新> [ModSecret] 该版本中不包含更新通知功能……
+14:55:01.392 I <20 · L/RMCL 配置更新> [ModLoader] 加载器 LoaderTask`2 RMCL 配置更新 状态改变：Finished
+14:55:01.392 I <21 · TryClearTaskTemp> [ModMain] 开始清理任务缓存文件夹
+14:55:01.392 I <19 · L/DlClientList Mojang> [ModNet] 发起网络请求（GET，https://launchermeta.mojang.com/mc/game/version_manifest.json），最大超时 10000
+14:55:01.393 I <21 · TryClearTaskTemp> [ModMain] 已清理任务缓存文件夹
+14:55:01.395 I <10 · 初始化> [ModNet] 发起网络请求（GET，https://api.github.com/repos/lxraytop/RMCL/releases/latest），最大超时 10000
+14:55:01.646 I <11 · L/Loader Login Auth> [ModLaunch] 验证登录成功（Validate, Auth）
+14:55:01.646 I <11 · L/Loader Login Auth> [ModLoader] 加载器 LoaderTask`2 Loader Login Auth 状态改变：Finished
+14:55:01.650 I <14 · L/登录> [ModLaunch] 登录加载已结束
+14:55:01.650 I <14 · L/登录> [ModLoader] 加载器 LoaderTask`2 登录 状态改变：Finished
+14:55:01.806 I [FormMain] DPI：96，系统版本：Microsoft Windows NT 10.0.26200.0，RMCL 位置：F:\ProjectAI\浣曟厱鍗縗RMCL.exe
+14:55:01.937 I <19 · L/DlClientList Mojang> [ModDownload] Mojang 官方源加载耗时：545ms，可优先使用官方源
+14:55:01.937 I <19 · L/DlClientList Mojang> [ModLoader] 加载器 LoaderTask`2 DlClientList Mojang 状态改变：Finished
+14:55:02.010 I <10 · 初始化> [ModUpdate] 检查更新：最新版本 2.17.0.0，exe 资产 RMCL.exe
+14:55:02.010 I <10 · 初始化> [ModUpdate] 启动器已是最新版本（2.17.0.0）
+14:55:03.732 I [MyRadioButton] 按下单选按钮：设置
+14:55:03.805 I [FormMain] 切换主要页面：Setup, -1
+14:55:04.580 I [MyListItem] 按下单选列表项：功能
+14:55:07.872 I [MyButton] 按下按钮：检查更新
+14:55:07.873 I <31 · 检查更新> [ModNet] 发起网络请求（GET，https://api.github.com/repos/lxraytop/RMCL/releases/latest），最大超时 10000
+14:55:07.874 I <31 · 检查更新> [ModUpdate] 检查更新：最新版本 2.17.0.0，exe 资产 RMCL.exe
+14:55:07.888 I [ModMain] 弹出提示：启动器已是最新版本
+14:55:40.989 I [ModAnimation] 两个动画帧间隔 126 ms
+14:56:53.408 I [ModAnimation] 两个动画帧间隔 141 ms
+15:02:16.052 I [FormMain] 收到置顶信息：4131012
+15:02:16.062 I [FormMain] 窗口已置顶，位置：(510, 301), 900 x 550
+15:02:17.599 I [MyIconButton] 按下图标按钮：BtnTitleClose
+15:02:17.603 I [FormMain] 收到关闭指令
+15:02:17.825 I [FormMain] 程序已退出，返回值：Success
