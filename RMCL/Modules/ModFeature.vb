@@ -13,6 +13,52 @@ Friend Module ModFeature
     End Function
 
     ''' <summary>
+    ''' PROCESS_MEMORY_COUNTERS_EX2（Windows 8.1+）。比 EX 多出 PrivateWorkingSetSize，即「专用工作集」。
+    ''' </summary>
+    <StructLayout(LayoutKind.Sequential)>
+    Private Structure ProcessMemoryCountersEx2
+        Public cb As Integer
+        Public PageFaultCount As Integer
+        Public PeakWorkingSetSize As IntPtr
+        Public WorkingSetSize As IntPtr
+        Public QuotaPeakPagedPoolUsage As IntPtr
+        Public QuotaPagedPoolUsage As IntPtr
+        Public QuotaPeakNonPagedPoolUsage As IntPtr
+        Public QuotaNonPagedPoolUsage As IntPtr
+        Public PagefileUsage As IntPtr
+        Public PeakPagefileUsage As IntPtr
+        Public PrivateUsage As IntPtr
+        Public PrivateWorkingSetSize As IntPtr
+        Public SharedCommitUsage As ULong
+    End Structure
+
+    <DllImport("psapi.dll", SetLastError:=True)>
+    Private Function GetProcessMemoryInfo(hProcess As IntPtr, ByRef Counters As ProcessMemoryCountersEx2, cb As Integer) As Boolean
+    End Function
+
+    ''' <summary>
+    ''' 读取进程当前的「专用工作集」字节数，专用值不可用时退回整个工作集；都读不到返回 -1。
+    ''' 专用工作集不含共享页，所以跨进程求和不会重复计算 —— 这正是之前释放量虚高的根源。
+    ''' </summary>
+    Private Function PrivateWorkingSetOf(Proc As Process) As Long
+        Try
+            Dim Counters As New ProcessMemoryCountersEx2 With {.cb = Marshal.SizeOf(GetType(ProcessMemoryCountersEx2))}
+            If GetProcessMemoryInfo(Proc.Handle, Counters, Counters.cb) Then
+                Dim Value As Long = Counters.PrivateWorkingSetSize.ToInt64()
+                '专用工作集被清到 0 是正常结果，此时退回整个工作集（基本只剩共享页），读数仍然很小
+                If Value > 0 Then Return Value
+            End If
+        Catch ex As Exception
+            '权限不足或进程已退出，走下面的兜底
+        End Try
+        Try
+            Return Proc.WorkingSet64
+        Catch ex As Exception
+            Return -1
+        End Try
+    End Function
+
+    ''' <summary>
     ''' 执行内存优化。清理其它进程的工作集必须要有管理员权限，没有权限时不会执行任何「优化」。
     ''' </summary>
     ''' <param name="ShowHint">是否显示提示。</param>
@@ -33,7 +79,7 @@ Friend Module ModFeature
             End If
             Return SelfFreed
         End If
-        '上游做法：以管理员权限重新启动自己并执行 --memory，退出码即释放的 KB
+        '上游做法：以管理员权限重新启动自己并执行 --memory，退出码为释放的 KB（负数表示失败）
         If ShowHint Then Hint("正在进行内存优化，请在权限提示中允许管理员权限……")
         If OnProgress IsNot Nothing Then OnProgress(0, 0)
         Dim FreedKb As Integer
@@ -66,35 +112,39 @@ Friend Module ModFeature
     ''' 实际执行内存优化：回收托管内存，并清空所有可访问进程的工作集。
     ''' 该操作会让系统在随后一小段时间内重新从磁盘读取数据，机械硬盘上可能出现卡顿。
     ''' </summary>
-    ''' <returns>各进程工作集实际减少的字节数之和。</returns>
+    ''' <returns>各进程「专用工作集」实际减少的字节数之和。</returns>
     Public Function MemoryOptimizeInternal(Optional ShowHint As Boolean = True, Optional OnProgress As Action(Of Integer, Integer) = Nothing) As Long
         '先回收自身托管内存
         GC.Collect()
         GC.WaitForPendingFinalizers()
         GC.Collect()
         GC.WaitForPendingFinalizers()
-        '再让所有能访问到的进程归还工作集，并按各进程工作集的真实减少量累计释放量
-        '（不用「系统可用内存的变化」来估算，那个数字会被其它程序的活动干扰）
+        '统计口径：各进程「专用工作集」的减少量之和。
+        '不能用整个工作集：DLL、运行时、共享内存这些共享页会在几十个进程里各算一次，
+        '第一次清理时这类软页最多，累加出来能比机器实际占用还大（32 GB 的机器算出 14.53 GB 就是这么来的），
+        '再清一次就没什么可清的了，所以表现为「只有第一次的数字离谱」。
+        '也不能用「系统可用内存的增量」：清出来的私有页先进 modified / standby 列表等写回页面文件，
+        '短期内并不计入可用内存（实测清掉 700 MB 工作集，可用内存只涨了 59 MB）。
         Dim Freed As Long = 0
+        Dim TrimmedCount As Integer = 0
         Dim AllProcesses As Process() = Process.GetProcesses()
         Dim Total As Integer = AllProcesses.Length
         Dim Done As Integer = 0
         For Each Proc As Process In AllProcesses
             Try
-                Dim Before As Long = 0
+                Dim Before As Long = PrivateWorkingSetOf(Proc) '-1 表示读不到
+                Dim Trimmed As Boolean = False
                 Try
-                    Before = Proc.WorkingSet64
+                    Trimmed = EmptyWorkingSet(Proc.Handle)
                 Catch ex As Exception
-                    '受保护进程读不到工作集，仍然尝试清理
+                    '读不到的进程同样清理不了，跳过
                 End Try
-                If EmptyWorkingSet(Proc.Handle) AndAlso Before > 0 Then
-                    Proc.Refresh()
-                    Try
-                        Dim After As Long = Proc.WorkingSet64
-                        If After < Before Then Freed += Before - After
-                    Catch ex As Exception
-                        '刷新失败则不计入
-                    End Try
+                If Trimmed Then
+                    TrimmedCount += 1
+                    If Before >= 0 Then
+                        Dim After As Long = PrivateWorkingSetOf(Proc)
+                        If After >= 0 AndAlso After < Before Then Freed += Before - After
+                    End If
                 End If
             Catch ex As Exception
                 '系统进程等无法访问的进程直接跳过
@@ -109,8 +159,10 @@ Friend Module ModFeature
             End Try
         Next
         If OnProgress IsNot Nothing Then OnProgress(Total, Total)
+        '可用内存只写进日志做对照：清理出的页要写回页面文件后才算「可用」，与释放量不是一回事
+        Dim AvailAfter As Long = AvailableBytes()
         Try
-            Logger.Info($"内存优化完成，已清理 {Done} 个进程的工作集，释放 {FormatSize(Freed)}")
+            Logger.Info($"内存优化完成，已清理 {TrimmedCount} 个进程的工作集，专用工作集减少 {FormatSize(Freed)}（当前系统可用内存 {FormatSize(AvailAfter)}）")
         Catch
             '启动早期（--memory 参数）日志尚未初始化
         End Try
