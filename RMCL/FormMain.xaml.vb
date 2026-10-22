@@ -422,6 +422,12 @@ Public Class FormMain
             Catch ex As Exception
                 Logger.Warn(ex, "清理自动更新文件失败")
             End Try
+            '自动检查启动器更新（仅当开启了自动更新）
+            Try
+                If Settings.Get(Of Boolean)("ToolLauncherUpdateAuto") Then ModUpdate.AutoCheck()
+            Catch ex As Exception
+                Logger.Warn(ex, "自动检查启动器更新失败")
+            End Try
             '上报
             '注：开源版本说明弹窗已移除（联网通知暂未启用，不再提示）
         End Sub, "初始化", ThreadPriority.Lowest)
@@ -547,6 +553,12 @@ Public Class FormMain
         If FrmLinkMain?.TryExit(Not SendWarning, True) Then Return
         '把合并中的 ini 写入落盘，避免最后几毫秒内的改动丢失
         FlushIniWrites()
+        '已下载的更新：写替换脚本并启动，脚本会等本进程退出后再覆盖 exe
+        Try
+            ModUpdate.ApplyPendingUpdate()
+        Catch ex As Exception
+            Logger.Error(ex, "应用启动器更新失败")
+        End Try
         '关闭
         RunInUiWait(
         Sub()

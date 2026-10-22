@@ -4,6 +4,7 @@
         '重复加载部分
         PanBack.ScrollToHome()
         RefreshMemoryInfo()
+        RefreshUpdateInfo()
 
         '非重复加载部分
         Static IsLoaded As Boolean = False
@@ -169,6 +170,129 @@
                 End Sub)
             End Try
         End Sub, "清理垃圾")
+    End Sub
+
+#End Region
+
+#Region "软件更新"
+
+    ''' <summary>
+    ''' 最近一次成功检查到的版本信息。
+    ''' </summary>
+    Private CurrentUpdate As ModUpdate.UpdateInfo = Nothing
+
+    ''' <summary>
+    ''' 刷新版本信息文本（只读本地状态，不发起网络请求）。
+    ''' </summary>
+    Private Sub RefreshUpdateInfo()
+        If ModUpdate.HasPendingUpdate Then
+            LabUpdateInfo.Text = $"当前版本：{VersionBaseName}" & vbCrLf & "已下载新的版本，退出启动器后会自动完成安装。"
+        Else
+            LabUpdateInfo.Text = $"当前版本：{VersionBaseName}" & vbCrLf & $"更新源：{ModUpdate.UpdateRepo}（GitHub Release）"
+        End If
+    End Sub
+
+    Private Sub BtnUpdateCheck_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnUpdateCheck.Click
+        If Not BtnUpdateCheck.IsEnabled Then Return
+        BtnUpdateCheck.IsEnabled = False
+        BtnUpdateCheck.Text = "检查中……"
+        LabUpdateInfo.Text = "正在从 GitHub 检查更新……"
+        RunInNewThread(
+        Sub()
+            Dim Info As ModUpdate.UpdateInfo = Nothing
+            Dim Err As String = Nothing
+            Try
+                Info = ModUpdate.FetchLatest()
+            Catch ex As Exception
+                Err = ex.Message
+                Logger.Warn(ex, "检查启动器更新失败")
+            End Try
+            RunInUi(Sub() ShowUpdateResult(Info, Err))
+        End Sub, "检查更新")
+    End Sub
+
+    ''' <summary>
+    ''' 把检查结果显示到界面上（UI 线程）。
+    ''' </summary>
+    Private Sub ShowUpdateResult(Info As ModUpdate.UpdateInfo, Err As String)
+        BtnUpdateCheck.Text = "检查更新"
+        BtnUpdateCheck.IsEnabled = True
+        If Err IsNot Nothing Then
+            CurrentUpdate = Nothing
+            BtnUpdateInstall.Visibility = Visibility.Collapsed
+            LabUpdateNotesTitle.Visibility = Visibility.Collapsed
+            PanUpdateNotes.Visibility = Visibility.Collapsed
+            LabUpdateInfo.Text = $"检查更新失败：{Err}{vbCrLf}当前版本：{VersionBaseName}"
+            Return
+        End If
+
+        CurrentUpdate = Info
+        Dim TimeText As String = ""
+        If Info.PublishedLocal.HasValue Then TimeText = "，发布于 " & Info.PublishedLocal.Value.ToString("yyyy-MM-dd HH:mm")
+
+        If Not ModUpdate.IsNewer(Info.Version) Then
+            BtnUpdateInstall.Visibility = Visibility.Collapsed
+            LabUpdateNotesTitle.Visibility = Visibility.Collapsed
+            PanUpdateNotes.Visibility = Visibility.Collapsed
+            LabUpdateInfo.Text = $"当前版本：{VersionBaseName}（已是最新版本）" & vbCrLf & $"最新版本：{Info.Version}{TimeText}"
+            Hint("启动器已是最新版本", HintType.Green)
+            Return
+        End If
+
+        Dim InfoText As String = $"当前版本：{VersionBaseName}" & vbCrLf & $"最新版本：{Info.Version}{TimeText}"
+        If Not Info.HasAsset Then InfoText &= vbCrLf & "该版本没有提供 exe 资源，请到发布页手动下载。"
+        LabUpdateInfo.Text = InfoText
+        BtnUpdateInstall.Visibility = If(Info.HasAsset, Visibility.Visible, Visibility.Collapsed)
+        TextUpdateNotes.Text = Info.Notes
+        LabUpdateNotesTitle.Visibility = Visibility.Visible
+        PanUpdateNotes.Visibility = Visibility.Visible
+        Hint($"发现新版本 {Info.Version}", HintType.Blue)
+    End Sub
+
+    Private Sub BtnUpdateInstall_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnUpdateInstall.Click
+        Dim Info As ModUpdate.UpdateInfo = CurrentUpdate
+        If Info Is Nothing OrElse Not Info.HasAsset Then Return
+        If Not BtnUpdateInstall.IsEnabled Then Return
+        Dim SizeText As String = If(Info.AssetSize > 0, FormatSize(Info.AssetSize), "大小未知")
+        If MyMsgBox($"即将下载 RMCL {Info.Version}（{SizeText}）。" & vbCrLf &
+                    "下载完成后可以立即重启安装，也可以选择在退出启动器时自动安装。",
+                    "安装更新", "下载", "取消") <> 1 Then Return
+
+        BtnUpdateInstall.IsEnabled = False
+        BtnUpdateInstall.Text = "下载中……"
+        LabUpdateInfo.Text = $"正在下载 RMCL {Info.Version}……"
+        RunInNewThread(
+        Sub()
+            Dim LocalPath As String = Nothing
+            Dim Err As String = Nothing
+            Try
+                LocalPath = ModUpdate.DownloadUpdate(Info,
+                    Sub(Value As Double) RunInUi(Sub() BtnUpdateInstall.Text = $"下载中 {Value * 100:F0}%"))
+            Catch ex As Exception
+                Err = ex.Message
+                Logger.Warn(ex, "下载启动器更新失败")
+            End Try
+            RunInUi(Sub() FinishUpdateDownload(Info, LocalPath, Err))
+        End Sub, "下载更新")
+    End Sub
+
+    ''' <summary>
+    ''' 下载结束后的收尾（UI 线程）。
+    ''' </summary>
+    Private Sub FinishUpdateDownload(Info As ModUpdate.UpdateInfo, LocalPath As String, Err As String)
+        BtnUpdateInstall.Text = "下载并安装"
+        BtnUpdateInstall.IsEnabled = True
+        If Err IsNot Nothing Then
+            LabUpdateInfo.Text = $"下载更新失败：{Err}"
+            Return
+        End If
+        '与自动更新共用同一套「下载后询问是否立即重启」的收尾
+        ModUpdate.PromptInstallAfterDownload(Info, LocalPath,
+            Sub() LabUpdateInfo.Text = $"当前版本：{VersionBaseName}" & vbCrLf & $"待安装：{Info.Version}（退出启动器后自动安装）")
+    End Sub
+
+    Private Sub BtnUpdatePage_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnUpdatePage.Click
+        OpenWebsite(If(CurrentUpdate?.PageUrl, ModUpdate.UpdatePage))
     End Sub
 
 #End Region

@@ -44,6 +44,33 @@
                     </Grid>
                 </StackPanel>
             </local:MyCard>
+            <local:MyCard Margin="0,0,0,15" Title="软件更新">
+                <StackPanel Margin="25,40,25,18">
+                    <TextBlock TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,12"
+                               Text="从 GitHub 的 Release 页面检查启动器的新版本。发布产物是单个 exe，下载完成后退出启动器即可完成替换。" />
+                    <Border Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,10" Margin="0,0,0,12">
+                        <TextBlock x:Name="LabUpdateInfo" TextWrapping="Wrap" LineHeight="19" Text="正在读取版本信息……" />
+                    </Border>
+                    <local:MyCheckBox local:SettingService.Key="ToolLauncherUpdateAuto" Text="自动更新" Margin="-1,0,0,4" Height="22" />
+                    <TextBlock Text="开启后每次启动都会检查更新；发现新版本时弹窗展示更新公告，确认后才开始下载，并在退出启动器时完成安装（不会自动重启启动器）。" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,12" />
+                    <Grid Height="35" Margin="0,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                        </Grid.ColumnDefinitions>
+                        <local:MyButton x:Name="BtnUpdateCheck" Text="检查更新" MinWidth="140" Height="35" Padding="13,0" ColorType="Highlight" Margin="0,0,20,0" />
+                        <local:MyButton x:Name="BtnUpdateInstall" Text="下载并安装" MinWidth="140" Height="35" Padding="13,0" Grid.Column="1" Margin="0,0,20,0" Visibility="Collapsed" />
+                        <local:MyButton x:Name="BtnUpdatePage" Text="打开发布页" MinWidth="140" Height="35" Padding="13,0" Grid.Column="2" />
+                    </Grid>
+                    <TextBlock x:Name="LabUpdateNotesTitle" Text="更新公告" Margin="1,14,0,6" FontSize="12.5" Opacity="0.7" Visibility="Collapsed" />
+                    <Border x:Name="PanUpdateNotes" Visibility="Collapsed" Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,10">
+                        <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <TextBlock x:Name="TextUpdateNotes" TextWrapping="Wrap" LineHeight="19" />
+                        </ScrollViewer>
+                    </Border>
+                </StackPanel>
+            </local:MyCard>
         </StackPanel>
     </local:MyScrollViewer>
 </local:MyPageRight>
