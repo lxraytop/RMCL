@@ -271,17 +271,40 @@ Friend Module ModUpdate
     Private ReadOnly AssetMirrors As String() = {"https://gh-proxy.com/"}
 
     ''' <summary>
-    ''' 生成下载源列表：官方地址在前，反代在后由下载引擎自动切换。
+    ''' 生成下载源列表。默认镜像优先（国内直连 GitHub 资产基本下不动），用户可在设置里改成官方优先。
     ''' </summary>
     Private Function BuildDownloadUrls(Url As String) As List(Of String)
-        Dim Urls As New List(Of String) From {Url}
-        If Url.Contains("github.com/") OrElse Url.Contains("githubusercontent.com") Then
-            For Each Mirror As String In AssetMirrors
-                Urls.Add(Mirror & Url)
-            Next
+        Dim Urls As New List(Of String)
+        If Not (Url.Contains("github.com/") OrElse Url.Contains("githubusercontent.com")) Then
+            Urls.Add(Url)
+            Return Urls
+        End If
+        Dim Mirrored As String = AssetMirrors(0) & Url
+        '0 = 镜像优先（默认），1 = 官方优先
+        If Settings.Get(Of Integer)("ToolLauncherUpdateSource") = 1 Then
+            Urls.Add(Url)
+            Urls.Add(Mirrored)
+        Else
+            Urls.Add(Mirrored)
+            Urls.Add(Url)
         End If
         Return Urls
     End Function
+
+    '正在进行的下载任务，供进度窗口的「取消下载」使用
+    Private ActiveTask As LoaderDownload = Nothing
+
+    ''' <summary>
+    ''' 取消正在进行的更新下载。
+    ''' </summary>
+    Public Sub CancelDownload()
+        Try
+            ActiveTask?.Cancel()
+            Logger.Info("用户取消了更新下载")
+        Catch ex As Exception
+            Logger.Warn(ex, "取消更新下载失败")
+        End Try
+    End Sub
 
     ''' <summary>
     ''' 下载更新到缓存目录，返回本地文件路径。失败时抛出异常。
@@ -299,10 +322,12 @@ Friend Module ModUpdate
         If OnProgress IsNot Nothing Then
             AddHandler Task.ProgressChanged, Sub(NewProgress As Double, OldProgress As Double) OnProgress(NewProgress)
         End If
+        ActiveTask = Task
         Try
             Task.WaitForExit()
         Finally
             Task.Cancel()
+            ActiveTask = Nothing
         End Try
 
         If Not FileUtils.Exists(Target) Then Throw New Exception("更新文件下载失败，请稍后重试")
@@ -420,23 +445,28 @@ Friend Module ModUpdate
     ''' <summary>
     ''' 检查更新。结果写入共享状态；本方法会阻塞在网络请求上，调用方应放到后台线程。
     ''' </summary>
-    Public Sub Check()
+    ''' <param name="Manual">是否由用户主动点击「检查更新」触发。手动检查会用 Hint 明确告知结果，启动时的静默检查不打扰用户。</param>
+    Public Sub Check(Optional Manual As Boolean = False)
         If Status = UpdateStatus.Checking OrElse Status = UpdateStatus.Downloading Then Return
         SetStatus(UpdateStatus.Checking, "")
         Try
             Dim Info As UpdateInfo = FetchLatest()
             If Info Is Nothing OrElse String.IsNullOrEmpty(Info.Version) Then
                 SetStatus(UpdateStatus.Failed, "更新服务器没有返回版本信息", Nothing, 0)
+                If Manual Then Hint("检查更新失败：更新服务器没有返回版本信息", HintType.Red)
                 Return
             End If
             If IsNewer(Info.Version) Then
                 SetStatus(UpdateStatus.Available, "", Info, 0)
+                If Manual Then Hint($"发现新版本 {Info.Version}（当前 {VersionBaseName}）", HintType.Blue)
             Else
                 SetStatus(UpdateStatus.UpToDate, "", Info, 0)
+                If Manual Then Hint($"已是最新版本（{VersionBaseName}）", HintType.Green)
             End If
         Catch ex As Exception
             Logger.Warn(ex, "检查启动器更新失败")
             SetStatus(UpdateStatus.Failed, ex.Message, Nothing, 0)
+            If Manual Then Hint($"检查更新失败：{ex.Message}", HintType.Red)
         End Try
     End Sub
 
@@ -527,6 +557,17 @@ Friend Module ModUpdate
         If Info Is Nothing Then Info = Latest
         If Info Is Nothing Then Return
         If Status = UpdateStatus.Downloading Then Return
+        '先把进度窗口弹出来，再从后台开始下载：自动更新是从启动弹窗触发的，
+        '那时用户可能停在任意页面，塞在设置页里的进度条根本看不到。
+        RunInUi(
+        Sub()
+            Try
+                Dim Dialog As New MyUpdateProgress With {.Owner = FrmMain}
+                Dialog.Show()
+            Catch ex As Exception
+                Logger.Warn(ex, "打开更新进度窗口失败")
+            End Try
+        End Sub)
         RunInNewThread(
         Sub()
             Try

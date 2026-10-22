@@ -53,6 +53,20 @@
                     </Border>
                     <local:MyCheckBox local:SettingService.Key="ToolLauncherUpdateAuto" Text="自动更新" Margin="-1,0,0,4" Height="22" />
                     <TextBlock Text="开启后每次启动都会检查更新；发现新版本时弹窗展示更新公告，确认后才开始下载，并在退出启动器时完成安装（不会自动重启启动器）。" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,12" />
+                    <Grid Height="28" Margin="0,2,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="下载源" Margin="1,0,16,0" />
+                        <local:MyComboBox Grid.Column="1" local:SettingService.Key="ToolLauncherUpdateSource" x:Name="ComboUpdateSource"
+                                          Width="300" HorizontalAlignment="Left"
+                                          ToolTip="镜像优先：经 gh-proxy.com 反代下载，国内更稳。&#xa;官方优先：直连 GitHub；若连不上 Release 资产，仍会自动改用镜像。">
+                            <local:MyComboBoxItem Content="镜像优先（推荐）" />
+                            <local:MyComboBoxItem Content="官方优先" />
+                        </local:MyComboBox>
+                    </Grid>
+                    <TextBlock Text="官方源在部分网络下无法直接下载 Release 资产，届时会自动改用镜像；两者都失败才会报错。" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,12" />
                     <Grid Height="35" Margin="0,0,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />

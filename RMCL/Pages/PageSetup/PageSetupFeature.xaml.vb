@@ -279,7 +279,8 @@
     End Sub
 
     Private Sub BtnUpdateCheck_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnUpdateCheck.Click
-        RunInNewThread(Sub() ModUpdate.Check(), "检查更新")
+        '手动检查：结果用 Hint 明确告知（有新版本 / 已是最新 / 失败）
+        RunInNewThread(Sub() ModUpdate.Check(Manual:=True), "检查更新")
     End Sub
 
     Private Sub BtnUpdateInstall_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnUpdateInstall.Click

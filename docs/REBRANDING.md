@@ -250,8 +250,9 @@ CurseForge 项目 `322385`。移除 CurseForge 后请求返回 403，异常把�
 | --- | --- |
 | 检查更新 | `GET https://api.github.com/repos/lxraytop/RMCL/releases/latest`，取 `tag_name` 比对 `VersionBaseName`（`Version.TryParse`，不吃字符串大小写） |
 | 更新公告 | 直接显示 Release 的 `body`，仅做轻量清洗（去 `#` 标题、`**`/`` ` ``、列表符转 `·`、链接只留文字） |
-| 下载 | 复用 `NetFile` + `LoaderDownload` 多线程下载到 `缓存\Update\RMCL_new.exe`，校验 ≥512 KB 且大小与 `assets[].size` 一致；**官方地址下不动时自动切到 `gh-proxy.com` 反代**（实测官方 10~20s 中断、反代可下且 sha256 一致） |
-| 下载进度 | 下载引擎的 `ProgressChanged` 按 1% 步长写入共享状态，设置页用一条自绘进度条（渐变列宽，不用原生 ProgressBar，避免与玻璃观感冲突）显示百分比 |
+| 下载 | 复用 `NetFile` + `LoaderDownload` 多线程下载到 `缓存\Update\RMCL_new.exe`，校验 ≥512 KB 且大小与 `assets[].size` 一致。下载源可由用户在设置里选：**镜像优先（默认）** 或 **官方优先**，两者互为备选；实测官方直连 10~20s 中断、`gh-proxy.com` 可下且 sha256 一致 |
+| 下载进度 | 独立的进度窗口 `Controls/MyUpdateProgress.vb`（代码构建的透明窗口，不额外加 XAML）：标题 + 版本与大小 + 自绘进度条 + 百分比 + 「取消下载」。它订阅共享状态，因此**无论从启动弹窗还是设置页触发下载都能看到进度**；设置页里另有一条同款进度条 |
+| 取消下载 | `ModUpdate.CancelDownload()` 直接 Cancel 掉当前的 `LoaderDownload`，状态转为 `Failed`，窗口自行关闭 |
 | 状态共享 | `ModUpdate` 维护唯一一份状态（`Idle/Checking/UpToDate/Available/Downloading/Downloaded/Failed`）+ 监听者列表；自动更新弹窗与设置页读同一份状态，页面即使后打开也能看到正在进行的下载进度，两边不会重复下载或各说各话 |
 | 安装 | 退出前把新版本复制到 **exe 同目录**（`RMCL.update.exe`），再写同目录的 `RMCL.update.bat`：循环 `ping` 等待本进程释放 exe → `move /y "%~dp0RMCL.update.exe" "%~dp0<exe>"` → 可选 `start` 重启 → 自删脚本。安装目录不可写时退回「脚本放缓存目录 + 绝对路径」方案，两种方式都按 **系统 ANSI 代码页**写脚本 |
 | 自动更新 | `ToolLauncherUpdateAuto`（默认关）。开启后每次启动静默检查；发现新版本时**弹窗展示 Release 公告**（超长截断并提示去发布页），按钮为「立即更新 / 稍后 / 查看公告」，确认后才下载，退出启动器时替换、下次启动生效 |
@@ -266,6 +267,12 @@ CurseForge 项目 `322385`。移除 CurseForge 后请求返回 403，异常把�
 - **批处理必须按 ANSI 写、且不要内嵌中文路径**：cmd 是按系统代码页读取 `.bat` 的，用 UTF-8 写出含中文目录的脚本会变成乱码，`move` 每次「找不到文件」，重试 60 次后放弃 —— 表现为「下载成功、日志也写了更新脚本，但版本一直不变」。现在新版本直接落到 exe 同目录，脚本里只用 `%~dp0`，彻底不出现目录路径（已用中文 + 空格路径实测：占用时不动、释放后替换成功）。
 - **不要在多份拷贝间混用更新器**：`ToolLauncherUpdateAuto` 等设置存在 `HKCU\Software\RMCLDebug`，是全局的；旧版本还会把「已下载版本」写进同一位置，导致另一份旧拷贝被静音。
 - 替换失败的可见后果仅仅是「新 exe 留在缓存目录」，不会破坏现有安装。
+
+### 追加：下载源可选 + 独立进度窗口
+
+- 新增设置 `ToolLauncherUpdateSource`（设置 → 功能 → 软件更新 → 下载源）：`0` 镜像优先（默认）、`1` 官方优先。`BuildDownloadUrls` 据此决定顺序，两源始终互为备选。
+- 进度条从「设置页内嵌」升级为「独立窗口」：`MyMsg` 家族都是 FrmMain 内的覆盖层，不支持进度，所以直接做了一个代码构建的 `Window`（`Controls/MyUpdateProgress.vb`，无 XAML，避免再引一套标记编译产物），样式沿用 `ColorBrushDialogBackground` / `ColorBrush2`，自绘双列 Star 进度条。
+- 窗口在 `DownloadAndPrompt` 里先 `Show()` 再起后台下载线程；状态变成 `Downloaded`/`Failed` 时自行 `Close()`，后续「立即重启 / 稍后」仍由 `PromptInstallAfterDownload` 负责。
 
 ## 九、构建与推送
 
