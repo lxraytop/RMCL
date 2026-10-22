@@ -115,7 +115,7 @@
 
 ### 8.4 其它
 
-- 资源搜索源仅保留 Modrinth（`PageResource` 下拉框只剩一项，`ResourceSearcher` 错误文案同步）。
+- 资源搜索源恢复为「全部 / CurseForge / Modrinth」（默认「全部」），CurseForge 走 `ModSecret.vb` 内置的 API Key，错误文案同步区分两个来源。
 - 标题栏字标由 `PCL` 笔画路径改为 `RMCL` 字形，默认 `UiLogoText` 改为 `RMCL`。
 
 ## 十、第四轮：细节修正与「修改」页修复
@@ -208,6 +208,22 @@ CurseForge 项目 `322385`。移除 CurseForge 后请求返回 403，异常把�
 | 错误弹窗等（`MyMsgText/Input/Select`、`MyMsgLogin`） | 底色写死 `#FBFBFB`、正文写死 `#FF5C5C5C` | 新增 `ColorBrushDialogBackground` / `ColorBrushDialogText` 动态资源，随外观重算 |
 
 由于 `Themes.Black` 由固定黑改为随外观反转，返回、清空、恢复等 20 余个图标按钮一并得到修正。
+
+## 十二、第六轮：恢复 CurseForge 资源搜索与整合包安装（2.16.0.0）
+
+第三轮把搜索源收窄为「仅 Modrinth」，本轮按 `1ed567c` 的 diff 逐条还原，并把 API Key 内置：
+
+| 位置 | 改动 |
+| --- | --- |
+| `Pages/PageDownload/Resource/PageResource.xaml` | 来源下拉框恢复 `全部(3)` / `CurseForge(1)` / `Modrinth(2)`，默认「全部」；`HintError` 默认文案恢复双源描述 |
+| `Pages/PageDownload/Resource/PageResource.xaml.vb` | `.Sources` 由硬编码 `ResourcePlatforms.Modrinth` 改回读取下拉框 `Tag` |
+| `Modules/Resource/ResourceSearcher.vb` | 恢复双源错误文案分支（CurseForge 失败时提示只显示了 Modrinth 的内容，并提示检查 API Key） |
+| `Modules/ModSecret.vb` | `CurseForgeAPIKey` 内置默认值（环境变量 `RMCL_CURSEFORGE_API_KEY` 仍优先）；`x-api-key` 增加空值短路与 `mod.mcimirror.top/curseforge` 镜像判定 |
+| `Modules/Minecraft/ModModpack.vb` | 修 `ModJson?("FileName")` → `("fileName")`：JObject 区分大小写，原写法恒为 false，导致 `.jar` 的类型兜底失效 |
+
+后端（`InstallPackCurseForge`、`GetCurseForgeAddress`、`ResourceProject.FromProjectId`、`ParseCurseForgeDownloadUrls`）自始至终完整，本轮未改。
+
+已知限制：CurseForge 对「作者关闭第三方分发」的文件返回 `downloadUrl = null`，`ResourceVersion.FromPlatformJson` 会据此拼一个猜测的 CDN 地址，安装时这类文件会下载失败；彻底解决需另做「列出清单让用户手动下载」的流程。
 
 ## 九、构建与推送
 

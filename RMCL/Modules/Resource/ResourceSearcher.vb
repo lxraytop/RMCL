@@ -435,7 +435,11 @@ NextPage:
                 End If
             ElseIf Errors.Any() Then
                 '有结果但是有错误
-                Storage.ErrorMessage = $"无法连接到 Modrinth，搜索结果可能不全。{vbCrLf}请稍后再试，或检查网络环境。"
+                If Errors.Any(Function(e) e.Source = ResourcePlatforms.CurseForge) Then
+                    Storage.ErrorMessage = $"无法连接到 CurseForge，所以目前仅显示了来自 Modrinth 的内容，搜索结果可能不全。{vbCrLf}请稍后再试，或检查网络环境与 CurseForge API Key。"
+                Else
+                    Storage.ErrorMessage = $"无法连接到 Modrinth，所以目前仅显示了来自 CurseForge 的内容，搜索结果可能不全。{vbCrLf}请稍后再试，或检查网络环境。"
+                End If
             End If
 
         Finally

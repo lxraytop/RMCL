@@ -8,8 +8,9 @@ Friend Module ModSecret
     Public Const RegFolder As String = "RMCLDebug"
     '用于微软登录的 ClientId
     Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("RMCL_MS_CLIENT_ID"), "ab25b229-f826-46db-b646-01035c3a3e52")
-    'CurseForge API Key
-    Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("RMCL_CURSEFORGE_API_KEY"), "")
+    'CurseForge API Key（资源搜索与整合包安装均依赖它）
+    '优先读取环境变量 RMCL_CURSEFORGE_API_KEY，未设置时使用内置密钥
+    Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("RMCL_CURSEFORGE_API_KEY"), "$2a$10$wuAJuNZuted3NORVmpgUC.m8sI.pv1tOPKZyBgLFGjxFp/br0lZCC")
 
 #Region "网络鉴权"
 
@@ -31,7 +32,11 @@ Friend Module ModSecret
             End If
         End If
         If Not SimulateBrowserHeaders Then Req.Headers.Add("Referer", $"http://{VersionCode}.open.rmcl.server/")
-        If Url.Contains("api.curseforge.com") OrElse Url.Contains("forgecdn.net") Then Req.Headers.Add("x-api-key", CurseForgeAPIKey)
+        'CurseForge 官方 API 与镜像（mod.mcimirror.top/curseforge）都需要携带 x-api-key
+        If Not String.IsNullOrEmpty(CurseForgeAPIKey) AndAlso
+           (Url.Contains("api.curseforge.com") OrElse Url.Contains("forgecdn.net") OrElse Url.Contains("mcimirror.top/curseforge")) Then
+            Req.Headers.Add("x-api-key", CurseForgeAPIKey)
+        End If
     End Sub
 
 #End Region

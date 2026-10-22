@@ -1,4 +1,4 @@
-# 构建说明（RMCL 2.15.0.1）
+# 构建说明（RMCL 2.16.0.0）
 
 RMCL 基于上游 2.14.0.0 开源基线重构，技术栈与上游一致：**.NET Framework 4.8 + WPF + VB.NET**（主工程为传统 vbproj，`RMCLCS` 与 `MeloongCore` 为 SDK 风格 csproj）。
 
@@ -44,16 +44,16 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 ## 四、已知提示
 
 - `warning MSB3884: 无法找到规则集文件 BasicDesignGuidelineRules.ruleset`：仅代码分析规则集缺失，不影响编译与运行；如需消除，在项目属性关闭「启用代码分析」即可。
-- 未配置密钥时，正版登录与 CurseForge API 不可用（`Modules/ModSecret.vb` 中通过环境变量 `RMCL_MS_CLIENT_ID`、`RMCL_CURSEFORGE_API_KEY` 注入），启动时会弹出「开源版本说明」提示，属上游既有行为。
-- 资源搜索页的搜索源只保留 **Modrinth**（CurseForge 入口已从下拉框与错误文案中移除，底层 API 分支仍保留以便整合包链路使用）。
+- CurseForge API Key 已内置默认值于 `Modules/ModSecret.vb`，仍可用环境变量 `RMCL_CURSEFORGE_API_KEY` 覆盖；微软登录 ClientId 同理（`RMCL_MS_CLIENT_ID`）。
+- 资源搜索源为 **全部 / CurseForge / Modrinth**（默认「全部」），CurseForge 分支依赖内置 API Key；整合包安装中的 CurseForge 清单（`manifest.json`）解析同样使用该 Key。
 - 单例检查使用互斥体 `RMCL_SingletonMutex`：已有实例在运行时再次启动会**以退出码 4 直接退出**，这是正常行为，不是崩溃。
 
 ## 五、本地已产出的成品
 
 | 文件 | 大小 | 说明 |
 | --- | --- | --- |
-| `dist/RMCL 2.15.0.1/RMCL.exe` | 5.36 MB | 主程序，版本信息 `2.15.0.1 / Ray Minecraft Launcher` |
-| `dist/RMCL 2.15.0.1/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
-| `dist/RMCL-2.15.0.1-win.zip` | 2.42 MB | 上述两个文件的压缩包 |
+| `dist/RMCL 2.16.0.0/RMCL.exe` | 5.53 MB | 主程序，版本信息 `2.16.0.0 / Ray Minecraft Launcher` |
+| `dist/RMCL 2.16.0.0/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
+| `dist/RMCL-2.16.0.0-win.zip` | 2.49 MB | 上述两个文件的压缩包（sha256 `32445b33…`） |
 
 冒烟验证：解压后直接运行，主窗口标题为 `Ray Minecraft Launcher　`，初始化日志（`RMCL\Log1.txt`）无异常，Java 探测、Mojang 版本列表加载正常。
