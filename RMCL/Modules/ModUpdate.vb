@@ -57,6 +57,123 @@ Friend Module ModUpdate
 
 #End Region
 
+#Region "共享状态"
+
+    ''' <summary>
+    ''' 更新流程的状态。自动更新与设置页共用同一份，界面据此显示进度。
+    ''' </summary>
+    Public Enum UpdateStatus
+        ''' <summary>还没查过。</summary>
+        Idle = 0
+        ''' <summary>正在查询 Release。</summary>
+        Checking = 1
+        ''' <summary>已是最新版本。</summary>
+        UpToDate = 2
+        ''' <summary>发现新版本，等待用户决定。</summary>
+        Available = 3
+        ''' <summary>正在下载。</summary>
+        Downloading = 4
+        ''' <summary>已下载，退出时安装。</summary>
+        Downloaded = 5
+        ''' <summary>检查或下载失败。</summary>
+        Failed = 6
+    End Enum
+
+    Private StateLock As New Object
+    Private StatusValue As UpdateStatus = UpdateStatus.Idle
+    Private LatestValue As UpdateInfo = Nothing
+    Private ProgressValue As Double = 0
+    Private MessageValue As String = ""
+    Private StagedValue As String = ""
+    Private ReadOnly StateListeners As New List(Of Action)
+
+    ''' <summary>当前状态。</summary>
+    Public ReadOnly Property Status As UpdateStatus
+        Get
+            SyncLock StateLock
+                Return StatusValue
+            End SyncLock
+        End Get
+    End Property
+
+    ''' <summary>最近一次检查到的版本信息，未检查过时为 Nothing。</summary>
+    Public ReadOnly Property Latest As UpdateInfo
+        Get
+            SyncLock StateLock
+                Return LatestValue
+            End SyncLock
+        End Get
+    End Property
+
+    ''' <summary>下载进度，0-1。</summary>
+    Public ReadOnly Property Progress As Double
+        Get
+            SyncLock StateLock
+                Return ProgressValue
+            End SyncLock
+        End Get
+    End Property
+
+    ''' <summary>最后一次失败的原因，没有失败时为空。</summary>
+    Public ReadOnly Property Message As String
+        Get
+            SyncLock StateLock
+                Return MessageValue
+            End SyncLock
+        End Get
+    End Property
+
+    ''' <summary>已下载待安装的新版本文件路径，未下载时为空。</summary>
+    Public ReadOnly Property StagedPath As String
+        Get
+            SyncLock StateLock
+                Return StagedValue
+            End SyncLock
+        End Get
+    End Property
+
+    ''' <summary>
+    ''' 注册状态变化的回调。回调会在设置状态的线程上执行，界面需要自己切回 UI 线程。
+    ''' </summary>
+    Public Sub RegisterListener(Handler As Action)
+        If Handler Is Nothing Then Return
+        SyncLock StateLock
+            If Not StateListeners.Contains(Handler) Then StateListeners.Add(Handler)
+        End SyncLock
+    End Sub
+
+    Public Sub UnregisterListener(Handler As Action)
+        If Handler Is Nothing Then Return
+        SyncLock StateLock
+            StateListeners.Remove(Handler)
+        End SyncLock
+    End Sub
+
+    ''' <summary>
+    ''' 更新状态并通知所有监听者。
+    ''' </summary>
+    ''' <param name="NewProgress">-1 表示不变。</param>
+    Private Sub SetStatus(NewStatus As UpdateStatus, Optional NewMessage As String = Nothing,
+                          Optional NewLatest As UpdateInfo = Nothing, Optional NewProgress As Double = -1)
+        Dim Handlers As Action()
+        SyncLock StateLock
+            StatusValue = NewStatus
+            If NewMessage IsNot Nothing Then MessageValue = NewMessage
+            If NewLatest IsNot Nothing Then LatestValue = NewLatest
+            If NewProgress >= 0 Then ProgressValue = NewProgress
+            Handlers = StateListeners.ToArray()
+        End SyncLock
+        For Each Handler As Action In Handlers
+            Try
+                Handler()
+            Catch ex As Exception
+                Logger.Warn(ex, "刷新更新界面失败")
+            End Try
+        Next
+    End Sub
+
+#End Region
+
 #Region "检查"
 
     ''' <summary>
@@ -148,6 +265,25 @@ Friend Module ModUpdate
 #Region "下载与安装"
 
     ''' <summary>
+    ''' 可用的 GitHub 资产下载反代。国内直连 github.com 的 Release 资产经常连不上，
+    ''' 实测官方地址 10~20s 后中断而反代可用（下载结果与官方 sha256 一致）。
+    ''' </summary>
+    Private ReadOnly AssetMirrors As String() = {"https://gh-proxy.com/"}
+
+    ''' <summary>
+    ''' 生成下载源列表：官方地址在前，反代在后由下载引擎自动切换。
+    ''' </summary>
+    Private Function BuildDownloadUrls(Url As String) As List(Of String)
+        Dim Urls As New List(Of String) From {Url}
+        If Url.Contains("github.com/") OrElse Url.Contains("githubusercontent.com") Then
+            For Each Mirror As String In AssetMirrors
+                Urls.Add(Mirror & Url)
+            Next
+        End If
+        Return Urls
+    End Function
+
+    ''' <summary>
     ''' 下载更新到缓存目录，返回本地文件路径。失败时抛出异常。
     ''' </summary>
     ''' <param name="OnProgress">下载进度回调，参数为 0-1。</param>
@@ -158,7 +294,7 @@ Friend Module ModUpdate
         Dim Target As String = Folder & "RMCL_new.exe"
         FileUtils.Delete(Target)
 
-        Dim File As New NetFile({Info.AssetUrl}, Target, SimulateBrowserHeaders:=True)
+        Dim File As New NetFile(BuildDownloadUrls(Info.AssetUrl), Target, SimulateBrowserHeaders:=True)
         Dim Task As New LoaderDownload("下载启动器更新", New List(Of NetFile) From {File})
         If OnProgress IsNot Nothing Then
             AddHandler Task.ProgressChanged, Sub(NewProgress As Double, OldProgress As Double) OnProgress(NewProgress)
@@ -244,25 +380,78 @@ Friend Module ModUpdate
     End Function
 
     ''' <summary>
-    ''' 启动时自动检查：发现新版本时弹窗展示更新公告并询问是否更新，确认后再下载。
+    ''' 检查更新。结果写入共享状态；本方法会阻塞在网络请求上，调用方应放到后台线程。
+    ''' </summary>
+    Public Sub Check()
+        If Status = UpdateStatus.Checking OrElse Status = UpdateStatus.Downloading Then Return
+        SetStatus(UpdateStatus.Checking, "")
+        Try
+            Dim Info As UpdateInfo = FetchLatest()
+            If Info Is Nothing OrElse String.IsNullOrEmpty(Info.Version) Then
+                SetStatus(UpdateStatus.Failed, "更新服务器没有返回版本信息", Nothing, 0)
+                Return
+            End If
+            If IsNewer(Info.Version) Then
+                SetStatus(UpdateStatus.Available, "", Info, 0)
+            Else
+                SetStatus(UpdateStatus.UpToDate, "", Info, 0)
+            End If
+        Catch ex As Exception
+            Logger.Warn(ex, "检查启动器更新失败")
+            SetStatus(UpdateStatus.Failed, ex.Message, Nothing, 0)
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' 下载最新版本并登记为待安装。状态会同步到界面；本方法会阻塞，调用方应放到后台线程。
+    ''' </summary>
+    Public Sub StartDownload()
+        If Status = UpdateStatus.Downloading Then Return
+        Dim Info As UpdateInfo = Latest
+        If Info Is Nothing OrElse Not Info.HasAsset Then Throw New Exception("当前没有可下载的更新")
+        LastProgressNotified = -1
+        SetStatus(UpdateStatus.Downloading, "", Info, 0)
+        Try
+            Dim LocalPath As String = DownloadUpdate(Info, AddressOf OnDownloadProgress)
+            Settings.Set("ToolLauncherUpdateSkip", Info.Version)
+            StageUpdate(LocalPath, False)
+            SyncLock StateLock
+                StagedValue = LocalPath
+            End SyncLock
+            SetStatus(UpdateStatus.Downloaded, "", Info, 1)
+        Catch ex As Exception
+            Logger.Warn(ex, "下载启动器更新失败")
+            SetStatus(UpdateStatus.Failed, ex.Message, Info, 0)
+            Throw
+        End Try
+    End Sub
+
+    '上一次推送进度的百分比，用于过滤过密的刷新
+    Private LastProgressNotified As Double = -1
+    ''' <summary>
+    ''' 下载引擎的进度回调：按 1% 步长推送到共享状态，避免每收到一段数据就刷一次界面。
+    ''' </summary>
+    Private Sub OnDownloadProgress(Value As Double)
+        If Value < 0.999 AndAlso Value - LastProgressNotified < 0.01 Then Return
+        LastProgressNotified = Value
+        SetStatus(Status, Nothing, Nothing, Value)
+    End Sub
+
+    ''' <summary>
+    ''' 启动时自动检查：发现新版本时弹窗展示公告并询问，确认后才下载。
     ''' </summary>
     Public Sub AutoCheck()
-        Dim Info As UpdateInfo = FetchLatest()
-        If Info Is Nothing OrElse String.IsNullOrEmpty(Info.Version) Then Return
-        If Not IsNewer(Info.Version) Then
-            Logger.Info($"启动器已是最新版本（{VersionBaseName}）")
-            Return
-        End If
-        If Not Info.HasAsset Then
-            Logger.Warn($"新版本 {Info.Version} 没有提供 exe 资源，已跳过自动更新")
-            Return
-        End If
-        If Settings.Get(Of String)("ToolLauncherUpdateSkip") = Info.Version Then
-            Logger.Info($"新版本 {Info.Version} 已经下载过，本次不再提示")
-            Return
-        End If
-        '弹窗必须在 UI 线程
-        RunInUi(Sub() AskUpdate(Info))
+        RunInNewThread(
+        Sub()
+            Check()
+            Dim Info As UpdateInfo = Latest
+            If Info Is Nothing OrElse Status <> UpdateStatus.Available Then Return
+            If Settings.Get(Of String)("ToolLauncherUpdateSkip") = Info.Version Then
+                Logger.Info($"新版本 {Info.Version} 已经下载过，本次不再提示")
+                Return
+            End If
+            RunInUi(Sub() AskUpdate(Info))
+        End Sub, "自动检查更新")
     End Sub
 
     ''' <summary>
@@ -283,10 +472,30 @@ Friend Module ModUpdate
                 Logger.Info($"用户选择稍后更新 {Info.Version}")
                 Return
             End If
-            DownloadAndStage(Info)
+            DownloadAndPrompt(Info)
         Catch ex As Exception
             Logger.Error(ex, "弹窗提示更新失败")
         End Try
+    End Sub
+
+    ''' <summary>
+    ''' 后台下载，完成后弹窗询问是否立即重启安装。自动更新与设置页手动更新共用这一条路径。
+    ''' </summary>
+    Public Sub DownloadAndPrompt(Info As UpdateInfo)
+        If Info Is Nothing Then Info = Latest
+        If Info Is Nothing Then Return
+        If Status = UpdateStatus.Downloading Then Return
+        RunInNewThread(
+        Sub()
+            Try
+                StartDownload()
+                Dim LocalPath As String = StagedPath
+                If String.IsNullOrEmpty(LocalPath) Then Return
+                RunInUi(Sub() PromptInstallAfterDownload(Info, LocalPath))
+            Catch ex As Exception
+                RunInUi(Sub() Hint("更新下载失败：" & ex.Message, HintType.Red))
+            End Try
+        End Sub, "下载更新")
     End Sub
 
     ''' <summary>
@@ -303,23 +512,6 @@ Friend Module ModUpdate
             Hint($"更新 {Info.Version} 将在退出启动器时自动安装", HintType.Green)
             If OnDeferred IsNot Nothing Then OnDeferred()
         End If
-    End Sub
-
-    ''' <summary>
-    ''' 在后台下载更新，完成后询问是否立即重启安装。
-    ''' </summary>
-    Private Sub DownloadAndStage(Info As UpdateInfo)
-        RunInNewThread(
-        Sub()
-            Try
-                Dim LocalPath As String = DownloadUpdate(Info)
-                Settings.Set("ToolLauncherUpdateSkip", Info.Version)
-                RunInUi(Sub() PromptInstallAfterDownload(Info, LocalPath))
-            Catch ex As Exception
-                Logger.Warn(ex, "自动更新下载失败")
-                RunInUi(Sub() Hint("自动更新下载失败：" & ex.Message, HintType.Red))
-            End Try
-        End Sub, "自动更新")
     End Sub
 
 #End Region

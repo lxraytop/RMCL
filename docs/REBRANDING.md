@@ -250,7 +250,9 @@ CurseForge 项目 `322385`。移除 CurseForge 后请求返回 403，异常把�
 | --- | --- |
 | 检查更新 | `GET https://api.github.com/repos/lxraytop/RMCL/releases/latest`，取 `tag_name` 比对 `VersionBaseName`（`Version.TryParse`，不吃字符串大小写） |
 | 更新公告 | 直接显示 Release 的 `body`，仅做轻量清洗（去 `#` 标题、`**`/`` ` ``、列表符转 `·`、链接只留文字） |
-| 下载 | 复用 `NetFile` + `LoaderDownload` 多线程下载到 `缓存\Update\RMCL_new.exe`，校验 ≥512 KB 且大小与 `assets[].size` 一致 |
+| 下载 | 复用 `NetFile` + `LoaderDownload` 多线程下载到 `缓存\Update\RMCL_new.exe`，校验 ≥512 KB 且大小与 `assets[].size` 一致；**官方地址下不动时自动切到 `gh-proxy.com` 反代**（实测官方 10~20s 中断、反代可下且 sha256 一致） |
+| 下载进度 | 下载引擎的 `ProgressChanged` 按 1% 步长写入共享状态，设置页用一条自绘进度条（渐变列宽，不用原生 ProgressBar，避免与玻璃观感冲突）显示百分比 |
+| 状态共享 | `ModUpdate` 维护唯一一份状态（`Idle/Checking/UpToDate/Available/Downloading/Downloaded/Failed`）+ 监听者列表；自动更新弹窗与设置页读同一份状态，页面即使后打开也能看到正在进行的下载进度，两边不会重复下载或各说各话 |
 | 安装 | 退出前写 `缓存\Update\apply.bat`：循环 `ping` 等待本进程释放 exe → `move /y` 覆盖 → 可选 `start` 重启 → 自删脚本 |
 | 自动更新 | `ToolLauncherUpdateAuto`（默认关）。开启后每次启动静默检查；发现新版本时**弹窗展示 Release 公告**（超长截断并提示去发布页），按钮为「立即更新 / 稍后 / 查看公告」，确认后才下载，退出启动器时替换、下次启动生效；`ToolLauncherUpdateSkip` 记录已下载的版本，避免装失败后每次启动重复下载 |
 

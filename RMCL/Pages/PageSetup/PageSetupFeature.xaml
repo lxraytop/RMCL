@@ -63,6 +63,17 @@
                         <local:MyButton x:Name="BtnUpdateInstall" Text="下载并安装" MinWidth="140" Height="35" Padding="13,0" Grid.Column="1" Margin="0,0,20,0" Visibility="Collapsed" />
                         <local:MyButton x:Name="BtnUpdatePage" Text="打开发布页" MinWidth="140" Height="35" Padding="13,0" Grid.Column="2" />
                     </Grid>
+                    <StackPanel x:Name="PanUpdateProgress" Visibility="Collapsed" Margin="0,12,0,0">
+                        <Grid Height="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition x:Name="ColUpdateFill" Width="0*" />
+                                <ColumnDefinition x:Name="ColUpdateRest" Width="1*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="{DynamicResource ColorBrush2}" CornerRadius="3" />
+                            <Border Grid.Column="1" Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="3" />
+                        </Grid>
+                        <TextBlock x:Name="LabUpdateProgress" FontSize="12" Opacity="0.75" Margin="1,6,0,0" Text="正在下载……" />
+                    </StackPanel>
                     <TextBlock x:Name="LabUpdateNotesTitle" Text="更新公告" Margin="1,14,0,6" FontSize="12.5" Opacity="0.7" Visibility="Collapsed" />
                     <Border x:Name="PanUpdateNotes" Visibility="Collapsed" Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,10">
                         <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
