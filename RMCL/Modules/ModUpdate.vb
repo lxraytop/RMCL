@@ -339,13 +339,50 @@ Friend Module ModUpdate
     End Property
 
     ''' <summary>
-    ''' 在程序退出前调用：写一个临时脚本，等当前进程释放 exe 后再替换它。
+    ''' 在程序退出前调用：写一个替换脚本，等当前进程释放 exe 后再覆盖它。
     ''' 脚本会反复重试，因此这里启动后不需要等待，进程可以直接退出。
     ''' </summary>
     ''' <returns>是否成功启动了替换脚本。</returns>
     Public Function ApplyPendingUpdate() As Boolean
         If Not HasPendingUpdate Then Return False
         Try
+            Dim ExeDir As String = Path.GetDirectoryName(PathExe) & "\"
+            Dim ExeName As String = Path.GetFileName(PathExe)
+
+            '优先把新版本复制到 exe 同目录：这样 move 是同卷重命名，而且脚本里不出现任何目录路径。
+            '之前把绝对路径（常含中文目录）写进 .bat，而 cmd 按系统 ANSI 代码页读取脚本，
+            '用 UTF-8 写出的中文路径会变成乱码，move 每次都找不到文件 —— 表现为「下载成功但版本没变」。
+            Try
+                Dim StagedNearby As String = ExeDir & "RMCL.update.exe"
+                Dim ScriptNearby As String = ExeDir & "RMCL.update.bat"
+                System.IO.File.Copy(PendingExe, StagedNearby, True)
+                Dim NearbyLines As New List(Of String) From {
+                    "@echo off",
+                    "setlocal",
+                    "for /l %%i in (1,1,60) do (",
+                    "  ping -n 2 127.0.0.1 >nul",
+                    $"  move /y ""%~dp0RMCL.update.exe"" ""%~dp0{ExeName}"" >nul 2>&1 && goto done",
+                    ")",
+                    "goto end",
+                    ":done",
+                    If(PendingRestart, $"start """" ""%~dp0{ExeName}""", "rem no restart"),
+                    ":end",
+                    "del ""%~f0"" >nul 2>&1"
+                }
+                FileUtils.Write(ScriptNearby, NearbyLines.Join(vbCrLf), Text.Encoding.Default)
+                Logger.Info($"已写入更新脚本：{ScriptNearby}（重启={PendingRestart}，同目录模式）")
+                StartProcess(New ProcessStartInfo("cmd.exe", "/c """ & ScriptNearby & """") With {
+                    .UseShellExecute = False,
+                    .CreateNoWindow = True,
+                    .WindowStyle = ProcessWindowStyle.Hidden
+                })
+                PendingExe = ""
+                Return True
+            Catch ex As Exception
+                '安装目录不可写（例如放在 Program Files）时退回缓存目录方案
+                Logger.Warn(ex, "把新版本放到 exe 同目录失败，改用缓存目录方案")
+            End Try
+
             Dim Folder As String = PathTemp & "Update\"
             DirectoryUtils.Create(Folder)
             Dim Script As String = Folder & "apply.bat"
@@ -364,8 +401,9 @@ Friend Module ModUpdate
                 ":end",
                 "del ""%~f0"" >nul 2>&1"
             }
-            FileUtils.Write(Script, Lines.Join(vbCrLf))
-            Logger.Info($"已写入更新脚本：{Script}（重启={PendingRestart}）")
+            '脚本里有中文路径，必须按系统 ANSI 写出，否则 cmd 读到的是乱码
+            FileUtils.Write(Script, Lines.Join(vbCrLf), Text.Encoding.Default)
+            Logger.Info($"已写入更新脚本：{Script}（重启={PendingRestart}，缓存目录模式）")
             StartProcess(New ProcessStartInfo("cmd.exe", "/c """ & Script & """") With {
                 .UseShellExecute = False,
                 .CreateNoWindow = True,
