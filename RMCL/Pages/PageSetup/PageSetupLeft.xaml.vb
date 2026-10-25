@@ -77,8 +77,8 @@ Public Class PageSetupLeft
                 If FrmSetupUI Is Nothing Then FrmSetupUI = New PageSetupUI
                 Return FrmSetupUI
             Case FormMain.PageSubType.SetupLink
-                If FrmSetupLink Is Nothing Then FrmSetupLink = New PageSetupLink
-                Return FrmSetupLink
+                If FrmLinkMain Is Nothing Then FrmLinkMain = New PageLinkMain
+                Return FrmLinkMain
             Case FormMain.PageSubType.SetupSystem
                 If FrmSetupSystem Is Nothing Then FrmSetupSystem = New PageSetupSystem
                 Return FrmSetupSystem
@@ -107,8 +107,8 @@ Public Class PageSetupLeft
                     If IsNothing(FrmSetupUI) Then FrmSetupUI = New PageSetupUI
                     PageChangeRun(FrmSetupUI)
                 Case FormMain.PageSubType.SetupLink
-                    If IsNothing(FrmSetupLink) Then FrmSetupLink = New PageSetupLink
-                    PageChangeRun(FrmSetupLink)
+                    If IsNothing(FrmLinkMain) Then FrmLinkMain = New PageLinkMain
+                    PageChangeRun(FrmLinkMain)
                 Case FormMain.PageSubType.SetupSystem
                     If IsNothing(FrmSetupSystem) Then FrmSetupSystem = New PageSetupSystem
                     PageChangeRun(FrmSetupSystem)
@@ -171,8 +171,8 @@ Public Class PageSetupLeft
                 End If
             Case FormMain.PageSubType.SetupLink
                 If MyMsgBox("是否要初始化 联机 页面的所有设置？该操作不可撤销。", "初始化确认",, "取消", IsWarn:=True) = 1 Then
-                    If IsNothing(FrmSetupLink) Then FrmSetupLink = New PageSetupLink
-                    FrmSetupLink.Reset()
+                    If IsNothing(FrmLinkMain) Then FrmLinkMain = New PageLinkMain
+                    FrmLinkMain.Reset()
                     ItemLink.Checked = True
                 End If
             Case FormMain.PageSubType.SetupFeature

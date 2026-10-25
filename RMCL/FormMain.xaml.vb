@@ -11,6 +11,12 @@ Public Class FormMain
         Dim FeatureList As New List(Of KeyValuePair(Of Integer, String))
         '统计更新日志条目
         If BuildType = BuildTypes.Release Then
+            If LastVersion < 413 Then 'Release 2.18.0.0
+                FeatureList.Add(New KeyValuePair(Of Integer, String)(5, "新增：联机功能！基于 EasyTier 建立虚拟局域网，无需公网 IP 即可让朋友加入你的单人游戏"))
+                FeatureList.Add(New KeyValuePair(Of Integer, String)(3, "优化：联机页面移动到设置中，与启动、个性化等页面同级"))
+                FeatureList.Add(New KeyValuePair(Of Integer, String)(2, "优化：复制邀请码后可直接加入房间"))
+                FeatureCount += 3
+            End If
             If LastVersion < 411 Then 'Release 2.14.0.0
                 FeatureList.Add(New KeyValuePair(Of Integer, String)(5, "新增：允许修改、添加、移除、更新已安装版本的 MC 版本以及各个组件，可从版本设置中进入"))
                 FeatureList.Add(New KeyValuePair(Of Integer, String)(2, "优化：启动游戏时允许按 Esc 取消"))
@@ -514,6 +520,11 @@ Public Class FormMain
             Settings.Reset("LaunchAdvanceJvm")
             Logger.Info("已重置 JVM 参数设置")
         End If
+        '2.18.0.0 起联机改为设置的子页面，旧版本曾强制隐藏该项，需要清除
+        If LastVersionCode < 413 AndAlso Settings.Get(Of Boolean)("UiHiddenSetupLink") Then
+            Settings.Set("UiHiddenSetupLink", False)
+            Logger.Info("已恢复被隐藏的联机设置页")
+        End If
         '输出更新日志
         If LastVersionCode <= 0 Then Return
         If HighestVersionCode >= VersionCode Then Return
@@ -929,9 +940,8 @@ Public Class FormMain
             Logger.Warn(ex, "同步系统外观模式失败")
         End Try
         '读取剪贴板，自动加入联机房间
-        Return 'TODO: 联机复活赛
         If PageLinkMain.LinkState <> PageLinkMain.LinkStates.Waiting Then Return '已启动联机
-        If PageCurrent = PageType.Link Then Return '已在联机界面
+        If PageCurrent = PageType.Setup AndAlso PageCurrentSub = PageSubType.SetupLink Then Return '已在联机界面
         Dim Code = ClipboardGetText() : If Code Is Nothing Then Return '剪贴板无文本
         If Settings.Get(Of String)("LinkLastAutoJoinInviteCode") = Code Then Return
         If PageLinkMain.ValidateCodeFormat(Code) IsNot Nothing Then Return '不是邀请码
@@ -1221,13 +1231,9 @@ Public Class FormMain
         ''' </summary>
         Download = 1
         ''' <summary>
-        ''' 联机。
+        ''' 设置。联机功能作为它的子页面存在。
         ''' </summary>
-        Link = 2
-        ''' <summary>
-        ''' 设置。
-        ''' </summary>
-        Setup = 3
+        Setup = 2
         ''' <summary>
         ''' 版本选择。这是一个副页面。
         ''' </summary>
@@ -1404,7 +1410,7 @@ Public Class FormMain
     ''' <summary>
     ''' 通过点击导航栏改变页面。
     ''' </summary>
-    Private Sub BtnTitleSelect_Click(sender As MyRadioButton, raiseByMouse As Boolean) Handles BtnTitleSelect0.Check, BtnTitleSelect1.Check, BtnTitleSelect2.Check, BtnTitleSelect3.Check
+    Private Sub BtnTitleSelect_Click(sender As MyRadioButton, raiseByMouse As Boolean) Handles BtnTitleSelect0.Check, BtnTitleSelect1.Check, BtnTitleSelect2.Check
         If IsChangingPage Then Return
         PageChangeActual(Val(sender.Tag))
     End Sub
@@ -1483,9 +1489,6 @@ Public Class FormMain
                     If FrmDownloadLeft Is Nothing Then FrmDownloadLeft = New PageDownloadLeft
                     'PageGet 方法会在未设置 SubType 时指定默认值，并建立相关页面的实例
                     PageChangeAnim(FrmDownloadLeft, FrmDownloadLeft.PageGet(SubType))
-                Case PageType.Link '联机
-                    If FrmLinkMain Is Nothing Then FrmLinkMain = New PageLinkMain
-                    PageChangeAnim(New MyPageLeft, FrmLinkMain)
                 Case PageType.Setup '设置
                     If FrmSetupLeft Is Nothing Then FrmSetupLeft = New PageSetupLeft
                     PageChangeAnim(FrmSetupLeft, FrmSetupLeft.PageGet(SubType))

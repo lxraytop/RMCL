@@ -52,6 +52,7 @@ msbuild "RMCL\RMCL.vbproj" -p:Configuration=Release
 - 版本忽略标记 `.rmclignore`；自定义主页替换标记 `{rmcl_*}`（同时保留 `{pcl_*}` 别名，兼容社区已有主页模板）
 - 所有界面主题默认可用，不再需要任何解锁条件
 - 移除了内置帮助、启动器更新与匿名数据收集模块
+- 内置联机功能（基于 EasyTier 的虚拟局域网），入口位于 `设置 → 联机`，详见 [docs/LINK.md](docs/LINK.md)
 
 <br/>
 

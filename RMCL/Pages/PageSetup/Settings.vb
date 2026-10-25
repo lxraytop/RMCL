@@ -106,6 +106,9 @@ Public Class Settings
         New Setting("LaunchRamType", 0, OnChanged:=AddressOf PageSetupLaunch.UpdateRamType),
         New Setting("LaunchRamCustom", 15),
         New Setting("LinkLastAutoJoinInviteCode", "", Source:=Sources.Registry),
+        New Setting("LinkLastInviteCode", "", Source:=Sources.Registry),
+        New Setting("LinkLastCreatePort", 0, Source:=Sources.Registry),
+        New Setting("LinkLaunchVersion", "", Source:=Sources.Registry),
         New Setting("LinkLatencyMode", 0, Source:=Sources.Registry),
         New Setting("LinkCustomPeer", ""),
         New Setting("LinkEasyTierVersion", -1, Source:=Sources.Registry),
@@ -153,7 +156,6 @@ Public Class Settings
         New Setting("UiMusicRandom", True),
         New Setting("UiMusicAuto", True),
         New Setting("UiHiddenPageDownload", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh),
-        New Setting("UiHiddenPageLink", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh),
         New Setting("UiHiddenPageSetup", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh),
         New Setting("UiHiddenFunctionSelect", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh),
         New Setting("UiHiddenFunctionModUpdate", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh),
@@ -307,16 +309,6 @@ Public Class Settings
         If Not Entries.TryGetValue(Key, Entry) Then Throw New KeyNotFoundException("未找到设置项：" & Key)
         Dim Value = Entry.GetCache(Instance)
         If Value IsNot Nothing Then Return Value
-        '对部分设置强制赋值
-        Static ForcedSettings As New Dictionary(Of String, Object) From {
-            {"UiHiddenPageLink", True},
-            {"UiHiddenSetupLink", True}
-        }
-        Dim ForcedSetting As Object = Nothing
-        If ForcedSettings.TryGetValue(Key, ForcedSetting) Then
-            Entry.Set(ForcedSetting, Instance)
-            Return ForcedSetting
-        End If
         '正常读取
         Try
             Dim GotValue As String = Nothing '先用 String 储存，避免类型转换

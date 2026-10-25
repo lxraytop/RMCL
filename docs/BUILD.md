@@ -1,4 +1,4 @@
-# 构建说明（RMCL 2.17.0.4）
+# 构建说明（RMCL 2.18.0.0）
 
 RMCL 基于上游 2.14.0.0 开源基线重构，技术栈与上游一致：**.NET Framework 4.8 + WPF + VB.NET**（主工程为传统 vbproj，`RMCLCS` 与 `MeloongCore` 为 SDK 风格 csproj）。
 

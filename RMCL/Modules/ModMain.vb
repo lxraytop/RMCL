@@ -373,7 +373,7 @@ EndHint:
     Public FrmSpeedLeft As PageSpeedLeft
     Public FrmSpeedRight As PageSpeedRight
 
-    '联机页面声明
+    '联机页面声明（作为设置页的子页面使用）
     Public FrmLinkMain As PageLinkMain
 
     '下载页面声明
@@ -390,7 +390,6 @@ Public FrmSetupLeft As PageSetupLeft
 Public FrmSetupLaunch As PageSetupLaunch
 Public FrmSetupUI As PageSetupUI
 Public FrmSetupSystem As PageSetupSystem
-Public FrmSetupLink As PageSetupLink
 Public FrmSetupFeature As PageSetupFeature
 
     '登录页面声明
