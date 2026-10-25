@@ -292,6 +292,23 @@ Loop
 
 同时加了自检日志：首次回调记「更新下载进度回调已触发（首个进度 x%）」，完成时记「进度回调共 N 次，最终 x%」—— 下次再怀疑进度链路，看日志就能分辨是「没回调」还是「回调了但界面没刷新」。
 
+### 追加：下载慢的三项处置（2.18.0.1）
+
+实测（同一台机器、同一镜像）：
+
+| 方式 | 速度 | 5.8 MB 耗时 |
+| --- | --- | --- |
+| 官方直连 | 39 KB/s，10~20 s 必断 | 不可用 |
+| `gh-proxy.com` 单连接 | 27~63 KB/s | 90~200 s |
+| `gh-proxy.com` 32 并发 | 约 380 KB/s | 约 15 s |
+| `gh-proxy.com` 64 并发（当时默认） | 约 94 KB/s | 62 s |
+
+- **并发压到 24**：全局默认 `ToolDownloadThread + 1 = 64` 是为批量小文件设计的；单个 5 MB 文件被切成 64 段、每段一个请求，会撞上镜像按 IP 的连接数限速。新增 `ModNet.NetTaskThreadLimitOverride`，仅在更新下载期间生效，`Finally` 里恢复为 0。
+- **阶段文字**：连接建立与分段调度阶段没有字节进度，此前界面一直停在 0%。现在 `ModUpdate.Phase` 会依次给出「正在连接下载源……」→「正在下载……」→「正在校验文件……」，进度窗口与设置页共用这一个字段。
+- **不要在短时间反复重试**：`gh-proxy.com` 会按 IP 限流，连续测试一小时后单连接被压到 6~19 KB/s。反复点「检查更新 / 下载」会把自己越限越慢，失败后先等一会儿。
+
+另外确认过：其余 11 个公共反代（`ghfast.top`、`ghproxy.net`、`gh.llkk.cc`、`github.moeyy.xyz`、`ghproxy.cc`、`gh-proxy.net`、`gh.api.99988866.xyz`、`gh.xxooo.cf`、`ghproxy.cfd`、`hub.gitmirror.com`、`ghfile.geekertao.top`）以及 `gh-proxy.com` 的 hk/us/eu/ru 节点，当前全部返回 `000` 或 `403`，**能用的只剩主域名一个**，所以没有往 `AssetMirrors` 里堆更多失效项。
+
 ## 九、构建与推送
 
 ```bash

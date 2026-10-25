@@ -20,6 +20,13 @@ Friend Module ModUpdate
     ''' 发布页地址（没有新版本或获取失败时供用户手动查看）。
     ''' </summary>
     Public Const UpdatePage As String = "https://github.com/lxraytop/RMCL/releases/latest"
+    ''' <summary>
+    ''' 更新下载的最大并发线程数。
+    ''' 全局默认是 ToolDownloadThread + 1（63 + 1 = 64），那是为批量小文件设计的；
+    ''' 单个 5 MB 文件被切成 64 段、每段一个请求，反而会撞上镜像按 IP 的连接数限速，
+    ''' 实测 64 并发比 32 并发慢 4 倍，这里压到 24。
+    ''' </summary>
+    Public Const UpdateThreadLimit As Integer = 24
 
     ''' <summary>
     ''' 一次更新检查的结果。
@@ -85,6 +92,7 @@ Friend Module ModUpdate
     Private ProgressValue As Double = 0
     Private MessageValue As String = ""
     Private StagedValue As String = ""
+    Private PhaseValue As String = ""
     Private ReadOnly StateListeners As New List(Of Action)
 
     ''' <summary>当前状态。</summary>
@@ -119,6 +127,18 @@ Friend Module ModUpdate
         Get
             SyncLock StateLock
                 Return MessageValue
+            End SyncLock
+        End Get
+    End Property
+
+    ''' <summary>
+    ''' 当前进行到哪一步（如「正在连接下载源……」）。
+    ''' 连接建立、分段调度这些阶段没有字节进度，只靠百分比会以为卡死了。
+    ''' </summary>
+    Public ReadOnly Property Phase As String
+        Get
+            SyncLock StateLock
+                Return PhaseValue
             End SyncLock
         End Get
     End Property
@@ -163,6 +183,24 @@ Friend Module ModUpdate
             If NewProgress >= 0 Then ProgressValue = NewProgress
             Handlers = StateListeners.ToArray()
         End SyncLock
+        InvokeListeners(Handlers)
+    End Sub
+
+    ''' <summary>
+    ''' 只更新阶段文字并通知界面。连接建立、分段调度这些阶段没有字节进度，
+    ''' 不给出文字的话界面会一直停在 0%。
+    ''' </summary>
+    Private Sub SetPhase(Value As String)
+        Dim Handlers As Action()
+        SyncLock StateLock
+            If PhaseValue = Value Then Return
+            PhaseValue = Value
+            Handlers = StateListeners.ToArray()
+        End SyncLock
+        InvokeListeners(Handlers)
+    End Sub
+
+    Private Sub InvokeListeners(Handlers As Action())
         For Each Handler As Action In Handlers
             Try
                 Handler()
@@ -320,14 +358,23 @@ Friend Module ModUpdate
         Dim File As New NetFile(BuildDownloadUrls(Info.AssetUrl), Target, SimulateBrowserHeaders:=True)
         Dim Task As New LoaderDownload("下载启动器更新", New List(Of NetFile) From {File})
         ActiveTask = Task
+        '压低并发后再开始，见 UpdateThreadLimit 的说明
+        NetTaskThreadLimitOverride = UpdateThreadLimit
+        SetPhase("正在连接下载源……")
         Try
             'LoaderDownload 的 Progress 是只读重写属性（setter 直接抛异常），基类的 ProgressChanged
             '永远不会触发，所以这里主动轮询它的 Progress；_Progress 由 NetManager 每 0.1 秒刷新一次
             Task.Start()
+            Dim Downloading As Boolean = False
             Do While Task.State = LoadState.Loading
                 If OnProgress IsNot Nothing Then
                     Dim Value As Double = Task.Progress
                     If Double.IsNaN(Value) OrElse Value < 0 Then Value = 0
+                    '从连接/调度阶段进入真正的字节传输，此时才把阶段文字换掉
+                    If Not Downloading AndAlso Value > 0.001 Then
+                        Downloading = True
+                        SetPhase("正在下载……")
+                    End If
                     OnProgress(Math.Min(1.0, Value))
                 End If
                 Thread.Sleep(100)
@@ -338,8 +385,10 @@ Friend Module ModUpdate
         Finally
             Task.Cancel()
             ActiveTask = Nothing
+            NetTaskThreadLimitOverride = 0
         End Try
 
+        SetPhase("正在校验文件……")
         If Not FileUtils.Exists(Target) Then Throw New Exception("更新文件下载失败，请稍后重试")
         Dim Length As Long = FileUtils.GetInfo(Target).Length
         If Length < 512 * 1024 Then
@@ -351,6 +400,7 @@ Friend Module ModUpdate
             Throw New Exception($"下载的更新文件大小与发布信息不一致（{FormatSize(Length)} / {FormatSize(Info.AssetSize)}），请稍后重试")
         End If
         Logger.Info($"更新文件下载完成：{Target}（{FormatSize(Length)}）")
+        SetPhase("")
         Return Target
     End Function
 

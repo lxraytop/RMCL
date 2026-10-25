@@ -169,12 +169,7 @@ Public Class PageLinkMain
                     ComboWorldList.SelectedIndex = If(RestoreIndex >= 0, RestoreIndex, 0)
                     LabWorldHint.Text = $"检测到 {Worlds.Count} 个局域网世界，选中后点「创建」。"
                 Else
-                    Dim LastPort As Integer = Settings.Get(Of Integer)("LinkLastCreatePort")
-                    If LastPort > 0 Then
-                        LabWorldHint.Text = $"没有检测到局域网世界。请先在游戏里按 Esc → 对局域网开放，然后点「刷新」；也可以点「手动端口」直接填（上次用的是 {LastPort}）。"
-                    Else
-                        LabWorldHint.Text = "没有检测到局域网世界。请先在游戏里按 Esc → 对局域网开放，然后点「刷新」。"
-                    End If
+                    LabWorldHint.Text = "没有检测到局域网世界。请先在游戏里按 Esc → 对局域网开放，然后点「刷新」；也可以点「手动端口」直接填。"
                 End If
             End Sub)
         End Sub, "Link World Scan")

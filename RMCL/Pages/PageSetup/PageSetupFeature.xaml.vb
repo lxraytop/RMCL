@@ -218,7 +218,9 @@
                 PanUpdateProgress.Visibility = Visibility.Visible
                 ColUpdateFill.Width = New GridLength(Math.Max(0.001, ModUpdate.Progress), GridUnitType.Star)
                 ColUpdateRest.Width = New GridLength(Math.Max(0.001, 1 - ModUpdate.Progress), GridUnitType.Star)
-                LabUpdateProgress.Text = $"正在下载…… {ModUpdate.Progress * 100:F0}%"
+                Dim Phase As String = ModUpdate.Phase
+                If String.IsNullOrEmpty(Phase) Then Phase = "正在下载"
+                LabUpdateProgress.Text = $"{Phase.TrimEnd("…"c)}  {ModUpdate.Progress * 100:F0}%"
             Else
                 PanUpdateProgress.Visibility = Visibility.Collapsed
             End If

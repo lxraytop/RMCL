@@ -306,10 +306,18 @@ Retry:
     })
 
     ''' <summary>
+    ''' 临时覆盖最大线程数，0 表示不覆盖。
+    ''' 用于对单个文件的下载压低并发：镜像/反代通常按 IP 的连接数限速，
+    ''' 把 5 MB 的文件切成几十段反而更慢（实测 64 并发比 32 并发慢 4 倍）。
+    ''' </summary>
+    Public NetTaskThreadLimitOverride As Integer = 0
+
+    ''' <summary>
     ''' 最大线程数。
     ''' </summary>
     Public ReadOnly Property NetTaskThreadLimit As Integer
         Get
+            If NetTaskThreadLimitOverride > 0 Then Return NetTaskThreadLimitOverride
             Return Settings.Get(Of Integer)("ToolDownloadThread") + 1
         End Get
     End Property

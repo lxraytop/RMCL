@@ -106,11 +106,15 @@ Friend Class MyUpdateProgress
             LabPercent.Text = $"{Percent * 100:F0}%"
 
             Dim Info As ModUpdate.UpdateInfo = ModUpdate.Latest
+            Dim Text As String = "正在准备下载……"
             If Info IsNot Nothing Then
                 Dim SizeText As String = If(Info.AssetSize > 0, FormatSize(Info.AssetSize), "大小未知")
-                LabDetail.Text = $"RMCL {Info.Version}（{SizeText}）" & vbCrLf &
-                                 "下载完成后可以选择立即重启安装，或退出启动器时自动安装。"
+                Text = $"RMCL {Info.Version}（{SizeText}）"
             End If
+            '连接建立、分段调度这些阶段没有字节进度，只看百分比会以为卡死了
+            Dim Phase As String = ModUpdate.Phase
+            If Not String.IsNullOrEmpty(Phase) Then Text &= vbCrLf & Phase
+            LabDetail.Text = Text
 
             '下载结束（成功或失败）就自己关掉，后续提示由调用方负责
             If ModUpdate.Status = ModUpdate.UpdateStatus.Downloaded OrElse
