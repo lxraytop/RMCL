@@ -251,7 +251,7 @@ CurseForge 项目 `322385`。移除 CurseForge 后请求返回 403，异常把�
 | 检查更新 | `GET https://api.github.com/repos/lxraytop/RMCL/releases/latest`，取 `tag_name` 比对 `VersionBaseName`（`Version.TryParse`，不吃字符串大小写） |
 | 更新公告 | 直接显示 Release 的 `body`，仅做轻量清洗（去 `#` 标题、`**`/`` ` ``、列表符转 `·`、链接只留文字） |
 | 下载 | 复用 `NetFile` + `LoaderDownload` 多线程下载到 `缓存\Update\RMCL_new.exe`，校验 ≥512 KB 且大小与 `assets[].size` 一致。下载源可由用户在设置里选：**镜像优先（默认）** 或 **官方优先**，两者互为备选；实测官方直连 10~20s 中断、`gh-proxy.com` 可下且 sha256 一致 |
-| 下载进度 | 独立的进度窗口 `Controls/MyUpdateProgress.vb`（代码构建的透明窗口，不额外加 XAML）：标题 + 版本与大小 + 自绘进度条 + 百分比 + 「取消下载」。它订阅共享状态，因此**无论从启动弹窗还是设置页触发下载都能看到进度**；设置页里另有一条同款进度条 |
+| 下载进度 | 独立的进度窗口 `Controls/MyUpdateProgress.vb`（代码构建的透明窗口，不额外加 XAML）：标题 + 版本与大小 + 自绘进度条 + 百分比 + 「取消下载」。它订阅共享状态，因此**无论从启动弹窗还是设置页触发下载都能看到进度**；设置页里另有一条同款进度条。进度来源为**主动轮询** `LoaderDownload.Progress`（每 100 ms）——该类把 `Progress` 只读重写且 setter 直接抛异常，基类的 `ProgressChanged` 永远不会触发，监听事件是收不到任何东西的 |
 | 取消下载 | `ModUpdate.CancelDownload()` 直接 Cancel 掉当前的 `LoaderDownload`，状态转为 `Failed`，窗口自行关闭 |
 | 状态共享 | `ModUpdate` 维护唯一一份状态（`Idle/Checking/UpToDate/Available/Downloading/Downloaded/Failed`）+ 监听者列表；自动更新弹窗与设置页读同一份状态，页面即使后打开也能看到正在进行的下载进度，两边不会重复下载或各说各话 |
 | 安装 | 退出前把新版本复制到 **exe 同目录**（`RMCL.update.exe`），再写同目录的 `RMCL.update.bat`：循环 `ping` 等待本进程释放 exe → `move /y "%~dp0RMCL.update.exe" "%~dp0<exe>"` → 可选 `start` 重启 → 自删脚本。安装目录不可写时退回「脚本放缓存目录 + 绝对路径」方案，两种方式都按 **系统 ANSI 代码页**写脚本 |
@@ -273,6 +273,24 @@ CurseForge 项目 `322385`。移除 CurseForge 后请求返回 403，异常把�
 - 新增设置 `ToolLauncherUpdateSource`（设置 → 功能 → 软件更新 → 下载源）：`0` 镜像优先（默认）、`1` 官方优先。`BuildDownloadUrls` 据此决定顺序，两源始终互为备选。
 - 进度条从「设置页内嵌」升级为「独立窗口」：`MyMsg` 家族都是 FrmMain 内的覆盖层，不支持进度，所以直接做了一个代码构建的 `Window`（`Controls/MyUpdateProgress.vb`，无 XAML，避免再引一套标记编译产物），样式沿用 `ColorBrushDialogBackground` / `ColorBrush2`，自绘双列 Star 进度条。
 - 窗口在 `DownloadAndPrompt` 里先 `Show()` 再起后台下载线程；状态变成 `Downloaded`/`Failed` 时自行 `Close()`，后续「立即重启 / 稍后」仍由 `PromptInstallAfterDownload` 负责。
+
+### 追加：进度条一直是 0%（2.18.0.1 修复）
+
+`LoaderDownload` 把 `Progress` 重写成了**只读属性**，setter 里直接 `Throw New Exception("文件下载不允许指定进度")`；而 `LoaderBase.Progress` 的 `RaiseEvent ProgressChanged` 就写在那段被跳过的 setter 里。所以 `AddHandler Task.ProgressChanged` 永远收不到通知 —— 进度界面停在构造时的 0%，下载一结束窗口直接关闭，看起来就是「一直 0%，然后跳到下载完成」。
+
+`_Progress` 的真实值由 `NetManager` 的独立线程每 100 ms 调一次 `RefreshStat()` 算出（`NetFile.Progress` 按 `DownloadDone / FileSize` 计算，下载段映射到 5%~98%）。所以正确做法是**主动轮询** `Task.Progress`，而不是订阅事件：
+
+```vb
+Task.Start()
+Do While Task.State = LoadState.Loading
+    OnProgress(Math.Min(1.0, If(Double.IsNaN(Task.Progress) OrElse Task.Progress < 0, 0, Task.Progress)))
+    Thread.Sleep(100)
+Loop
+```
+
+`Start()` 在 `RunInNewThread` 之前就同步把 `State` 置为 `Loading`，所以不会出现「循环一次都没跑就误判完成」。收尾仍按 `State = Canceled` / `Error IsNot Nothing` 抛异常，与原 `WaitForExit` 语义一致。
+
+同时加了自检日志：首次回调记「更新下载进度回调已触发（首个进度 x%）」，完成时记「进度回调共 N 次，最终 x%」—— 下次再怀疑进度链路，看日志就能分辨是「没回调」还是「回调了但界面没刷新」。
 
 ## 九、构建与推送
 

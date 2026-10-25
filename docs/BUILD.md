@@ -1,4 +1,4 @@
-# 构建说明（RMCL 2.18.0.0）
+# 构建说明（RMCL 2.18.0.1）
 
 RMCL 基于上游 2.14.0.0 开源基线重构，技术栈与上游一致：**.NET Framework 4.8 + WPF + VB.NET**（主工程为传统 vbproj，`RMCLCS` 与 `MeloongCore` 为 SDK 风格 csproj）。
 
@@ -54,7 +54,7 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 
 - 每个 Release **必须直接上传 `RMCL.exe`**（zip 可以照旧保留，但更新器不会用它）；
 - 资产名建议就叫 `RMCL.exe`；若同版本有多个 exe，更新器优先选名字里带 `RMCL` 的那个；
-- 更新器读取 `tag_name` 与资源大小，tag 需要是 `v2.17.0.4` 这类可被 `Version.TryParse` 解析的形式；
+- 更新器读取 `tag_name` 与资源大小，tag 需要是 `v2.18.0.1` 这类可被 `Version.TryParse` 解析的形式；
 - 下载后会把当前 exe 替换掉：用户点「立即重启安装」会重启，选择「稍后」则在退出启动器时替换，下次启动生效。
 - **国内直连 `objects.githubusercontent.com` 经常失败**（实测 10~20 s 后连接中断），更新器已内置 `gh-proxy.com` 反代作为备用下载源（官方地址仍排在最前）。若反代也失效，改 `Modules/ModUpdate.vb` 里的 `AssetMirrors` 即可。
 
@@ -62,11 +62,11 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 
 | 文件 | 大小 | 说明 |
 | --- | --- | --- |
-| `dist/RMCL 2.18.0.0/RMCL.exe` | 5.57 MB | 主程序，版本信息 `2.18.0.0 / Ray Minecraft Launcher` |
-| `dist/RMCL 2.18.0.0/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
-| `dist/RMCL-2.18.0.0-win.zip` | 2.51 MB | 上述两个文件的压缩包（sha256 `7abd730e…`） |
+| `dist/RMCL 2.18.0.1/RMCL.exe` | 5.57 MB | 主程序，版本信息 `2.18.0.1 / Ray Minecraft Launcher` |
+| `dist/RMCL 2.18.0.1/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
+| `dist/RMCL-2.18.0.1-win.zip` | 2.51 MB | 上述两个文件的压缩包（sha256 `04c879b1…`） |
 
-对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.18.0.0>，
-两个资产 `RMCL.exe`（5,836,288 B）与 `RMCL-2.18.0.0-win.zip`，按 tag 校验均为 `uploaded`。
+对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.18.0.1>，
+两个资产 `RMCL.exe`（5,836,288 B）与 `RMCL-2.18.0.1-win.zip`，按 tag 校验均为 `uploaded`。
 
 冒烟验证：解压后直接运行，主窗口标题为 `Ray Minecraft Launcher　`，初始化日志（`RMCL\Log1.txt`）无异常，Java 探测、Mojang 版本列表加载正常。

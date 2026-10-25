@@ -319,12 +319,22 @@ Friend Module ModUpdate
 
         Dim File As New NetFile(BuildDownloadUrls(Info.AssetUrl), Target, SimulateBrowserHeaders:=True)
         Dim Task As New LoaderDownload("下载启动器更新", New List(Of NetFile) From {File})
-        If OnProgress IsNot Nothing Then
-            AddHandler Task.ProgressChanged, Sub(NewProgress As Double, OldProgress As Double) OnProgress(NewProgress)
-        End If
         ActiveTask = Task
         Try
-            Task.WaitForExit()
+            'LoaderDownload 的 Progress 是只读重写属性（setter 直接抛异常），基类的 ProgressChanged
+            '永远不会触发，所以这里主动轮询它的 Progress；_Progress 由 NetManager 每 0.1 秒刷新一次
+            Task.Start()
+            Do While Task.State = LoadState.Loading
+                If OnProgress IsNot Nothing Then
+                    Dim Value As Double = Task.Progress
+                    If Double.IsNaN(Value) OrElse Value < 0 Then Value = 0
+                    OnProgress(Math.Min(1.0, Value))
+                End If
+                Thread.Sleep(100)
+            Loop
+            If Task.State = LoadState.Canceled Then Throw New OperationCanceledException("更新下载已取消")
+            If Task.Error IsNot Nothing Then Throw New Exception(Task.Error.Message, Task.Error)
+            If OnProgress IsNot Nothing Then OnProgress(1)
         Finally
             Task.Cancel()
             ActiveTask = Nothing
@@ -478,6 +488,7 @@ Friend Module ModUpdate
         Dim Info As UpdateInfo = Latest
         If Info Is Nothing OrElse Not Info.HasAsset Then Throw New Exception("当前没有可下载的更新")
         LastProgressNotified = -1
+        ProgressCallbackCount = 0
         SetStatus(UpdateStatus.Downloading, "", Info, 0)
         Try
             Dim LocalPath As String = DownloadUpdate(Info, AddressOf OnDownloadProgress)
@@ -485,6 +496,7 @@ Friend Module ModUpdate
             SyncLock StateLock
                 StagedValue = LocalPath
             End SyncLock
+            Logger.Info($"更新下载完成，进度回调共 {ProgressCallbackCount} 次，最终 {LastProgressNotified * 100:F0}%")
             SetStatus(UpdateStatus.Downloaded, "", Info, 1)
         Catch ex As Exception
             Logger.Warn(ex, "下载启动器更新失败")
@@ -495,10 +507,14 @@ Friend Module ModUpdate
 
     '上一次推送进度的百分比，用于过滤过密的刷新
     Private LastProgressNotified As Double = -1
+    '进度回调次数，仅用于日志自检：下载完成时能确认回调链路是否真的在工作
+    Private ProgressCallbackCount As Integer = 0
     ''' <summary>
     ''' 下载引擎的进度回调：按 1% 步长推送到共享状态，避免每收到一段数据就刷一次界面。
     ''' </summary>
     Private Sub OnDownloadProgress(Value As Double)
+        ProgressCallbackCount += 1
+        If ProgressCallbackCount = 1 Then Logger.Info($"更新下载进度回调已触发（首个进度 {Value * 100:F1}%）")
         If Value < 0.999 AndAlso Value - LastProgressNotified < 0.01 Then Return
         LastProgressNotified = Value
         SetStatus(Status, Nothing, Nothing, Value)
