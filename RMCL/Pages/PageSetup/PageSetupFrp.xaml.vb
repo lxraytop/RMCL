@@ -87,7 +87,9 @@
                     Logger.Warn(ex, "请求加载 Minecraft 版本列表失败")
                 End Try
             End If
+            LabJoinVersionHint.Text = "读取中……"
             If JoinEmptyTicks > 8 Then
+                LabJoinVersionHint.Text = "无可用版本"
                 If JoinHintState <> 3 Then
                     JoinHintState = 3
                     LabJoinHint.Text = "还没有找到任何游戏版本。请先到「启动」页下载或导入一个版本，之后回到这里就会自动列出。"
@@ -126,6 +128,7 @@
 
         JoinInstanceFilled = True
         ComboJoinInstance.SelectedIndex = SelectedIndex
+        LabJoinVersionHint.Text = $"共 {All.Count} 个"
         If JoinHintState <> 2 Then
             JoinHintState = 2
             LabJoinHint.Text = $"共 {All.Count} 个版本可选。地址与版本都会记住，下次打开自动填回。"

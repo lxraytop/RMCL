@@ -200,6 +200,7 @@
                         <StackPanel Grid.Column="1" Margin="16,0,0,0">
                             <TextBlock Text="游戏版本" FontSize="12.5" Opacity="0.7" Margin="1,0,0,6" />
                             <local:MyComboBox x:Name="ComboJoinInstance" Width="260" Height="28" />
+                            <TextBlock x:Name="LabJoinVersionHint" FontSize="10.5" Opacity="0.6" Margin="1,4,0,0" Text="读取中……" />
                         </StackPanel>
                     </Grid>
 
