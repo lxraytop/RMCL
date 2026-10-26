@@ -49,13 +49,15 @@
                         <TextBlock Text="隧道" FontSize="12.5" Opacity="0.7" Margin="1,0,0,6" />
                         <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <local:MyComboBox x:Name="ComboTunnel" Width="360" Height="28" VerticalAlignment="Center" />
-                            <local:MyButton x:Name="BtnNewTunnel" Text="新建隧道" Grid.Column="1" MinWidth="100" Height="28" Padding="11,0" Margin="10,0,0,0" VerticalAlignment="Center" />
-                            <local:MyButton x:Name="BtnDeleteTunnel" Text="删除隧道" Grid.Column="2" MinWidth="100" Height="28" Padding="11,0" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            <local:MyComboBox x:Name="ComboTunnel" Height="28" MinWidth="180" VerticalAlignment="Center" />
+                            <local:MyButton x:Name="BtnNewTunnel" Text="新建隧道" Grid.Column="1" MinWidth="88" Height="28" Padding="10,0" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            <local:MyButton x:Name="BtnEditTunnel" Text="编辑隧道" Grid.Column="2" MinWidth="88" Height="28" Padding="10,0" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            <local:MyButton x:Name="BtnDeleteTunnel" Text="删除隧道" Grid.Column="3" MinWidth="88" Height="28" Padding="10,0" Margin="10,0,0,0" VerticalAlignment="Center" />
                         </Grid>
                         <TextBlock x:Name="LabTunnelHint" Text="正在读取隧道……" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,12" />
 
@@ -113,6 +115,48 @@
                                     </Grid.ColumnDefinitions>
                                     <local:MyButton x:Name="BtnCreateTunnel" Text="创建" MinWidth="100" Height="30" Padding="11,0" ColorType="Highlight" Margin="0,0,10,0" />
                                     <local:MyButton x:Name="BtnCancelCreate" Text="取消" MinWidth="100" Height="30" Padding="11,0" Grid.Column="1" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 编辑隧道 -->
+                        <Border x:Name="PanEdit" Visibility="Collapsed" Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,12" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock x:Name="LabEditTitle" Text="编辑隧道" FontSize="13" Margin="0,0,0,10" TextTrimming="CharacterEllipsis" />
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="备注" FontSize="12.5" Opacity="0.7" Margin="1,0,0,6" />
+                                        <local:MyTextBox x:Name="TextEditNote" Width="200" Height="28" MaxLength="64"
+                                                         ToolTip="隧道备注，例如：好友生存世界" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="本地端口" FontSize="12.5" Opacity="0.7" Margin="1,0,0,6" />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <local:MyTextBox x:Name="TextEditLocalPort" Width="130" Height="28" MaxLength="5"
+                                                             ToolTip="游戏里对局域网开放后显示的端口" />
+                                            <local:MyButton x:Name="BtnDetectPortEdit" Grid.Column="1" Text="自动识别" MinWidth="86" Height="28" Padding="9,0" Margin="8,0,0,0"
+                                                            ToolTip="从正在运行的 Minecraft 里读出局域网端口" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock x:Name="LabEditHint" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,10"
+                                           Text="樱花接口只允许改「备注」与「本地端口」；隧道名称和远程端口不在可修改范围内。" />
+                                <Grid Height="30">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                                    </Grid.ColumnDefinitions>
+                                    <local:MyButton x:Name="BtnSaveEdit" Text="保存" MinWidth="100" Height="30" Padding="11,0" ColorType="Highlight" Margin="0,0,10,0" />
+                                    <local:MyButton x:Name="BtnCancelEdit" Text="取消" MinWidth="100" Height="30" Padding="11,0" Grid.Column="1" />
                                 </Grid>
                             </StackPanel>
                         </Border>

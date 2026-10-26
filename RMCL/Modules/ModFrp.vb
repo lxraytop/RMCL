@@ -440,9 +440,13 @@ Public Module ModFrp
         Public Banned As Boolean
         Public LocalPort As Integer
         Public Remote As String = ""
+        ''' <summary>隧道备注，编辑隧道时能改的就是它。</summary>
+        Public Note As String = ""
 
         Public Overrides Function ToString() As String
             Dim Parts As New List(Of String) From {$"{Name}（#{Id}）"}
+            '备注是编辑接口唯一能改的文字，显示出来用户才知道改成功了
+            If Note <> "" Then Parts.Add($"备注：{Note}")
             If NodeName <> "" Then Parts.Add(NodeName)
             If LocalPort > 0 Then Parts.Add($"本地 {LocalPort}")
             If Banned Then
@@ -469,7 +473,8 @@ Public Module ModFrp
                 .Online = Item("online")?.Value(Of Boolean) = True,
                 .Banned = Val(Item("status")?.ToString) = 2,
                 .LocalPort = Val(Item("local_port")?.ToString),
-                .Remote = If(Item("remote")?.ToString, "")
+                .Remote = If(Item("remote")?.ToString, ""),
+                .Note = If(Item("note")?.ToString, "")
             }
             Result.Add(T)
         Next
@@ -632,6 +637,51 @@ Public Module ModFrp
             .LocalPort = LocalPort,
             .Online = True
         }
+    End Function
+
+    ''' <summary>
+    ''' 编辑隧道（POST /tunnel/edit）。
+    ''' 樱花这个接口只接受 <c>note</c>（备注）、<c>local_ip</c>、<c>local_port</c> 与 <c>extra</c>，
+    ''' 隧道名称、远程端口、所属节点都不在其中：名称得去樱花网站改，换节点是另一个迁移接口。
+    ''' 会阻塞，调用方应放在后台线程。
+    ''' </summary>
+    ''' <param name="Note">隧道备注，Nothing 表示不修改。</param>
+    ''' <param name="LocalPort">本地端口，0 表示不修改。</param>
+    ''' <param name="LocalIp">本地 IP，留空表示不修改。</param>
+    ''' <returns>回读得到的隧道，已包含更新后的本地端口与备注。</returns>
+    Public Function UpdateTunnel(AccessKey As String, TunnelId As Integer,
+                                 Optional Note As String = Nothing,
+                                 Optional LocalPort As Integer = 0,
+                                 Optional LocalIp As String = "") As FrpTunnel
+        AccessKey = If(AccessKey, "").Trim()
+        If AccessKey = "" Then Throw New Exception("请先登录樱花穿透")
+        If TunnelId <= 0 Then Throw New Exception("请先选中要编辑的隧道")
+        If LocalPort <> 0 AndAlso (LocalPort < 1 OrElse LocalPort > 65535) Then
+            Throw New Exception("本地端口需要是 1-65535")
+        End If
+
+        Dim Body As New JObject()
+        Body("id") = TunnelId
+        If Note IsNot Nothing Then Body("note") = Note.Trim()
+        If Not String.IsNullOrWhiteSpace(LocalIp) Then Body("local_ip") = LocalIp.Trim()
+        If LocalPort > 0 Then Body("local_port") = LocalPort
+        If Body.Count <= 1 Then Throw New Exception("没有需要修改的内容")
+
+        Logger.Info($"编辑樱花穿透隧道 #{TunnelId}：{Body.ToString(Formatting.None)}")
+        Try
+            FrpApiRequest("/tunnel/edit", AccessKey, Body)
+        Catch ex As Exception
+            Throw New Exception("编辑隧道失败：" & ex.Message)
+        End Try
+
+        '接口返回成功不代表字段真被接受，回读一次确认 —— 端口改错了联机会直接连不上
+        Dim Fresh As FrpTunnel = FetchTunnels(AccessKey).FirstOrDefault(Function(T) T.Id = TunnelId)
+        If Fresh Is Nothing Then Throw New Exception("编辑后没有找回到该隧道，请点「刷新隧道」确认")
+        If LocalPort > 0 AndAlso Fresh.LocalPort <> LocalPort Then
+            Throw New Exception($"接口返回成功，但本地端口仍是 {Fresh.LocalPort}，请刷新后确认")
+        End If
+        Logger.Info($"隧道 #{TunnelId} 已更新：本地端口 {Fresh.LocalPort}，备注「{Fresh.Note}」")
+        Return Fresh
     End Function
 
     ''' <summary>

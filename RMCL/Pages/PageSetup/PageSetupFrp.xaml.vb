@@ -172,15 +172,17 @@
 
 #End Region
 
-#Region "新建隧道"
+#Region "新建与编辑隧道"
 
     Private Sub BtnNewTunnel_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnNewTunnel.Click
         PanCreate.Visibility = If(PanCreate.Visibility = Visibility.Visible, Visibility.Collapsed, Visibility.Visible)
         If PanCreate.Visibility = Visibility.Visible Then
+            '新建与编辑是两个面板，别叠在一起
+            PanEdit.Visibility = Visibility.Collapsed
             If TextCreateName.Text.Trim() = "" Then TextCreateName.Text = "Minecraft"
             If ComboNode.Items.Count = 0 Then Hint("没有可用的服务节点，稍后再试或到樱花网站创建", HintType.Red)
             '展开时顺手识别一次：用户这会儿多半就是刚在游戏里开了局域网
-            If TextCreateLocalPort.Text.Trim() = "" Then DetectLocalPort()
+            If TextCreateLocalPort.Text.Trim() = "" Then DetectLocalPort(TextCreateLocalPort, LabCreatePortHint)
             TextCreateLocalPort.Focus()
         End If
     End Sub
@@ -189,19 +191,26 @@
     Private IsDetectingPort As Boolean
 
     Private Sub BtnDetectPort_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnDetectPort.Click
-        DetectLocalPort()
+        DetectLocalPort(TextCreateLocalPort, LabCreatePortHint)
+    End Sub
+
+    Private Sub BtnDetectPortEdit_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnDetectPortEdit.Click
+        DetectLocalPort(TextEditLocalPort, LabEditHint)
     End Sub
 
     ''' <summary>
-    ''' 从正在运行的 Minecraft 里读出局域网端口，填进「本地端口」。
+    ''' 从正在运行的 Minecraft 里读出局域网端口，填进指定的输入框。
     ''' 复用联机页那套探测：先找 java / javaw 进程监听的端口，再用状态协议确认是 MC 服务器。
     ''' 识别不到也不拦着，用户可以直接手填。
     ''' </summary>
-    Private Sub DetectLocalPort()
+    ''' <param name="Target">要填入端口的输入框，新建与编辑两个面板共用。</param>
+    ''' <param name="HintLabel">显示识别结果的说明文字。</param>
+    Private Sub DetectLocalPort(Target As MyTextBox, HintLabel As TextBlock)
         If IsDetectingPort Then Return
         IsDetectingPort = True
         BtnDetectPort.IsEnabled = False
-        LabCreatePortHint.Text = "正在查找正在运行的 Minecraft……"
+        BtnDetectPortEdit.IsEnabled = False
+        HintLabel.Text = "正在查找正在运行的 Minecraft……"
         RunInNewThread(
         Sub()
             Dim Worlds As List(Of ModLink.LinkWorld) = Nothing
@@ -215,25 +224,26 @@
             Sub()
                 IsDetectingPort = False
                 BtnDetectPort.IsEnabled = True
+                BtnDetectPortEdit.IsEnabled = True
                 If Failure IsNot Nothing Then
                     Logger.Warn(Failure, "识别 Minecraft 局域网端口失败")
-                    LabCreatePortHint.Text = "自动识别失败，请手动填写端口。"
+                    HintLabel.Text = "自动识别失败，请手动填写端口。"
                     Return
                 End If
                 If Worlds Is Nothing OrElse Worlds.Count = 0 Then
-                    LabCreatePortHint.Text = "没有找到正在运行的 Minecraft 局域网世界。请先在游戏里按 Esc → 对局域网开放，再点「自动识别」；也可以直接填端口。"
+                    HintLabel.Text = "没有找到正在运行的 Minecraft 局域网世界。请先在游戏里按 Esc → 对局域网开放，再点「自动识别」；也可以直接填端口。"
                     Return
                 End If
                 '优先用已确认是 MC 服务器的那个（有 MOTD），「未识别的端口」只作兜底
                 Dim Best As ModLink.LinkWorld = Worlds.FirstOrDefault(
                     Function(W) Not String.IsNullOrWhiteSpace(W.Motd) AndAlso W.Motd <> "未识别的端口")
                 If Best Is Nothing Then Best = Worlds(0)
-                TextCreateLocalPort.Text = Best.Port.ToString()
+                Target.Text = Best.Port.ToString()
                 If Worlds.Count = 1 Then
-                    LabCreatePortHint.Text = $"已识别：{Best.Display}。远程端口留空则由樱花分配。"
+                    HintLabel.Text = $"已识别：{Best.Display}。"
                 Else
                     Dim Others As String = Worlds.Where(Function(W) W IsNot Best).Select(Function(W) W.Port.ToString()).Join("，")
-                    LabCreatePortHint.Text = $"已填入 {Best.Display}；另外还检测到 {Others}，需要的话手动改。"
+                    HintLabel.Text = $"已填入 {Best.Display}；另外还检测到 {Others}，需要的话手动改。"
                 End If
             End Sub)
         End Sub, "识别局域网端口")
@@ -241,6 +251,88 @@
 
     Private Sub BtnCancelCreate_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnCancelCreate.Click
         PanCreate.Visibility = Visibility.Collapsed
+    End Sub
+
+    ''' <summary>展开编辑面板，并把选中隧道的当前值填进去。</summary>
+    Private Sub BtnEditTunnel_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnEditTunnel.Click
+        Dim Item As MyComboBoxItem = TryCast(ComboTunnel.SelectedItem, MyComboBoxItem)
+        If Item Is Nothing Then
+            Hint("请先选中要编辑的隧道", HintType.Red)
+            Return
+        End If
+        Dim Target As ModFrp.FrpTunnel = Tunnels.FirstOrDefault(Function(T) T.Id = Val(Item.Tag))
+        If Target Is Nothing Then
+            Hint("隧道信息已过期，请先点「刷新隧道」", HintType.Red)
+            Return
+        End If
+
+        PanCreate.Visibility = Visibility.Collapsed '两个面板别叠在一起
+        PanEdit.Visibility = Visibility.Visible
+        LabEditTitle.Text = $"编辑隧道：{Target.Name}（#{Target.Id}）"
+        TextEditNote.Text = Target.Note
+        TextEditLocalPort.Text = Target.LocalPort.ToString()
+        LabEditHint.Text = "樱花接口只允许改「备注」与「本地端口」；隧道名称和远程端口不在可修改范围内。"
+        TextEditNote.Focus()
+    End Sub
+
+    Private Sub BtnCancelEdit_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnCancelEdit.Click
+        PanEdit.Visibility = Visibility.Collapsed
+    End Sub
+
+    Private Sub BtnSaveEdit_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnSaveEdit.Click
+        If IsBusy Then Return
+        Dim Item As MyComboBoxItem = TryCast(ComboTunnel.SelectedItem, MyComboBoxItem)
+        If Item Is Nothing Then
+            Hint("请先选中要编辑的隧道", HintType.Red)
+            Return
+        End If
+        Dim TunnelId As Integer = Val(Item.Tag)
+
+        Dim PortText As String = TextEditLocalPort.Text.Trim()
+        Dim LocalPort As Integer = Val(PortText)
+        If PortText <> "" AndAlso (LocalPort < 1 OrElse LocalPort > 65535) Then
+            Hint("本地端口需要是 1-65535，也就是游戏里对局域网开放后显示的端口", HintType.Red)
+            TextEditLocalPort.Focus()
+            Return
+        End If
+        Dim Note As String = TextEditNote.Text.Trim()
+
+        Dim IsRunning As Boolean = (ModFrp.RunningTunnelId = TunnelId)
+        If IsRunning Then
+            If MyMsgBox($"隧道 #{TunnelId} 正在运行，修改本地端口后需要重启隧道才会生效。" & vbCrLf & "继续保存吗？",
+                        "编辑隧道", "保存", "取消") <> 1 Then Return
+        End If
+
+        IsBusy = True
+        RefreshUi()
+        LabEditHint.Text = "正在保存……"
+        Dim Key As String = CurrentKey
+        RunInNewThread(
+        Sub()
+            Dim Updated As ModFrp.FrpTunnel = Nothing
+            Dim Failure As Exception = Nothing
+            Try
+                Updated = ModFrp.UpdateTunnel(Key, TunnelId, Note, LocalPort)
+            Catch ex As Exception
+                Failure = ex
+            End Try
+            RunInUi(
+            Sub()
+                IsBusy = False
+                If Failure IsNot Nothing Then
+                    Logger.Warn(Failure, "编辑樱花穿透隧道失败")
+                    LabEditHint.Text = "编辑失败：" & Failure.Message
+                    Hint("编辑隧道失败：" & Failure.Message, HintType.Red)
+                    RefreshUi()
+                    Return
+                End If
+                PanEdit.Visibility = Visibility.Collapsed
+                Hint($"隧道 #{TunnelId} 已更新（本地端口 {Updated.LocalPort}）", HintType.Green)
+                If IsRunning Then Hint("这条隧道正在运行，重启隧道后新配置才会生效", HintType.Red)
+                '重新拉一遍列表，让下拉框显示更新后的本地端口
+                LoadAccount()
+            End Sub)
+        End Sub, "编辑樱花穿透隧道")
     End Sub
 
     ''' <summary>删除当前选中的隧道。会从樱花账号里永久删掉，必须先二次确认。</summary>
@@ -279,6 +371,8 @@
                     IsBusy = False
                     '删掉的正好是记住的那条，重置后再刷新就会落到第一条
                     If Settings.Get(Of Integer)("FrpLastTunnelId") = TunnelId Then Settings.Set("FrpLastTunnelId", 0)
+                    '编辑面板如果正对着这条隧道，一起收起，免得继续编辑一个已经不存在的对象
+                    If PanEdit.Visibility = Visibility.Visible Then PanEdit.Visibility = Visibility.Collapsed
                     If DisconnectPending Then
                         Hint($"隧道「{TunnelName}」已删除，远程连接稍后断开", HintType.Green)
                     Else
@@ -378,8 +472,10 @@
             BtnReloadTunnels.IsEnabled = Not IsBusy
             BtnLogout.IsEnabled = Not IsBusy
             BtnNewTunnel.IsEnabled = Not IsBusy
+            BtnEditTunnel.IsEnabled = Not IsBusy AndAlso ComboTunnel.SelectedItem IsNot Nothing
             BtnDeleteTunnel.IsEnabled = Not IsBusy AndAlso ComboTunnel.SelectedItem IsNot Nothing
             BtnCreateTunnel.IsEnabled = Not IsBusy
+            BtnSaveEdit.IsEnabled = Not IsBusy
             BtnStart.IsEnabled = Not IsBusy AndAlso Not ModFrp.IsActive AndAlso ComboTunnel.SelectedItem IsNot Nothing
             BtnStop.IsEnabled = Not IsBusy AndAlso ModFrp.IsActive
             BtnCopy.IsEnabled = Not String.IsNullOrEmpty(Address)
@@ -398,6 +494,8 @@
     Private Sub ComboTunnel_SelectionChanged(sender As Object, e As SelectionChangedEventArgs) Handles ComboTunnel.SelectionChanged
         Dim Item As MyComboBoxItem = TryCast(ComboTunnel.SelectedItem, MyComboBoxItem)
         If Item IsNot Nothing Then Settings.Set("FrpLastTunnelId", Val(Item.Tag))
+        '换了隧道就收起编辑面板，否则面板里的值会和新选中的那条对不上
+        If PanEdit IsNot Nothing AndAlso PanEdit.Visibility = Visibility.Visible Then PanEdit.Visibility = Visibility.Collapsed
         RefreshUi()
     End Sub
 
