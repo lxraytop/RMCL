@@ -256,6 +256,7 @@ CurseForge 项目 `322385`。移除 CurseForge 后请求返回 403，异常把�
 | 状态共享 | `ModUpdate` 维护唯一一份状态（`Idle/Checking/UpToDate/Available/Downloading/Downloaded/Failed`）+ 监听者列表；自动更新弹窗与设置页读同一份状态，页面即使后打开也能看到正在进行的下载进度，两边不会重复下载或各说各话 |
 | 安装 | 退出前把新版本复制到 **exe 同目录**（`RMCL.update.exe`），再写同目录的 `RMCL.update.bat`：循环 `ping` 等待本进程释放 exe → `move /y "%~dp0RMCL.update.exe" "%~dp0<exe>"` → 可选 `start` 重启 → 自删脚本。安装目录不可写时退回「脚本放缓存目录 + 绝对路径」方案，两种方式都按 **系统 ANSI 代码页**写脚本 |
 | 自动更新 | `ToolLauncherUpdateAuto`（默认关）。开启后每次启动静默检查；发现新版本时**弹窗展示 Release 公告**（超长截断并提示去发布页），按钮为「立即更新 / 稍后 / 查看公告」，确认后才下载，退出启动器时替换、下次启动生效 |
+| 更新后公告 | 安装登记时把目标版本写进 `ToolLauncherUpdateInstalled`；重启后若当前版本与之相等，说明刚由更新器装上，按 tag 拉回该 Release 并弹窗展示「本次更新内容」，按钮「知道了 / 查看公告」。版本对不上（替换没落地）时直接清记录、不弹窗 |
 
 几个刻意的取舍：
 
