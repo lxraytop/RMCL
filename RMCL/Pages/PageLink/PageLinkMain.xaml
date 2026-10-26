@@ -145,6 +145,8 @@
                                     <RowDefinition Height="28" />
                                     <RowDefinition Height="12" />
                                     <RowDefinition Height="28" />
+                                    <RowDefinition Height="12" />
+                                    <RowDefinition Height="28" />
                                 </Grid.RowDefinitions>
                                 <TextBlock VerticalAlignment="Center" Text="连接模式" Margin="0,0,20,0" />
                                 <local:MyComboBox Grid.Column="1" x:Name="ComboLatencyMode" local:SettingService.Key="LinkLatencyMode">
@@ -155,6 +157,10 @@
                                 <local:MyTextBox Grid.Row="2" Grid.Column="1" x:Name="TextCustomPeer" MaxHeight="28"
                                                  local:SettingService.Key="LinkCustomPeer"
                                                  ToolTip="覆盖 RMCL 自动选择的节点，仅连接此处填写的节点。&#xa;使用逗号分隔多个节点，例如：&#xa;tcp://183.66.27.22:39409&#xa;&#xa;房主和加入者必须连接到至少一个相同节点，才能互相连上。" />
+                                <TextBlock Grid.Row="4" VerticalAlignment="Center" Text="额外端口" Margin="0,0,20,0" />
+                                <local:MyTextBox Grid.Row="4" Grid.Column="1" x:Name="TextExtraPorts" MaxHeight="28"
+                                                 local:SettingService.Key="LinkExtraPorts"
+                                                 ToolTip="游戏端口之外还要转发的端口，逗号分隔，例如：24454,25566&#xa;&#xa;只有当整合包里有 Mod 另开端口时才需要填（如 Simple Voice Chat 默认 24454）。&#xa;留空即不额外转发——原版联机、以及绝大多数整合包都不需要填。" />
                             </Grid>
                         </StackPanel>
                     </local:MyCard>

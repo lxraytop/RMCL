@@ -837,7 +837,44 @@ Public Class PageLinkMain
     End Function
 
     ''' <summary>
+    ''' 解析「额外端口」设置。
+    ''' 整合包里的语音等 Mod 往往再开一个端口（如 Simple Voice Chat 的 24454），
+    ''' 这些端口必须在房主放行、加入者做本机同号映射，否则客户端会卡在加入世界或直接断开。
+    ''' </summary>
+    Private Function GetExtraPorts() As List(Of Integer)
+        Dim Result As New List(Of Integer)
+        Dim Raw As String = Settings.Get(Of String)("LinkExtraPorts")
+        If String.IsNullOrWhiteSpace(Raw) Then Return Result
+        For Each Part As String In Raw.Split({","c, "，"c, " "c, ";"c, "；"c, vbTab}, StringSplitOptions.RemoveEmptyEntries)
+            Dim Port As Integer = Val(Part.Trim())
+            If Port < 1 OrElse Port > 65535 Then Continue For
+            If Port = ServerPort Then Continue For '游戏端口本来就在转发，不必重复
+            If Result.Contains(Port) Then Continue For
+            Result.Add(Port)
+        Next
+        Return Result
+    End Function
+
+    ''' <summary>
+    ''' EasyTier 的 machine-id。同一网络内必须唯一，用于区分节点；
+    ''' 首次生成后持久保存，避免同一台机器每次启动都被当成不同节点。
+    ''' </summary>
+    Private MachineIdValue As String = Nothing
+    Private Function GetMachineId() As String
+        If MachineIdValue IsNot Nothing Then Return MachineIdValue
+        Dim Id As String = Settings.Get(Of String)("LinkMachineId")
+        If String.IsNullOrWhiteSpace(Id) Then
+            Id = Guid.NewGuid().ToString("N")
+            Settings.Set("LinkMachineId", Id)
+        End If
+        MachineIdValue = Id
+        Return Id
+    End Function
+
+    ''' <summary>
     ''' 构造联机模块的启动参数。
+    ''' 传输层参数对齐 PCL2-CE 的 ETController（no-tun + quic/kcp 代理 + smoltcp + zstd），
+    ''' 那套组合经实际联机验证可用，不要随意增删。
     ''' </summary>
     Private Function BuildArguments(Peers As List(Of String)) As String
         Dim Args As New StringBuilder()
@@ -846,25 +883,51 @@ Public Class PageLinkMain
         Args.Append($" --network-secret={NetworkSecret}")
         Args.Append($" --relay-network-whitelist {NetworkName}")
         Args.Append(" --private-mode true")
+        '传输层：与 PCL2-CE 一致
+        Args.Append(" --enable-quic-proxy")
+        Args.Append(" --enable-kcp-proxy")
+        Args.Append(" --use-smoltcp")
         Args.Append(" --encryption-algorithm chacha20")
+        Args.Append(" --compression zstd")
         Args.Append(" --multi-thread")
+        Args.Append($" --machine-id={GetMachineId()}")
         Args.Append($" --listeners {ListenPort}")
         Args.Append($" --rpc-portal 127.0.0.1:{RPCPort}")
         If Settings.Get(Of Integer)("LinkLatencyMode") = 1 Then Args.Append(" --latency-first")
         '主机名用于在房间内区分身份：以 Client 开头即为加入者
         Dim HostName As String = If(IsServerSide, "Server-", "Client-") & RandomInteger(100000, 999999).ToString()
         Args.Append($" --hostname={HostName}")
+
+        Dim Extras As List(Of Integer) = GetExtraPorts()
         If IsServerSide Then
             Args.Append($" -i {LinkHostIP}")
-            Args.Append($" --tcp-whitelist={ServerPort} --udp-whitelist={ServerPort}")
+            '房主把游戏端口与额外端口一起放行进虚拟网络。
+            'whitelist 是 clap 的多值参数，按「每个端口一组参数」重复传入最稳，不依赖逗号分隔的解析行为
+            For Each Port As Integer In (New List(Of Integer) From {ServerPort}).Concat(Extras)
+                Args.Append($" --tcp-whitelist {Port}")
+                Args.Append($" --udp-whitelist {Port}")
+            Next
         Else
             Args.Append(" -d")
-            Args.Append(" --tcp-whitelist=0 --udp-whitelist=0")
+            Args.Append(" --tcp-whitelist 0")
+            Args.Append(" --udp-whitelist 0")
             '把房主的端口映射到本地的空闲端口
             ClientAddress = $"localhost:{ClientPort}"
             Args.Append($" --port-forward tcp://127.0.0.1:{ClientPort}/{LinkHostIP}:{ServerPort}")
             Args.Append($" --port-forward udp://127.0.0.1:{ClientPort}/{LinkHostIP}:{ServerPort}")
+            '额外端口按同号映射：Mod 会用服务端配置的端口去连 127.0.0.1，本地必须监听同一个号才对得上
+            Dim UsedPorts As List(Of Integer) = Nothing
+            For Each Extra As Integer In Extras
+                If UsedPorts Is Nothing Then UsedPorts = GetUsedPorts()
+                If UsedPorts.Contains(Extra) OrElse Extra = ClientPort Then
+                    Logger.Warn($"额外端口 {Extra} 已被本机占用，跳过转发")
+                    Continue For
+                End If
+                Args.Append($" --port-forward tcp://127.0.0.1:{Extra}/{LinkHostIP}:{Extra}")
+                Args.Append($" --port-forward udp://127.0.0.1:{Extra}/{LinkHostIP}:{Extra}")
+            Next
         End If
+        If Extras.Any Then Logger.Info($"额外转发端口：{Extras.Join("，")}")
         For Each PeerUrl As String In Peers
             Args.Append($" -p={PeerUrl}")
         Next

@@ -112,6 +112,8 @@ Public Class Settings
         New Setting("LinkLatencyMode", 0, Source:=Sources.Registry),
         New Setting("LinkCustomPeer", ""),
         New Setting("LinkEasyTierVersion", -1, Source:=Sources.Registry),
+        New Setting("LinkExtraPorts", "", Source:=Sources.Registry), '游戏端口之外还要转发的端口，逗号分隔，留空即不额外转发
+        New Setting("LinkMachineId", "", Source:=Sources.Registry), 'EasyTier 的 machine-id，首次生成后固定
         New Setting("FrpAccessKey", "", Source:=Sources.Registry), '樱花穿透访问密钥
         New Setting("FrpLastTunnelId", 0, Source:=Sources.Registry), '上次选择的樱花穿透隧道
         New Setting("ToolHelpChinese", True, Source:=Sources.Registry),
