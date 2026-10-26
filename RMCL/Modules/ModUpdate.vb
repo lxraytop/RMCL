@@ -443,8 +443,9 @@ Friend Module ModUpdate
         PendingExe = NewExePath
         PendingRestart = Restart
         '记住这一版：重启后若当前版本号等于它，说明刚由更新器装上，就弹窗展示这次的更新内容。
-        '替换最终没落地时版本号对不上，下次启动会把这条记录清掉，不会一直挂着。
-        If Not String.IsNullOrEmpty(Version) Then Settings.Set("ToolLauncherUpdateInstalled", Version)
+        '必须连 exe 路径一起记 —— 这个设置存在 HKCU\Software\RMCLDebug，是全部副本共用的，
+        '只记版本号的话，别的副本启动时会把它当成「自己的记录」处理掉。
+        If Not String.IsNullOrEmpty(Version) Then Settings.Set("ToolLauncherUpdateInstalled", Version & "|" & PathExe)
         Logger.Info($"已登记待安装的更新：{NewExePath}（重启={Restart}，版本={If(Version, "未知")}）")
     End Sub
 
@@ -628,16 +629,38 @@ Friend Module ModUpdate
 
     ''' <summary>
     ''' 启动时调用：如果这一版是刚由更新器装上的，弹窗展示该版本的更新公告。
-    ''' 无论公告能否取到，都会先清掉记录，避免每次启动都提示。
+    ''' 记录里带 exe 路径，只认当前这份程序的记录 —— 设置存在 HKCU\Software\RMCLDebug，
+    ''' 是全部副本共用的，不带路径就会被别的副本当成自己的记录处理掉。
     ''' </summary>
     Public Sub ShowNotesAfterRestart()
-        Dim Installed As String = ""
+        Dim Raw As String = ""
         Try
-            Installed = Settings.Get(Of String)("ToolLauncherUpdateInstalled")
+            Raw = Settings.Get(Of String)("ToolLauncherUpdateInstalled")
         Catch ex As Exception
             Logger.Warn(ex, "读取刚更新的版本记录失败")
         End Try
-        If String.IsNullOrEmpty(Installed) Then Return
+        If String.IsNullOrEmpty(Raw) Then Return
+
+        '格式：版本|exe完整路径。旧版本只写了版本号，没有 |，按通用记录兼容处理
+        Dim Installed As String = Raw
+        Dim Owner As String = ""
+        Dim SplitAt As Integer = Raw.IndexOf("|"c)
+        If SplitAt >= 0 Then
+            Installed = Raw.Substring(0, SplitAt)
+            Owner = Raw.Substring(SplitAt + 1)
+        End If
+
+        '别的副本留下的记录：它还没来得及重启，轮不到我处理。
+        '只有那份 exe 已经不在了，才当作失效清掉
+        If Not String.IsNullOrEmpty(Owner) AndAlso Not PathUtils.IsSame(Owner, PathExe) Then
+            If FileUtils.Exists(Owner) Then
+                Logger.Info($"更新完成记录属于另一份程序（{Owner}），本次不处理")
+                Return
+            End If
+            Settings.Set("ToolLauncherUpdateInstalled", "")
+            Logger.Info($"更新完成记录指向的程序已不存在（{Owner}），已清除")
+            Return
+        End If
 
         '版本对不上，说明替换没落地（或用户自己换了 exe），这条记录已经过期
         If Not String.Equals(Installed, VersionBaseName, StringComparison.OrdinalIgnoreCase) Then
