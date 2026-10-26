@@ -31,6 +31,11 @@
                 RefreshLoginUi()
             End If
         End If
+        '每次进来都重新核对一次版本列表：新导入的版本不用重开启动器也能在这里选到
+        JoinInstanceFilled = False
+        JoinInstanceLoadRequested = False
+        JoinEmptyTicks = 0
+        JoinHintState = 0
         RefreshUi()
     End Sub
 
@@ -47,11 +52,18 @@
 
     ''' <summary>是否已经往版本下拉框里填过内容。</summary>
     Private JoinInstanceFilled As Boolean
+    ''' <summary>是否已经主动请求过加载版本列表，避免每 600 ms 都触发一次。</summary>
+    Private JoinInstanceLoadRequested As Boolean
+    ''' <summary>空列表已经过了几个刷新周期，用来区分「正在加载」和「确实没有版本」。</summary>
+    Private JoinEmptyTicks As Integer
+    ''' <summary>提示文字当前的含义：0 未设置、1 正在加载、2 就绪、3 没有版本。只在变化时改写，避免刷掉用户看到的其他提示。</summary>
+    Private JoinHintState As Integer
 
     ''' <summary>
     ''' 把已导入的版本填进「加入好友的世界」下拉框。
-    ''' 版本列表可能比本页面加载得晚，所以由定时刷新反复调，填过一次就不再动
-    ''' （否则用户正在选的时候会被刷掉）。
+    ''' 设置页打开时版本列表不一定已经加载过（那个加载器平时由「启动」页驱动），
+    ''' 所以这里在列表为空时主动请求一次，并把「在等」这件事直接写在提示里，
+    ''' 而不是让用户对着一个空下拉框发呆。
     ''' </summary>
     Private Sub FillJoinInstances()
         If ComboJoinInstance Is Nothing OrElse JoinInstanceFilled Then Return
@@ -60,7 +72,32 @@
             If Pair.Value Is Nothing Then Continue For
             All.AddRange(Pair.Value)
         Next
-        If All.Count = 0 Then Return '版本列表还没读出来，等下一次刷新再试
+
+        If All.Count = 0 Then
+            JoinEmptyTicks += 1
+            '列表可能是「还没读过」也可能真的是空的，先主动催一次
+            If Not JoinInstanceLoadRequested Then
+                JoinInstanceLoadRequested = True
+                Try
+                    '已经在加载就别再去动它，等它自己完成
+                    If McInstanceListLoader.State <> LoadState.Loading Then
+                        LoaderFolderRun(McInstanceListLoader, McFolderSelected, LoaderFolderRunType.RunOnUpdated, MaxDepth:=1, ExtraPath:="versions\")
+                    End If
+                Catch ex As Exception
+                    Logger.Warn(ex, "请求加载 Minecraft 版本列表失败")
+                End Try
+            End If
+            If JoinEmptyTicks > 8 Then
+                If JoinHintState <> 3 Then
+                    JoinHintState = 3
+                    LabJoinHint.Text = "还没有找到任何游戏版本。请先到「启动」页下载或导入一个版本，之后回到这里就会自动列出。"
+                End If
+            ElseIf JoinHintState <> 1 Then
+                JoinHintState = 1
+                LabJoinHint.Text = "正在读取游戏版本列表……读到之后这里会自动出现选项。"
+            End If
+            Return
+        End If
 
         All.Sort(Function(A, B) String.Compare(A.Name, B.Name, StringComparison.CurrentCultureIgnoreCase))
         ComboJoinInstance.Items.Clear()
@@ -68,25 +105,31 @@
             ComboJoinInstance.Items.Add(New MyComboBoxItem With {.Content = Item.Name, .Tag = Item})
         Next
 
-        '默认停在启动页当前选中的那个版本
+        '优先停在「上次用这个功能启动过的版本」，其次才是启动页当前选中的那个
         Dim SelectedIndex As Integer = 0
+        Dim Remembered As String = Settings.Get(Of String)("FrpJoinInstanceName")
         Dim Current As McInstance = Nothing
         Try
             Current = McInstanceSelected
         Catch ex As Exception
             Logger.Warn(ex, "读取当前选中的 Minecraft 版本失败")
         End Try
-        If Current IsNot Nothing Then
-            For i As Integer = 0 To ComboJoinInstance.Items.Count - 1
-                Dim Tag As McInstance = TryCast(CType(ComboJoinInstance.Items(i), MyComboBoxItem).Tag, McInstance)
-                If Tag Is Current Then
-                    SelectedIndex = i
-                    Exit For
-                End If
-            Next
-        End If
+        For i As Integer = 0 To ComboJoinInstance.Items.Count - 1
+            Dim Tag As McInstance = TryCast(CType(ComboJoinInstance.Items(i), MyComboBoxItem).Tag, McInstance)
+            If Tag Is Nothing Then Continue For
+            If Remembered <> "" AndAlso String.Equals(Tag.Name, Remembered, StringComparison.OrdinalIgnoreCase) Then
+                SelectedIndex = i
+                Exit For
+            End If
+            If Tag Is Current Then SelectedIndex = i
+        Next
+
         JoinInstanceFilled = True
         ComboJoinInstance.SelectedIndex = SelectedIndex
+        If JoinHintState <> 2 Then
+            JoinHintState = 2
+            LabJoinHint.Text = $"共 {All.Count} 个版本可选。地址与版本都会记住，下次打开自动填回。"
+        End If
     End Sub
 
     ''' <summary>
@@ -152,6 +195,7 @@
         '回填整理后的地址，让用户看到实际会用哪个端口
         TextJoinAddress.Text = Address
         Settings.Set("FrpJoinAddress", Address)
+        Settings.Set("FrpJoinInstanceName", Instance.Name) '下次进来默认还是这个版本
         LabJoinHint.Text = $"正在启动 {Instance.Name} 并进入 {Address}……"
         If McLaunchStart(New McLaunchOptions With {.Instance = Instance, .ServerIp = Address}) Then
             Hint($"正在启动 {Instance.Name} 并进入 {Address}", HintType.Green)

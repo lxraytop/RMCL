@@ -117,6 +117,7 @@ Public Class Settings
         New Setting("FrpAccessKey", "", Source:=Sources.Registry), '樱花穿透访问密钥
         New Setting("FrpLastTunnelId", 0, Source:=Sources.Registry), '上次选择的樱花穿透隧道
         New Setting("FrpJoinAddress", "", Source:=Sources.Registry), '上次填的「加入好友的世界」远程地址
+        New Setting("FrpJoinInstanceName", "", Source:=Sources.Registry), '上次用「加入好友的世界」启动的版本名
         New Setting("ToolHelpChinese", True, Source:=Sources.Registry),
         New Setting("ToolDownloadThread", 63, Source:=Sources.Registry),
         New Setting("ToolDownloadSpeed", 42, Source:=Sources.Registry, OnChanged:=AddressOf ModNet.UpdateNetTaskSpeedLimitHigh),
