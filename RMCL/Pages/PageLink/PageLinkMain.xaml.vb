@@ -763,10 +763,14 @@ Public Class PageLinkMain
         Task.Progress = 0.12
         '获取空闲端口
         UpdateLoadingPage("正在启动联机模块……", "启动联机模块")
-        Dim FreePorts = FindFreePorts(5, ServerPort)
+        'EasyTier 的 --listeners 传一个端口，实际会在这一个端口及其后 3 个连续端口上监听
+        '（tcp / udp / wg+ws / quic+wss / faketcp），实测 16000 会占 16000-16003。
+        '所以这里要多留一段连续空闲端口，否则 ListenPort+1..+3 可能已被别的程序占用，
+        '表现就是联机模块一启动就退出。
+        Dim FreePorts = FindFreePorts(9, ServerPort)
         ClientPort = FreePorts(0)
         RPCPort = FreePorts(1)
-        ListenPort = FreePorts(2)
+        ListenPort = FreePorts(4) '后 4 个（4..7）留给 EasyTier 的监听端口段
         '启动进程
         ProcessStart(BuildArguments(RawPeers))
         Task.Progress = 0.15
