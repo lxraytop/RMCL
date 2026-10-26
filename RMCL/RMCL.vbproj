@@ -260,6 +260,7 @@
     <Compile Include="Modules\ModLink.vb" />
     <Compile Include="Modules\ModFeature.vb" />
     <Compile Include="Modules\ModUpdate.vb" />
+    <Compile Include="Modules\ModFrp.vb" />
     <Compile Include="Controls\MyUpdateProgress.vb" />
     <Compile Include="Pages\PageDownload\Resource\PageResource.xaml.vb">
       <DependentUpon>PageResource.xaml</DependentUpon>
@@ -372,6 +373,9 @@
     </Compile>
     <Compile Include="Pages\PageSetup\PageSetupFeature.xaml.vb">
       <DependentUpon>PageSetupFeature.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Pages\PageSetup\PageSetupFrp.xaml.vb">
+      <DependentUpon>PageSetupFrp.xaml</DependentUpon>
     </Compile>
     <Compile Include="Pages\PageSetup\PageSetupUI.xaml.vb">
       <DependentUpon>PageSetupUI.xaml</DependentUpon>
@@ -606,6 +610,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Pages\PageSetup\PageSetupFeature.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Pages\PageSetup\PageSetupFrp.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

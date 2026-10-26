@@ -391,6 +391,7 @@ Public FrmSetupLaunch As PageSetupLaunch
 Public FrmSetupUI As PageSetupUI
 Public FrmSetupSystem As PageSetupSystem
 Public FrmSetupFeature As PageSetupFeature
+Public FrmSetupFrp As PageSetupFrp
 
     '登录页面声明
     Public FrmLoginLegacy As PageLoginLegacy

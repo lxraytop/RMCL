@@ -562,6 +562,12 @@ Public Class FormMain
         End If
         '关闭联机？
         If FrmLinkMain?.TryExit(Not SendWarning, True) Then Return
+        '关闭樱花穿透：frpc 是独立进程，不主动结束会残留
+        Try
+            ModFrp.StopSession()
+        Catch ex As Exception
+            Logger.Warn(ex, "退出时停止樱花穿透失败")
+        End Try
         '把合并中的 ini 写入落盘，避免最后几毫秒内的改动丢失
         FlushIniWrites()
         '已下载的更新：写替换脚本并启动，脚本会等本进程退出后再覆盖 exe
@@ -1268,6 +1274,7 @@ Public Class FormMain
         SetupUI = 2
         SetupSystem = 3
         SetupFeature = 4
+        SetupFrp = 5
         LinkMain = 0
         InstanceOverall = 0
         InstanceSetup = 1
