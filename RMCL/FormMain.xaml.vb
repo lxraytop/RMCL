@@ -428,6 +428,12 @@ Public Class FormMain
             Catch ex As Exception
                 Logger.Warn(ex, "清理自动更新文件失败")
             End Try
+            '刚由更新器装上新版本时，弹窗展示这次的更新公告
+            Try
+                ModUpdate.ShowNotesAfterRestart()
+            Catch ex As Exception
+                Logger.Warn(ex, "展示更新公告失败")
+            End Try
             '自动检查启动器更新（仅当开启了自动更新）
             Try
                 If Settings.Get(Of Boolean)("ToolLauncherUpdateAuto") Then ModUpdate.AutoCheck()

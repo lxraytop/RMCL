@@ -217,6 +217,9 @@ Friend Module ModUpdate
     ''' <summary>
     ''' 获取最新 Release。失败时抛出异常。
     ''' </summary>
+    ''' <summary>
+    ''' 获取最新 Release。失败时抛出异常。
+    ''' </summary>
     Public Function FetchLatest() As UpdateInfo
         Dim Raw As JObject
         Try
@@ -225,7 +228,35 @@ Friend Module ModUpdate
             Throw New Exception($"无法连接更新服务器（{UpdateRepo}）", ex)
         End Try
         If Raw Is Nothing Then Throw New Exception("更新服务器返回了空内容")
+        Dim Info As UpdateInfo = ParseRelease(Raw)
+        Logger.Info($"检查更新：最新版本 {Info.Version}，exe 资产 {(If(Info.HasAsset, Info.AssetName, "无"))}")
+        Return Info
+    End Function
 
+    ''' <summary>
+    ''' 按版本号获取对应的 Release，用于更新完成后展示该版本的公告。
+    ''' 失败返回 Nothing：拿不到公告不应该影响启动。
+    ''' </summary>
+    Public Function FetchByTag(Version As String) As UpdateInfo
+        If String.IsNullOrEmpty(Version) Then Return Nothing
+        'tag 通常带 v 前缀，也兼容不带前缀的情况
+        For Each Url As String In {
+                $"https://api.github.com/repos/{UpdateRepo}/releases/tags/v{Version}",
+                $"https://api.github.com/repos/{UpdateRepo}/releases/tags/{Version}"}
+            Try
+                Dim Raw As JObject = NetRequestByClientRetry(Url, RequireJson:=True).DeserializeJson()
+                If Raw IsNot Nothing Then Return ParseRelease(Raw)
+            Catch ex As Exception
+                Logger.Warn(ex, $"按版本获取更新公告失败：{Url}")
+            End Try
+        Next
+        Return Nothing
+    End Function
+
+    ''' <summary>
+    ''' 把 Release 的 JSON 解析成 UpdateInfo。
+    ''' </summary>
+    Private Function ParseRelease(Raw As JObject) As UpdateInfo
         Dim Info As New UpdateInfo With {
             .Version = If(Raw("tag_name")?.ToString, "").Trim().TrimStart("v"c),
             .Title = If(Raw("name")?.ToString, "").Trim(),
@@ -269,7 +300,6 @@ Friend Module ModUpdate
                 Info.AssetSize = If(Target("size") Is Nothing, 0L, Target("size").ToObject(Of Long)())
             End If
         End If
-        Logger.Info($"检查更新：最新版本 {Info.Version}，exe 资产 {(If(Info.HasAsset, Info.AssetName, "无"))}")
         Return Info
     End Function
 
@@ -408,10 +438,14 @@ Friend Module ModUpdate
     ''' 登记一个已下载的新版本，等程序退出时替换。
     ''' </summary>
     ''' <param name="Restart">替换完成后是否自动重新启动启动器。</param>
-    Public Sub StageUpdate(NewExePath As String, Restart As Boolean)
+    ''' <param name="Version">即将装上的版本号，用于重启后展示该版本的更新公告。</param>
+    Public Sub StageUpdate(NewExePath As String, Restart As Boolean, Optional Version As String = "")
         PendingExe = NewExePath
         PendingRestart = Restart
-        Logger.Info($"已登记待安装的更新：{NewExePath}（重启={Restart}）")
+        '记住这一版：重启后若当前版本号等于它，说明刚由更新器装上，就弹窗展示这次的更新内容。
+        '替换最终没落地时版本号对不上，下次启动会把这条记录清掉，不会一直挂着。
+        If Not String.IsNullOrEmpty(Version) Then Settings.Set("ToolLauncherUpdateInstalled", Version)
+        Logger.Info($"已登记待安装的更新：{NewExePath}（重启={Restart}，版本={If(Version, "未知")}）")
     End Sub
 
     ''' <summary>
@@ -542,7 +576,7 @@ Friend Module ModUpdate
         SetStatus(UpdateStatus.Downloading, "", Info, 0)
         Try
             Dim LocalPath As String = DownloadUpdate(Info, AddressOf OnDownloadProgress)
-            StageUpdate(LocalPath, False)
+            StageUpdate(LocalPath, False, Info.Version)
             SyncLock StateLock
                 StagedValue = LocalPath
             End SyncLock
@@ -590,6 +624,73 @@ Friend Module ModUpdate
             End If
             RunInUi(Sub() AskUpdate(Info))
         End Sub, "自动检查更新")
+    End Sub
+
+    ''' <summary>
+    ''' 启动时调用：如果这一版是刚由更新器装上的，弹窗展示该版本的更新公告。
+    ''' 无论公告能否取到，都会先清掉记录，避免每次启动都提示。
+    ''' </summary>
+    Public Sub ShowNotesAfterRestart()
+        Dim Installed As String = ""
+        Try
+            Installed = Settings.Get(Of String)("ToolLauncherUpdateInstalled")
+        Catch ex As Exception
+            Logger.Warn(ex, "读取刚更新的版本记录失败")
+        End Try
+        If String.IsNullOrEmpty(Installed) Then Return
+
+        '版本对不上，说明替换没落地（或用户自己换了 exe），这条记录已经过期
+        If Not String.Equals(Installed, VersionBaseName, StringComparison.OrdinalIgnoreCase) Then
+            Settings.Set("ToolLauncherUpdateInstalled", "")
+            Logger.Info($"更新完成记录（{Installed}）与当前版本（{VersionBaseName}）不符，已清除")
+            Return
+        End If
+        Settings.Set("ToolLauncherUpdateInstalled", "")
+        Logger.Info($"检测到刚更新到 {Installed}，准备展示该版本的更新公告")
+
+        RunInNewThread(
+        Sub()
+            Dim Info As UpdateInfo = Nothing
+            Try
+                Info = FetchByTag(Installed)
+            Catch ex As Exception
+                Logger.Warn(ex, $"获取 {Installed} 的更新公告失败")
+            End Try
+            RunInUi(Sub() ShowUpdateNotes(Installed, Info))
+        End Sub, "展示更新公告")
+    End Sub
+
+    ''' <summary>
+    ''' 展示「已更新到某版本」的公告弹窗（UI 线程）。公告取不到时只报版本号，不打扰太久。
+    ''' </summary>
+    Private Sub ShowUpdateNotes(Version As String, Info As UpdateInfo)
+        Try
+            If Info Is Nothing OrElse String.IsNullOrEmpty(Info.Notes) Then
+                MyMsgBox($"已更新到 RMCL {Version}。" & vbCrLf & vbCrLf &
+                         "这次的更新公告没能取到，可以到发布页查看。",
+                         "更新完成", "知道了", "打开发布页",
+                         Button2Action:=Sub() OpenWebsite(UpdatePage))
+                Return
+            End If
+
+            '弹窗高度随文本自适应，公告太长会把按钮挤出屏幕，所以这里截断；
+            '完整内容留给「查看公告」按钮跳发布页。截断点回退到最近的换行，避免把句子切成两半
+            Dim Notes As String = Info.Notes
+            Dim Truncated As Boolean = Notes.Length > 800
+            If Truncated Then
+                Notes = Notes.Substring(0, 800)
+                Dim LastBreak As Integer = Notes.LastIndexOf(vbLf)
+                If LastBreak > 560 Then Notes = Notes.Substring(0, LastBreak)
+                Notes = Notes.TrimEnd() & "……"
+            End If
+            Dim Text As String = $"已更新到 RMCL {Info.Version}。" & vbCrLf & vbCrLf &
+                                 "本次更新内容：" & vbCrLf & Notes
+            If Truncated Then Text &= vbCrLf & vbCrLf & "（公告较长，点「查看公告」看完整内容）"
+            MyMsgBox(Text, "更新完成", "知道了", "查看公告",
+                     Button2Action:=Sub() OpenWebsite(Info.PageUrl))
+        Catch ex As Exception
+            Logger.Error(ex, "展示更新公告失败")
+        End Try
     End Sub
 
     ''' <summary>
@@ -654,10 +755,10 @@ Friend Module ModUpdate
     Public Sub PromptInstallAfterDownload(Info As UpdateInfo, LocalPath As String, Optional OnDeferred As Action = Nothing)
         If MyMsgBox($"RMCL {Info.Version} 已下载完成，退出启动器后会自动安装。" & vbCrLf & "现在重启安装吗？",
                     "安装更新", "立即重启", "稍后") = 1 Then
-            StageUpdate(LocalPath, True)
+            StageUpdate(LocalPath, True, If(Info?.Version, ""))
             FrmMain.EndProgram(False)
         Else
-            StageUpdate(LocalPath, False)
+            StageUpdate(LocalPath, False, If(Info?.Version, ""))
             Hint($"更新 {Info.Version} 将在退出启动器时自动安装", HintType.Green)
             If OnDeferred IsNot Nothing Then OnDeferred()
         End If
