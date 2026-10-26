@@ -59,6 +59,7 @@ Public Module ModFrp
     Private MessageValue As String = "尚未启动"
     Private ReadOnly LogList As New List(Of String)
     Private Session As Process = Nothing
+    Private RunningTunnelValue As Integer = 0
 
     ''' <summary>当前状态。</summary>
     Public ReadOnly Property Status As FrpStatus
@@ -83,6 +84,15 @@ Public Module ModFrp
         Get
             SyncLock StateLock
                 Return MessageValue
+            End SyncLock
+        End Get
+    End Property
+
+    ''' <summary>当前正在运行的隧道 ID，未运行时为 0。用于删除前判断是否需要先停掉它。</summary>
+    Public ReadOnly Property RunningTunnelId As Integer
+        Get
+            SyncLock StateLock
+                Return RunningTunnelValue
             End SyncLock
         End Get
     End Property
@@ -279,6 +289,7 @@ Public Module ModFrp
 
         SyncLock StateLock
             Session = P
+            RunningTunnelValue = Val(TunnelId)
             LogList.Clear()
             RemoteValue = ""
         End SyncLock
@@ -315,7 +326,10 @@ Public Module ModFrp
         Dim StillCurrent As Boolean
         SyncLock StateLock
             StillCurrent = (Session Is P)
-            If StillCurrent Then Session = Nothing
+            If StillCurrent Then
+                Session = Nothing
+                RunningTunnelValue = 0
+            End If
         End SyncLock
         If Not StillCurrent Then Return
         Select Case Status
@@ -338,6 +352,7 @@ Public Module ModFrp
         SyncLock StateLock
             P = Session
             Session = Nothing
+            RunningTunnelValue = 0
         End SyncLock
         If P Is Nothing Then Return
         SetStatus(FrpStatus.Stopped, "已停止")
@@ -617,6 +632,51 @@ Public Module ModFrp
             .LocalPort = LocalPort,
             .Online = True
         }
+    End Function
+
+    ''' <summary>
+    ''' 从樱花账号里永久删除一条隧道。会阻塞，调用方应放在后台线程。
+    ''' 返回值：True 表示已删除但远程连接尚未踢下线（樱花上游可能需要一会儿），False 表示完全删除。
+    ''' 不做自动重试：删除失败通常是隧道被锁定，重试没有意义。
+    ''' </summary>
+    Public Function DeleteTunnel(AccessKey As String, TunnelId As Integer) As Boolean
+        AccessKey = If(AccessKey, "").Trim()
+        If AccessKey = "" Then Throw New Exception("请先登录樱花穿透")
+        If TunnelId <= 0 Then Throw New Exception("请先选中要删除的隧道")
+
+        '先确认远端确实有这条：可能已被别的窗口删掉了
+        Dim Before As List(Of FrpTunnel) = FetchTunnels(AccessKey)
+        If Not Before.Any(Function(T) T.Id = TunnelId) Then
+            Logger.Info($"樱花穿透隧道 #{TunnelId} 已不存在，无需删除")
+            Return False
+        End If
+
+        Dim Body As New JObject From {{"ids", TunnelId.ToString()}}
+        Dim Result As JToken = FrpApiRequest("/tunnel/delete", AccessKey, Body)
+
+        Dim DeletedIds As New List(Of Integer)
+        Dim FailedIds As New List(Of Integer)
+        If Result("deleted") IsNot Nothing Then
+            For Each X As JToken In CType(Result("deleted"), JArray)
+                DeletedIds.Add(Val(X.ToString))
+            Next
+        End If
+        If Result("failed") IsNot Nothing Then
+            For Each X As JToken In CType(Result("failed"), JArray)
+                FailedIds.Add(Val(X.ToString))
+            Next
+        End If
+        If Not DeletedIds.Contains(TunnelId) AndAlso Not FailedIds.Contains(TunnelId) Then
+            Throw New Exception("樱花穿透没有确认删除该隧道，可能已被锁定，请到网站确认")
+        End If
+
+        '接口返回成功不代表真的删掉了，复查一次远端列表
+        Dim After As List(Of FrpTunnel) = FetchTunnels(AccessKey)
+        If After.Any(Function(T) T.Id = TunnelId) Then
+            Throw New Exception("远端仍存在该隧道，删除尚未生效，请稍后刷新重试")
+        End If
+        Logger.Info($"樱花穿透隧道 #{TunnelId} 已删除（远程踢下线失败={FailedIds.Contains(TunnelId)}）")
+        Return FailedIds.Contains(TunnelId)
     End Function
 
 #End Region

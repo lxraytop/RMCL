@@ -187,6 +187,61 @@
         PanCreate.Visibility = Visibility.Collapsed
     End Sub
 
+    ''' <summary>删除当前选中的隧道。会从樱花账号里永久删掉，必须先二次确认。</summary>
+    Private Sub BtnDeleteTunnel_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnDeleteTunnel.Click
+        Dim Item As MyComboBoxItem = TryCast(ComboTunnel.SelectedItem, MyComboBoxItem)
+        If Item Is Nothing Then
+            Hint("请先选中要删除的隧道", HintType.Red)
+            Return
+        End If
+        Dim TunnelId As Integer = Val(Item.Tag)
+        Dim Target As ModFrp.FrpTunnel = Tunnels.FirstOrDefault(Function(T) T.Id = TunnelId)
+        Dim TunnelName As String = If(Target IsNot Nothing, Target.Name, "#" & TunnelId)
+        Dim IsRunningThis As Boolean = (ModFrp.RunningTunnelId = TunnelId)
+        Dim Extra As String = If(IsRunningThis, vbCrLf & "这条隧道正在运行，删除前会先断开。", "")
+        If MyMsgBox($"确定要从樱花账号永久删除隧道「{TunnelName}」（#{TunnelId}）吗？" & vbCrLf &
+                    "这会删除樱花穿透服务器上的隧道配置，无法撤销；其他隧道不受影响。" & Extra,
+                    "删除隧道", "删除", "取消") <> 1 Then Return
+
+        '只停正在跑的这一条，别的隧道不动
+        If IsRunningThis Then
+            Try
+                ModFrp.StopSession()
+            Catch ex As Exception
+                Logger.Warn(ex, "删除隧道前停止樱花穿透失败")
+            End Try
+        End If
+
+        IsBusy = True
+        RefreshUi()
+        RunInNewThread(
+        Sub()
+            Try
+                Dim DisconnectPending As Boolean = ModFrp.DeleteTunnel(CurrentKey, TunnelId)
+                RunInUi(
+                Sub()
+                    IsBusy = False
+                    '删掉的正好是记住的那条，重置后再刷新就会落到第一条
+                    If Settings.Get(Of Integer)("FrpLastTunnelId") = TunnelId Then Settings.Set("FrpLastTunnelId", 0)
+                    If DisconnectPending Then
+                        Hint($"隧道「{TunnelName}」已删除，远程连接稍后断开", HintType.Green)
+                    Else
+                        Hint($"隧道「{TunnelName}」已删除", HintType.Green)
+                    End If
+                    LoadAccount()
+                End Sub)
+            Catch ex As Exception
+                Logger.Warn(ex, "删除樱花穿透隧道失败")
+                RunInUi(
+                Sub()
+                    IsBusy = False
+                    Hint("删除隧道失败：" & ex.Message, HintType.Red)
+                    RefreshUi()
+                End Sub)
+            End Try
+        End Sub, "删除樱花穿透隧道")
+    End Sub
+
     Private Sub BtnCreateTunnel_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnCreateTunnel.Click
         Dim Name As String = TextCreateName.Text.Trim()
         Dim NodeItem As MyComboBoxItem = TryCast(ComboNode.SelectedItem, MyComboBoxItem)
@@ -267,6 +322,7 @@
             BtnReloadTunnels.IsEnabled = Not IsBusy
             BtnLogout.IsEnabled = Not IsBusy
             BtnNewTunnel.IsEnabled = Not IsBusy
+            BtnDeleteTunnel.IsEnabled = Not IsBusy AndAlso ComboTunnel.SelectedItem IsNot Nothing
             BtnCreateTunnel.IsEnabled = Not IsBusy
             BtnStart.IsEnabled = Not IsBusy AndAlso Not ModFrp.IsActive AndAlso ComboTunnel.SelectedItem IsNot Nothing
             BtnStop.IsEnabled = Not IsBusy AndAlso ModFrp.IsActive

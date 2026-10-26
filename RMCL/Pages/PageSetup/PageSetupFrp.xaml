@@ -51,9 +51,11 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <local:MyComboBox x:Name="ComboTunnel" Width="380" Height="28" VerticalAlignment="Center" />
-                            <local:MyButton x:Name="BtnNewTunnel" Text="新建隧道" Grid.Column="1" MinWidth="110" Height="28" Padding="11,0" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            <local:MyComboBox x:Name="ComboTunnel" Width="360" Height="28" VerticalAlignment="Center" />
+                            <local:MyButton x:Name="BtnNewTunnel" Text="新建隧道" Grid.Column="1" MinWidth="100" Height="28" Padding="11,0" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            <local:MyButton x:Name="BtnDeleteTunnel" Text="删除隧道" Grid.Column="2" MinWidth="100" Height="28" Padding="11,0" Margin="10,0,0,0" VerticalAlignment="Center" />
                         </Grid>
                         <TextBlock x:Name="LabTunnelHint" Text="正在读取隧道……" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,12" />
 
