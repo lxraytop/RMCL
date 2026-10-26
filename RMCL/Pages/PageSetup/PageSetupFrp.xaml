@@ -9,44 +9,122 @@
             <local:MyCard Margin="0,15" Title="樱花穿透">
                 <StackPanel Margin="25,40,25,18">
                     <TextBlock TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,12"
-                               Text="樱花穿透（SakuraFrp）可以把本机的 Minecraft 局域网世界映射到公网，好友用「服务器地址」里的地址即可直连，不需要联机大厅。&#xa;使用前需要在樱花穿透建好一条 TCP 隧道，隧道的「本地端口」填游戏对局域网开放后显示的端口。" />
+                               Text="樱花穿透（SakuraFrp）可以把本机的 Minecraft 局域网世界映射到公网，好友用远程地址即可直连，不需要联机大厅。" />
 
-                    <TextBlock Text="访问密钥" FontSize="12.5" Opacity="0.7" Margin="1,0,0,6" />
-                    <local:MyTextBox x:Name="TextAccessKey" Height="28" Width="320" HorizontalAlignment="Left" MaxLength="128"
-                                     ToolTip="樱花穿透用户信息页里的访问密钥，形如 xxxxxxxx" />
-                    <TextBlock Text="在樱花穿透用户信息页复制访问密钥，只保存在本机注册表，不会上传到任何第三方。" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,4,0,12" />
+                    <!-- 未登录：只显示密钥输入 -->
+                    <StackPanel x:Name="PanLogin">
+                        <TextBlock Text="访问密钥" FontSize="12.5" Opacity="0.7" Margin="1,0,0,6" />
+                        <local:MyTextBox x:Name="TextAccessKey" Height="28" Width="320" HorizontalAlignment="Left" MaxLength="128"
+                                         ToolTip="樱花穿透用户信息页里的访问密钥，形如 xxxxxxxx" />
+                        <TextBlock Text="在樱花穿透用户信息页复制访问密钥。密钥只保存在本机，确认后输入框会自动隐藏；需要更换时点「退出登录」。" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,4,0,12" />
+                        <Grid Height="35">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                            </Grid.ColumnDefinitions>
+                            <local:MyButton x:Name="BtnLogin" Text="确认并读取隧道" MinWidth="140" Height="35" Padding="13,0" ColorType="Highlight" Margin="0,0,20,0" />
+                            <local:MyButton x:Name="BtnOpenSite" Text="打开樱花穿透" MinWidth="140" Height="35" Padding="13,0" Grid.Column="1" />
+                        </Grid>
+                    </StackPanel>
 
-                    <Grid Height="35">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
-                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
-                        </Grid.ColumnDefinitions>
-                        <local:MyButton x:Name="BtnLoadTunnels" Text="读取我的隧道" MinWidth="140" Height="35" Padding="13,0" ColorType="Highlight" Margin="0,0,20,0" />
-                        <local:MyButton x:Name="BtnOpenSite" Text="打开樱花穿透" MinWidth="140" Height="35" Padding="13,0" Grid.Column="1" />
-                    </Grid>
+                    <!-- 已登录：隐藏输入框，只保留账号状态 -->
+                    <StackPanel x:Name="PanAccount" Visibility="Collapsed">
+                        <Border Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,10" Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock x:Name="LabAccount" FontSize="12.5" Text="已登录" />
+                                    <TextBlock Text="访问密钥已保存在本机，只用于启动樱花穿透客户端。" Opacity="0.62" FontSize="11.5" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <local:MyButton x:Name="BtnReloadTunnels" Text="刷新隧道" MinWidth="100" Height="30" Padding="11,0" Margin="0,0,10,0" />
+                                    <local:MyButton x:Name="BtnLogout" Text="退出登录" MinWidth="100" Height="30" Padding="11,0" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
 
-                    <TextBlock Text="隧道" FontSize="12.5" Opacity="0.7" Margin="1,16,0,6" />
-                    <local:MyComboBox x:Name="ComboTunnel" Height="28" Width="380" HorizontalAlignment="Left" />
-                    <TextBlock x:Name="LabTunnelHint" Text="先填写访问密钥，再点「读取我的隧道」。" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,4,0,12" />
+                        <TextBlock Text="隧道" FontSize="12.5" Opacity="0.7" Margin="1,0,0,6" />
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <local:MyComboBox x:Name="ComboTunnel" Width="380" Height="28" VerticalAlignment="Center" />
+                            <local:MyButton x:Name="BtnNewTunnel" Text="新建隧道" Grid.Column="1" MinWidth="110" Height="28" Padding="11,0" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </Grid>
+                        <TextBlock x:Name="LabTunnelHint" Text="正在读取隧道……" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,12" />
 
-                    <Border Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,10" Margin="0,4,0,12">
-                        <StackPanel>
-                            <TextBlock x:Name="LabStatus" TextWrapping="Wrap" LineHeight="19" Text="尚未启动" />
-                            <TextBlock x:Name="LabRemote" TextWrapping="Wrap" LineHeight="19" Margin="0,6,0,0" Visibility="Collapsed" />
-                        </StackPanel>
-                    </Border>
+                        <!-- 新建隧道 -->
+                        <Border x:Name="PanCreate" Visibility="Collapsed" Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,12" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="新建 TCP 隧道" FontSize="13" Margin="0,0,0,10" />
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="隧道名称" FontSize="12.5" Opacity="0.7" Margin="1,0,0,6" />
+                                        <local:MyTextBox x:Name="TextCreateName" Width="200" Height="28" MaxLength="64"
+                                                         ToolTip="例如：好友生存世界" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="服务节点" FontSize="12.5" Opacity="0.7" Margin="1,0,0,6" />
+                                        <local:MyComboBox x:Name="ComboNode" Width="260" Height="28" />
+                                    </StackPanel>
+                                </Grid>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="本地端口" FontSize="12.5" Opacity="0.7" Margin="1,0,0,6" />
+                                        <local:MyTextBox x:Name="TextCreateLocalPort" Width="200" Height="28" MaxLength="5"
+                                                         ToolTip="游戏里对局域网开放后显示的端口" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="远程端口（可选）" FontSize="12.5" Opacity="0.7" Margin="1,0,0,6" />
+                                        <local:MyTextBox x:Name="TextCreateRemotePort" Width="260" Height="28" MaxLength="5"
+                                                         ToolTip="留空由樱花穿透分配" />
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock Text="本地端口填 Minecraft 里按 Esc → 对局域网开放后显示的端口；远程端口留空则由樱花分配。节点选带「免费」字样的即可。" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,10" />
+                                <Grid Height="30">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                                    </Grid.ColumnDefinitions>
+                                    <local:MyButton x:Name="BtnCreateTunnel" Text="创建" MinWidth="100" Height="30" Padding="11,0" ColorType="Highlight" Margin="0,0,10,0" />
+                                    <local:MyButton x:Name="BtnCancelCreate" Text="取消" MinWidth="100" Height="30" Padding="11,0" Grid.Column="1" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
 
-                    <Grid Height="35">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
-                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
-                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
-                        </Grid.ColumnDefinitions>
-                        <local:MyButton x:Name="BtnStart" Text="启动隧道" MinWidth="140" Height="35" Padding="13,0" ColorType="Highlight" Margin="0,0,20,0" />
-                        <local:MyButton x:Name="BtnStop" Text="停止" MinWidth="140" Height="35" Padding="13,0" Grid.Column="1" Margin="0,0,20,0" />
-                        <local:MyButton x:Name="BtnCopy" Text="复制远程地址" MinWidth="140" Height="35" Padding="13,0" Grid.Column="2" />
-                    </Grid>
-                    <TextBlock Text="隧道建立后，把远程地址发给好友，在多人游戏里用「直接连接」填入即可。关闭启动器会一并停止樱花穿透。" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0" />
+                        <Border Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,10" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock x:Name="LabStatus" TextWrapping="Wrap" LineHeight="19" Text="尚未启动" />
+                                <TextBlock x:Name="LabRemote" TextWrapping="Wrap" LineHeight="19" Margin="0,6,0,0" Visibility="Collapsed" />
+                            </StackPanel>
+                        </Border>
+
+                        <Grid Height="35">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                            </Grid.ColumnDefinitions>
+                            <local:MyButton x:Name="BtnStart" Text="启动隧道" MinWidth="140" Height="35" Padding="13,0" ColorType="Highlight" Margin="0,0,20,0" />
+                            <local:MyButton x:Name="BtnStop" Text="停止" MinWidth="140" Height="35" Padding="13,0" Grid.Column="1" Margin="0,0,20,0" />
+                            <local:MyButton x:Name="BtnCopy" Text="复制远程地址" MinWidth="140" Height="35" Padding="13,0" Grid.Column="2" />
+                        </Grid>
+                        <TextBlock Text="隧道建立后，把远程地址发给好友，在多人游戏里用「直接连接」填入即可。关闭启动器会一并停止樱花穿透。" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0" />
+                    </StackPanel>
                 </StackPanel>
             </local:MyCard>
             <local:MyCard Margin="0,0,0,15" Title="客户端日志">

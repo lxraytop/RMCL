@@ -443,7 +443,7 @@ Public Module ModFrp
     Public Function FetchTunnels(AccessKey As String) As List(Of FrpTunnel)
         AccessKey = If(AccessKey, "").Trim()
         If AccessKey = "" Then Throw New Exception("请先填写访问密钥")
-        Dim Raw As JToken = FrpApiGet("/tunnels", AccessKey)
+        Dim Raw As JToken = FrpApiRequest("/tunnels", AccessKey)
         Dim Result As New List(Of FrpTunnel)
         If Raw.Type <> JTokenType.Array Then Throw New Exception("樱花穿透接口返回了意料之外的格式")
         For Each Item As JToken In CType(Raw, JArray)
@@ -460,7 +460,7 @@ Public Module ModFrp
         Next
         '顺带补上节点名，失败不影响主流程
         Try
-            Dim Nodes As JToken = FrpApiGet("/nodes", AccessKey)
+            Dim Nodes As JToken = FrpApiRequest("/nodes", AccessKey)
             If Nodes.Type = JTokenType.Object Then
                 For Each T In Result
                     Dim N As JToken = CType(Nodes, JObject)(T.NodeId.ToString)
@@ -473,23 +473,150 @@ Public Module ModFrp
         Return Result
     End Function
 
-    ''' <summary>发一次带密钥的 API 请求，把非 2xx 的错误翻译成用户能看懂的话。</summary>
-    Private Function FrpApiGet(Path As String, AccessKey As String) As JToken
+    ''' <summary>
+    ''' 发一次带密钥的 API 请求，把非 2xx 的错误翻译成用户能看懂的话。
+    ''' Body 为 Nothing 时用 GET，否则用 POST + JSON。
+    ''' 请求带 no-cache：项目里的 HttpClient 挂了 CacheCow，不加会读到旧的隧道列表。
+    ''' </summary>
+    Private Function FrpApiRequest(Path As String, AccessKey As String, Optional Body As JObject = Nothing) As JToken
+        Dim Headers As String(,) = {
+            {"Authorization", "Bearer " & AccessKey},
+            {"Cache-Control", "no-cache"}
+        }
         Try
-            Dim Raw As String = NetRequestByClient(ApiBase & Path,
-                Headers:={{"Authorization", "Bearer " & AccessKey}},
-                Accept:="application/json", RequireJson:=True)
+            Dim Raw As String
+            If Body Is Nothing Then
+                Raw = NetRequestByClient(ApiBase & Path, Headers:=Headers,
+                    Accept:="application/json", RequireJson:=True)
+            Else
+                Raw = NetRequestByClient(ApiBase & Path, Method:=HttpMethod.Post, Content:=Body.ToString(),
+                    ContentType:="application/json", Headers:=Headers,
+                    Accept:="application/json", RequireJson:=True)
+            End If
             Return JToken.Parse(Raw)
         Catch ex As Exception
             '接口在鉴权失败时仍会返回 {"code":401,"msg":"访问密钥无效"}，从异常文本里把它捞出来
             Dim M As Match = Regex.Match(If(ex.Message, ""), """msg""\s*:\s*""([^""]*)""")
             If M.Success Then
                 Dim Detail As String = M.Groups(1).Value
-                If Detail.Contains("密钥") Then Throw New Exception("访问密钥无效，请到樱花穿透用户信息页重新复制")
+                If Detail.Contains("密钥") Then Throw New Exception("访问密钥无效，请退出登录后重新输入")
                 Throw New Exception("樱花穿透接口返回：" & Detail)
             End If
             Throw New Exception("连接樱花穿透接口失败：" & ex.Message)
         End Try
+    End Function
+
+    ''' <summary>樱花的一个服务节点。</summary>
+    Public Class FrpNode
+        Public Id As Integer
+        Public Name As String = ""
+        Public Host As String = ""
+        Public Description As String = ""
+        Public Vip As Integer
+        Public IsFree As Boolean
+        Public Online As Boolean
+        Public Load As Integer = -1
+        Public CanCreate As Boolean
+
+        Public Overrides Function ToString() As String
+            Dim Parts As New List(Of String) From {$"{Name}（#{Id}）"}
+            Parts.Add(If(IsFree, "免费", "专业版"))
+            If Load >= 0 Then Parts.Add(Load & "%")
+            If Description <> "" Then Parts.Add(Description)
+            If Not Online Then Parts.Add("离线")
+            If Not CanCreate Then Parts.Add("已满")
+            Return String.Join(" · ", Parts)
+        End Function
+    End Class
+
+    ''' <summary>
+    ''' 读取节点列表。/nodes 给节点信息（vip、flag 位），/node/stats 给在线与负载。
+    ''' 统计拿不到不影响主流程，退回用 flag 的离线位判断。
+    ''' </summary>
+    Public Function FetchNodes(AccessKey As String) As List(Of FrpNode)
+        AccessKey = If(AccessKey, "").Trim()
+        If AccessKey = "" Then Throw New Exception("请先填写访问密钥")
+        Dim Raw As JToken = FrpApiRequest("/nodes", AccessKey)
+        If Raw.Type <> JTokenType.Object Then Throw New Exception("樱花穿透节点接口返回了意料之外的格式")
+
+        Dim Stats As New Dictionary(Of Integer, JToken)
+        Try
+            Dim S As JToken = FrpApiRequest("/node/stats", AccessKey)
+            If S("nodes") IsNot Nothing Then
+                For Each N As JToken In CType(S("nodes"), JArray)
+                    Stats(Val(N("id")?.ToString)) = N
+                Next
+            End If
+        Catch ex As Exception
+            Logger.Warn(ex, "读取樱花穿透节点状态失败")
+        End Try
+
+        Dim Result As New List(Of FrpNode)
+        For Each Prop As JProperty In CType(Raw, JObject).Properties
+            Dim Item As JToken = Prop.Value
+            If Item Is Nothing OrElse Item.Type <> JTokenType.Object Then Continue For
+            Dim Id As Integer = Val(Prop.Name)
+            If Id <= 0 Then Continue For
+            Dim Flags As Integer = Val(Item("flag")?.ToString)
+            Dim Vip As Integer = Val(Item("vip")?.ToString)
+            Dim Node As New FrpNode With {
+                .Id = Id,
+                .Name = If(Item("name")?.ToString, ""),
+                .Host = If(Item("host")?.ToString, ""),
+                .Description = If(Item("description")?.ToString, ""),
+                .Vip = Vip,
+                .IsFree = (Vip = 0),
+                .Online = (Flags And (1 << 9)) = 0,
+                .CanCreate = (Flags And (1 << 2)) <> 0
+            }
+            Dim St As JToken = Nothing
+            If Stats.TryGetValue(Id, St) AndAlso St IsNot Nothing Then
+                Node.Online = Val(St("online")?.ToString) >= 0
+                Node.Load = Val(St("load")?.ToString)
+            End If
+            Result.Add(Node)
+        Next
+        '免费优先、在线优先、ID 升序：下拉框最上面就是能直接用的节点
+        Return Result.OrderByDescending(Function(N) N.IsFree).
+                      ThenByDescending(Function(N) N.Online).
+                      ThenBy(Function(N) N.Id).ToList()
+    End Function
+
+    ''' <summary>
+    ''' 创建一条 TCP 隧道。会阻塞，调用方应放在后台线程。
+    ''' 不做自动重试：POST 重试可能创建出重复隧道。
+    ''' </summary>
+    Public Function CreateTunnel(AccessKey As String, Name As String, NodeId As Integer,
+                                 LocalPort As Integer, Optional RemotePort As Integer = 0) As FrpTunnel
+        AccessKey = If(AccessKey, "").Trim()
+        Name = If(Name, "").Trim()
+        If AccessKey = "" Then Throw New Exception("请先登录樱花穿透")
+        If Name.Length = 0 OrElse Name.Length > 64 Then Throw New Exception("隧道名称需要 1-64 个字符")
+        If NodeId <= 0 Then Throw New Exception("请选择服务节点")
+        If LocalPort < 1 OrElse LocalPort > 65535 Then Throw New Exception("本地端口需要是 1-65535")
+        If RemotePort < 0 OrElse RemotePort > 65535 Then Throw New Exception("远程端口需要是 1-65535")
+
+        Dim Body As New JObject From {
+            {"name", Name},
+            {"type", "tcp"},
+            {"node", NodeId},
+            {"local_ip", "127.0.0.1"},
+            {"local_port", LocalPort}
+        }
+        '留空则由樱花分配
+        If RemotePort > 0 Then Body("remote") = RemotePort.ToString()
+
+        Dim Result As JToken = FrpApiRequest("/tunnels", AccessKey, Body)
+        Dim Id As Integer = Val(Result("id")?.ToString)
+        If Id <= 0 Then Throw New Exception("樱花穿透没有返回隧道 ID，请到网站确认是否已创建，不要重复提交")
+        Logger.Info($"樱花穿透隧道已创建：#{Id} {Name}（节点 {NodeId}，本地 {LocalPort}）")
+        Return New FrpTunnel With {
+            .Id = Id,
+            .Name = If(Result("name")?.ToString, Name),
+            .NodeId = NodeId,
+            .LocalPort = LocalPort,
+            .Online = True
+        }
     End Function
 
 #End Region
