@@ -392,6 +392,7 @@ Public FrmSetupUI As PageSetupUI
 Public FrmSetupSystem As PageSetupSystem
 Public FrmSetupFeature As PageSetupFeature
 Public FrmSetupFrp As PageSetupFrp
+Public FrmSetupJava As PageSetupJava
 
     '登录页面声明
     Public FrmLoginLegacy As PageLoginLegacy

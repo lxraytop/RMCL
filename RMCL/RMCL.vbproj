@@ -377,6 +377,9 @@
     <Compile Include="Pages\PageSetup\PageSetupFrp.xaml.vb">
       <DependentUpon>PageSetupFrp.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Pages\PageSetup\PageSetupJava.xaml.vb">
+      <DependentUpon>PageSetupJava.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Pages\PageSetup\PageSetupUI.xaml.vb">
       <DependentUpon>PageSetupUI.xaml</DependentUpon>
     </Compile>
@@ -614,6 +617,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Pages\PageSetup\PageSetupFrp.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Pages\PageSetup\PageSetupJava.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

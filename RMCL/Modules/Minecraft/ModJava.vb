@@ -61,6 +61,7 @@ Public Module ModJava
         Sub()
             FrmSetupLaunch?.UpdateJavaList()
             FrmInstanceSetup?.UpdateJavaList()
+            FrmSetupJava?.UpdateJavaList()
         End Sub)
     End Sub
 
@@ -374,36 +375,7 @@ Public Module ModJava
                         '电脑中没有合适的 Java，获取 Mojang 提供的 Java 下载列表
                         Logger.Warn($"电脑中没有合适的 Java，开始获取 Mojang 提供的 Java 下载列表")
                         Static DownloadListWorker As New RedoableWorker(Of List(Of JavaDownloadInfo))(
-                        Function(cancellationToken)
-                            '下载 Mojang 提供的 Java 列表
-                            Dim IndexFileStr As String = NetRequestByLoader(DlVersionListOrder(
-                                {"https://piston-meta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json"},
-                                {"https://bmclapi2.bangbang93.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json"}
-                            ), IsJson:=True)
-                            cancellationToken?.ThrowIfCancellationRequested()
-                            '解析 Java 列表
-                            Dim Results = New List(Of JavaDownloadInfo)
-                            For Each Prop As JProperty In IndexFileStr.DeserializeJson(Of JObject)()("windows-x64")
-                                cancellationToken?.ThrowIfCancellationRequested()
-                                If Prop.Name = "minecraft-java-exe" Then Continue For '不是完整 Java
-                                Try
-                                    Dim Entry = Prop.Value.FirstOrDefault
-                                    If Entry Is Nothing Then Continue For
-                                    Dim JavaName = Entry("version")("name").ToString '可能的名称格式："12"、"8u51-cacert462b08"、"17.0.8.1"、"17.0.1.12.1"、"21.0.7"
-                                    If JavaName.Contains(".") Then
-                                        Dim Parts As String() = JavaName.Split(".")
-                                        Results.Add(New JavaDownloadInfo With {.ComponentName = Prop.Name, .Java = Entry, .JavaVersion = New Version(Val(Parts(0)), Val(Parts(1)), If(Parts.Length >= 3, Val(Parts(2)), 0), If(Parts.Length >= 4, Val(Parts(3)), 0))})
-                                    ElseIf JavaName.StartsWithF("8u51-") Then
-                                        Results.Add(New JavaDownloadInfo With {.ComponentName = Prop.Name, .Java = Entry, .JavaVersion = New Version(8, 0, 51, 0)})
-                                    Else
-                                        Results.Add(New JavaDownloadInfo With {.ComponentName = Prop.Name, .Java = Entry, .JavaVersion = New Version(Val(JavaName.BeforeFirstOfAny({"u", "."})), 0, 0, 0)})
-                                    End If
-                                Catch ex As Exception
-                                    Logger.Warn(ex, $"解析 Mojang 提供的 Java 列表项失败，已跳过（{Prop.Name}）")
-                                End Try
-                            Next
-                            Return Results
-                        End Function)
+                            Function(cancellationToken) GetJavaDownloadList(cancellationToken))
                         If Not DownloadListWorker.HasSucceeded Then DownloadListWorker.Start(c, p?.SplitTo(0.4))
                         DownloadListWorker.WaitIfRunning(cancellationToken:=c)
                         p?.Set(0.4, skiped:=True)
@@ -533,22 +505,75 @@ NoForcedJava:
 
 #Region "下载（均为内部工具方法，无外部调用）"
 
-    Private Class JavaDownloadInfo
+    Public Class JavaDownloadInfo
         Public Property ComponentName As String
         Public Property Java As JObject
         Public Property JavaVersion As Version
+
+        ''' <summary>展示用名称，例如「Java 21.0.7」。</summary>
+        Public ReadOnly Property DisplayName As String
+            Get
+                Return $"Java {JavaVersion}"
+            End Get
+        End Property
     End Class
+
+    ''' <summary>
+    ''' 获取 Mojang 提供的可下载 Java 列表（Windows x64）。
+    ''' 会阻塞在网络请求上，调用方应放在后台线程。
+    ''' </summary>
+    Public Function GetJavaDownloadList(Optional c As CancellationToken = Nothing) As List(Of JavaDownloadInfo)
+        Dim IndexFileStr As String = NetRequestByLoader(DlVersionListOrder(
+            {"https://piston-meta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json"},
+            {"https://bmclapi2.bangbang93.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json"}
+        ), IsJson:=True)
+        c.ThrowIfCancellationRequested()
+        Dim Results As New List(Of JavaDownloadInfo)
+        Dim WindowsX64 As JToken = IndexFileStr.DeserializeJson(Of JObject)()("windows-x64")
+        If WindowsX64 Is Nothing Then Return Results
+        For Each Prop As JProperty In WindowsX64
+            c.ThrowIfCancellationRequested()
+            If Prop.Name = "minecraft-java-exe" Then Continue For '不是完整 Java
+            Try
+                Dim Entry = Prop.Value.FirstOrDefault
+                If Entry Is Nothing Then Continue For
+                Dim JavaName = Entry("version")("name").ToString
+                If JavaName.Contains(".") Then
+                    Dim Parts As String() = JavaName.Split(".")
+                    Results.Add(New JavaDownloadInfo With {
+                        .ComponentName = Prop.Name, .Java = Entry,
+                        .JavaVersion = New Version(Val(Parts(0)), Val(Parts(1)), If(Parts.Length >= 3, Val(Parts(2)), 0), If(Parts.Length >= 4, Val(Parts(3)), 0))})
+                ElseIf JavaName.StartsWithF("8u51-") Then
+                    Results.Add(New JavaDownloadInfo With {.ComponentName = Prop.Name, .Java = Entry, .JavaVersion = New Version(8, 0, 51, 0)})
+                Else
+                    Results.Add(New JavaDownloadInfo With {
+                        .ComponentName = Prop.Name, .Java = Entry,
+                        .JavaVersion = New Version(Val(JavaName.BeforeFirstOfAny({"u", "."})), 0, 0, 0)})
+                End If
+            Catch ex As Exception
+                Logger.Warn(ex, $"解析 Mojang 提供的 Java 列表项失败，已跳过（{Prop.Name}）")
+            End Try
+        Next
+        Return Results.OrderByDescending(Function(Item) Item.JavaVersion).ToList()
+    End Function
 
     ''' <summary>
     ''' 构建下载指定 Java 的加载器。
     ''' </summary>
-    Private Function CreateJavaDownloadLoader(Target As JavaDownloadInfo) As LoaderCombo(Of Integer)
+    ''' <param name="TargetRoot">
+    ''' 下载到的根目录（以 \ 结尾），Java 会落在其后再加组件名的一层。
+    ''' 留空时使用 Mojang 官方位置（.minecraft\runtime\组件名\）；
+    ''' 设置页的 Java 页面会传入 exe 同级的 Java 目录。
+    ''' </param>
+    Public Function CreateJavaDownloadLoader(Target As JavaDownloadInfo, Optional TargetRoot As String = Nothing) As LoaderCombo(Of Integer)
 
         '分析需要下载的 Java 文件列表
         Dim Address As String = Target.Java("manifest")("url")
         Logger.Info($"准备下载 Java {Target.Java("version")("name")}（{Target.ComponentName}）：{Address}")
         Dim ListFileStr As String = NetRequestByLoader(DlSourceOrder({Address}, {Address.Replace("piston-meta.mojang.com", "bmclapi2.bangbang93.com")}), IsJson:=True)
-        Dim BaseDir As String = $"{Paths.AppData}.minecraft\runtime\{Target.ComponentName}\"
+        Dim BaseDir As String = If(String.IsNullOrEmpty(TargetRoot),
+                                    $"{Paths.AppData}.minecraft\runtime\{Target.ComponentName}\",
+                                    PathUtils.AddSlashSuffix(TargetRoot) & Target.ComponentName & "\")
         Dim FilesToDownload As New List(Of NetFile)
         For Each File As JProperty In CType(ListFileStr.DeserializeJson(), JObject)("files")
             If CType(File.Value, JObject)("downloads")?("raw") Is Nothing Then Continue For

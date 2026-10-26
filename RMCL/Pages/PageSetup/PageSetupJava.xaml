@@ -1,0 +1,62 @@
+﻿<local:MyPageRight
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:RMCL" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+    mc:Ignorable="d" x:Class="PageSetupJava"
+    PanScroll="PanBack">
+    <local:MyScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" x:Name="PanBack">
+        <StackPanel x:Name="PanMain" Margin="25,10">
+            <local:MyCard Margin="0,15" Title="Java 运行环境">
+                <StackPanel Margin="25,40,25,18">
+                    <TextBlock TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,12"
+                               Text="Minecraft 需要 Java 才能运行，不同版本要求的 Java 版本不同（1.16 及更早多为 Java 8，1.17~1.20 多为 Java 17，1.20.5 之后多为 Java 21）。&#xa;启动游戏时，RMCL 会从上到下的顺序里挑第一个与当前版本兼容的 Java。" />
+
+                    <Border Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,10" Margin="0,0,0,12">
+                        <TextBlock x:Name="LabJavaSummary" TextWrapping="Wrap" LineHeight="19" Text="正在读取 Java 列表……" />
+                    </Border>
+
+                    <Grid Height="35">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                        </Grid.ColumnDefinitions>
+                        <local:MyButton x:Name="BtnJavaRescan" Text="重新扫描" MinWidth="120" Height="35" Padding="13,0" Margin="0,0,15,0" />
+                        <local:MyButton x:Name="BtnJavaImport" Text="导入已有 Java" MinWidth="140" Height="35" Padding="13,0" Grid.Column="1" Margin="0,0,15,0" />
+                        <local:MyButton x:Name="BtnJavaDownloadToggle" Text="下载 Java" MinWidth="120" Height="35" Padding="13,0" Grid.Column="2" ColorType="Highlight" />
+                    </Grid>
+
+                    <!-- 下载区 -->
+                    <Border x:Name="PanJavaDownload" Visibility="Collapsed"
+                            Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,12" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="下载 Java" FontSize="13" Margin="0,0,0,10" />
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="版本" FontSize="12.5" Opacity="0.7" Margin="1,0,0,6" />
+                                    <local:MyComboBox x:Name="ComboJavaVersion" Width="220" Height="28" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
+                                    <local:MyButton x:Name="BtnJavaDownloadStart" Text="开始下载" MinWidth="110" Height="28" Padding="11,0" ColorType="Highlight" />
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock x:Name="LabJavaTarget" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <TextBlock x:Name="LabJavaDownloadStatus" FontSize="12.5" TextWrapping="Wrap" Text="选择版本后点「开始下载」。" />
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="可用 Java（靠上的优先使用）" FontSize="12.5" Opacity="0.7" Margin="1,16,0,8" />
+                    <StackPanel x:Name="PanJavaList" />
+
+                    <TextBlock x:Name="LabJavaEmpty" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Visibility="Collapsed"
+                               Text="还没有找到任何 Java。可以点「下载 Java」，或者点「导入已有 Java」指定一个 java.exe。" />
+                </StackPanel>
+            </local:MyCard>
+        </StackPanel>
+    </local:MyScrollViewer>
+</local:MyPageRight>
