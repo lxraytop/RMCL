@@ -182,6 +182,40 @@
                     </StackPanel>
                 </StackPanel>
             </local:MyCard>
+            <local:MyCard Margin="0,0,0,15" Title="加入好友的世界">
+                <StackPanel Margin="25,40,25,18">
+                    <TextBlock TextWrapping="Wrap" LineHeight="19" Opacity="0.72" FontSize="11.5" Margin="0,0,0,10"
+                               Text="把好友发来的樱花穿透地址粘到这里（形如 xxx.natfrp.cloud:12345），选一个版本，点下面的按钮就会启动游戏并直接进服。&#xa;不需要登录樱花、也不用自己建隧道。" />
+
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="远程地址" FontSize="12.5" Opacity="0.7" Margin="1,0,0,6" />
+                            <local:MyTextBox x:Name="TextJoinAddress" Height="28" MaxLength="160"
+                                             ToolTip="例如 xxx.natfrp.cloud:12345；不带端口时按 25565 处理" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Margin="16,0,0,0">
+                            <TextBlock Text="游戏版本" FontSize="12.5" Opacity="0.7" Margin="1,0,0,6" />
+                            <local:MyComboBox x:Name="ComboJoinInstance" Width="260" Height="28" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Height="35">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                        </Grid.ColumnDefinitions>
+                        <local:MyButton x:Name="BtnJoinStart" Text="启动并进入" MinWidth="130" Height="35" Padding="13,0" ColorType="Highlight" Margin="0,0,10,0" />
+                        <local:MyButton x:Name="BtnJoinPaste" Text="从剪贴板粘贴" MinWidth="140" Height="35" Padding="13,0" Grid.Column="1" />
+                    </Grid>
+
+                    <TextBlock x:Name="LabJoinHint" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,9,0,0"
+                               Text="地址会保存到本机，下次打开自动填回。" />
+                </StackPanel>
+            </local:MyCard>
             <local:MyCard Margin="0,0,0,15" Title="客户端日志">
                 <StackPanel Margin="25,40,25,18">
                     <TextBlock TextWrapping="Wrap" LineHeight="19" Opacity="0.72" FontSize="11.5" Margin="0,0,0,8"

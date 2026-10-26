@@ -18,6 +18,8 @@
         Static IsLoaded As Boolean = False
         If Not IsLoaded Then
             IsLoaded = True
+            '恢复上次填过的远程地址
+            TextJoinAddress.Text = Settings.Get(Of String)("FrpJoinAddress")
             '有保存的密钥就直接进入已登录状态：输入框不再出现，用户主动退出登录才会回来
             CurrentKey = Settings.Get(Of String)("FrpAccessKey")
             If CurrentKey <> "" Then
@@ -40,6 +42,125 @@
     Private Sub RefreshTimer_Tick(sender As Object, e As EventArgs)
         RefreshUi()
     End Sub
+
+#Region "加入好友的世界"
+
+    ''' <summary>是否已经往版本下拉框里填过内容。</summary>
+    Private JoinInstanceFilled As Boolean
+
+    ''' <summary>
+    ''' 把已导入的版本填进「加入好友的世界」下拉框。
+    ''' 版本列表可能比本页面加载得晚，所以由定时刷新反复调，填过一次就不再动
+    ''' （否则用户正在选的时候会被刷掉）。
+    ''' </summary>
+    Private Sub FillJoinInstances()
+        If ComboJoinInstance Is Nothing OrElse JoinInstanceFilled Then Return
+        Dim All As New List(Of McInstance)
+        For Each Pair As KeyValuePair(Of McInstanceCardType, List(Of McInstance)) In McInstanceList
+            If Pair.Value Is Nothing Then Continue For
+            All.AddRange(Pair.Value)
+        Next
+        If All.Count = 0 Then Return '版本列表还没读出来，等下一次刷新再试
+
+        All.Sort(Function(A, B) String.Compare(A.Name, B.Name, StringComparison.CurrentCultureIgnoreCase))
+        ComboJoinInstance.Items.Clear()
+        For Each Item As McInstance In All
+            ComboJoinInstance.Items.Add(New MyComboBoxItem With {.Content = Item.Name, .Tag = Item})
+        Next
+
+        '默认停在启动页当前选中的那个版本
+        Dim SelectedIndex As Integer = 0
+        Dim Current As McInstance = Nothing
+        Try
+            Current = McInstanceSelected
+        Catch ex As Exception
+            Logger.Warn(ex, "读取当前选中的 Minecraft 版本失败")
+        End Try
+        If Current IsNot Nothing Then
+            For i As Integer = 0 To ComboJoinInstance.Items.Count - 1
+                Dim Tag As McInstance = TryCast(CType(ComboJoinInstance.Items(i), MyComboBoxItem).Tag, McInstance)
+                If Tag Is Current Then
+                    SelectedIndex = i
+                    Exit For
+                End If
+            Next
+        End If
+        JoinInstanceFilled = True
+        ComboJoinInstance.SelectedIndex = SelectedIndex
+    End Sub
+
+    ''' <summary>
+    ''' 把用户粘进来的地址整理成 host:port，识别不了返回空字符串。
+    ''' 好友常常把整段说明一起发过来，这里只去掉协议头与路径，多余文字交给校验去挡。
+    ''' </summary>
+    Private Function NormalizeAddress(Raw As String) As String
+        Dim Text As String = If(Raw, "").Trim()
+        If Text = "" Then Return ""
+        For Each Prefix As String In {"minecraft://", "https://", "http://"}
+            If Text.StartsWithF(Prefix, True) Then Text = Text.Substring(Prefix.Length)
+        Next
+        If Text.Contains("/") Then Text = Text.BeforeFirst("/")
+        Text = Text.Trim().TrimEnd("/"c).Trim()
+
+        Dim Host As String = Text
+        Dim PortText As String = "25565"
+        If Text.Contains(":") Then
+            Host = Text.BeforeFirst(":").Trim()
+            PortText = Text.AfterFirst(":").Trim()
+        End If
+        Dim Port As Integer = 0
+        If Host = "" OrElse Host.Contains(" ") Then Return ""
+        If Not Integer.TryParse(PortText, Port) Then Return ""
+        If Port < 1 OrElse Port > 65535 Then Return ""
+        Return Host & ":" & Port.ToString()
+    End Function
+
+    Private Sub BtnJoinPaste_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnJoinPaste.Click
+        Try
+            Dim Text As String = ClipboardGetText()
+            If String.IsNullOrWhiteSpace(Text) Then
+                Hint("剪贴板里没有文字", HintType.Red)
+                Return
+            End If
+            TextJoinAddress.Text = Text.Trim()
+            LabJoinHint.Text = "已从剪贴板填入，确认无误后点「启动并进入」。"
+        Catch ex As Exception
+            Logger.Warn(ex, "读取剪贴板失败")
+            Hint("读取剪贴板失败：" & ex.Message, HintType.Red)
+        End Try
+    End Sub
+
+    Private Sub BtnJoinStart_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnJoinStart.Click
+        Dim Address As String = NormalizeAddress(TextJoinAddress.Text)
+        If Address = "" Then
+            Hint("请填写好友发来的地址，形如 xxx.natfrp.cloud:12345", HintType.Red)
+            TextJoinAddress.Focus()
+            Return
+        End If
+        Dim Item As MyComboBoxItem = TryCast(ComboJoinInstance.SelectedItem, MyComboBoxItem)
+        If Item Is Nothing Then
+            Hint("请选择要用哪个版本进入", HintType.Red)
+            Return
+        End If
+        Dim Instance As McInstance = TryCast(Item.Tag, McInstance)
+        If Instance Is Nothing Then Return
+        If McLaunchLoader.State = LoadState.Loading Then
+            Hint("已有游戏正在启动，等它启动完再试", HintType.Red)
+            Return
+        End If
+
+        '回填整理后的地址，让用户看到实际会用哪个端口
+        TextJoinAddress.Text = Address
+        Settings.Set("FrpJoinAddress", Address)
+        LabJoinHint.Text = $"正在启动 {Instance.Name} 并进入 {Address}……"
+        If McLaunchStart(New McLaunchOptions With {.Instance = Instance, .ServerIp = Address}) Then
+            Hint($"正在启动 {Instance.Name} 并进入 {Address}", HintType.Green)
+        Else
+            LabJoinHint.Text = "启动没有成功，具体原因见弹出的提示。"
+        End If
+    End Sub
+
+#End Region
 
 #Region "登录状态"
 
@@ -476,6 +597,10 @@
             BtnDeleteTunnel.IsEnabled = Not IsBusy AndAlso ComboTunnel.SelectedItem IsNot Nothing
             BtnCreateTunnel.IsEnabled = Not IsBusy
             BtnSaveEdit.IsEnabled = Not IsBusy
+
+            '版本列表可能比本页面晚加载完，借定时刷新补上；填过一次就不再动
+            FillJoinInstances()
+            BtnJoinStart.IsEnabled = ComboJoinInstance.Items.Count > 0 AndAlso McLaunchLoader.State <> LoadState.Loading
             BtnStart.IsEnabled = Not IsBusy AndAlso Not ModFrp.IsActive AndAlso ComboTunnel.SelectedItem IsNot Nothing
             BtnStop.IsEnabled = Not IsBusy AndAlso ModFrp.IsActive
             BtnCopy.IsEnabled = Not String.IsNullOrEmpty(Address)
