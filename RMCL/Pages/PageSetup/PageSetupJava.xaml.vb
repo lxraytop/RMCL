@@ -241,9 +241,17 @@
                     Loader.Cancel()
                     CurrentLoader = Nothing
                 End Try
-                '下载位置不在自动扫描范围里，这里手动登记
-                Dim Folder As String = DownloadRoot & Target.ComponentName
-                Dim NewJava As New Java(Folder)
+                '下载失败时 loader 会顺手把没下完的目录清理掉，这时如果继续往下走，
+                '只会得到「无法识别为可用的 Java」，容易让人以为是 Java 本身有问题
+                If Loader.State = LoadState.Failed Then
+                    Throw New Exception("下载 Java 失败：" & If(Loader.Error Is Nothing, "未知原因", Loader.Error.Message))
+                End If
+                '下载位置不在自动扫描范围里，这里手动登记。
+                'Java 类要求传入 java.exe 所在的 bin 目录，不是版本根目录 —— 传错会
+                '拼出 java-runtime-delta\java.exe（不存在），检查必然失败
+                Dim BaseFolder As String = DownloadRoot & Target.ComponentName
+                Dim BinFolder As String = If(FileUtils.Exists(BaseFolder & "\bin\java.exe"), BaseFolder & "\bin\", BaseFolder)
+                Dim NewJava As New Java(BinFolder)
                 If NewJava.CheckAsync().Run() Then
                     Configs.JavaRemovedList.Edit(Sub(ByRef List) List.RemoveIf(Function(f) PathUtils.IsSame(f, NewJava.Folder)))
                     Configs.JavaList.Edit(
@@ -253,7 +261,7 @@
                     End Sub)
                     Installed = NewJava
                 Else
-                    Failure = New Exception("下载完成但无法识别为可用的 Java，请检查目录：" & Folder)
+                    Failure = New Exception($"下载完成但无法识别为可用的 Java，请检查目录：{BinFolder}")
                 End If
             Catch ex As Exception
                 Failure = ex

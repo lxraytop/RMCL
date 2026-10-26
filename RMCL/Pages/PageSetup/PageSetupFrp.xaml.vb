@@ -179,8 +179,64 @@
         If PanCreate.Visibility = Visibility.Visible Then
             If TextCreateName.Text.Trim() = "" Then TextCreateName.Text = "Minecraft"
             If ComboNode.Items.Count = 0 Then Hint("没有可用的服务节点，稍后再试或到樱花网站创建", HintType.Red)
+            '展开时顺手识别一次：用户这会儿多半就是刚在游戏里开了局域网
+            If TextCreateLocalPort.Text.Trim() = "" Then DetectLocalPort()
             TextCreateLocalPort.Focus()
         End If
+    End Sub
+
+    ''' <summary>是否正在识别端口，避免连点。</summary>
+    Private IsDetectingPort As Boolean
+
+    Private Sub BtnDetectPort_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnDetectPort.Click
+        DetectLocalPort()
+    End Sub
+
+    ''' <summary>
+    ''' 从正在运行的 Minecraft 里读出局域网端口，填进「本地端口」。
+    ''' 复用联机页那套探测：先找 java / javaw 进程监听的端口，再用状态协议确认是 MC 服务器。
+    ''' 识别不到也不拦着，用户可以直接手填。
+    ''' </summary>
+    Private Sub DetectLocalPort()
+        If IsDetectingPort Then Return
+        IsDetectingPort = True
+        BtnDetectPort.IsEnabled = False
+        LabCreatePortHint.Text = "正在查找正在运行的 Minecraft……"
+        RunInNewThread(
+        Sub()
+            Dim Worlds As List(Of ModLink.LinkWorld) = Nothing
+            Dim Failure As Exception = Nothing
+            Try
+                Worlds = ModLink.LinkDiscoverWorlds()
+            Catch ex As Exception
+                Failure = ex
+            End Try
+            RunInUi(
+            Sub()
+                IsDetectingPort = False
+                BtnDetectPort.IsEnabled = True
+                If Failure IsNot Nothing Then
+                    Logger.Warn(Failure, "识别 Minecraft 局域网端口失败")
+                    LabCreatePortHint.Text = "自动识别失败，请手动填写端口。"
+                    Return
+                End If
+                If Worlds Is Nothing OrElse Worlds.Count = 0 Then
+                    LabCreatePortHint.Text = "没有找到正在运行的 Minecraft 局域网世界。请先在游戏里按 Esc → 对局域网开放，再点「自动识别」；也可以直接填端口。"
+                    Return
+                End If
+                '优先用已确认是 MC 服务器的那个（有 MOTD），「未识别的端口」只作兜底
+                Dim Best As ModLink.LinkWorld = Worlds.FirstOrDefault(
+                    Function(W) Not String.IsNullOrWhiteSpace(W.Motd) AndAlso W.Motd <> "未识别的端口")
+                If Best Is Nothing Then Best = Worlds(0)
+                TextCreateLocalPort.Text = Best.Port.ToString()
+                If Worlds.Count = 1 Then
+                    LabCreatePortHint.Text = $"已识别：{Best.Display}。远程端口留空则由樱花分配。"
+                Else
+                    Dim Others As String = Worlds.Where(Function(W) W IsNot Best).Select(Function(W) W.Port.ToString()).Join("，")
+                    LabCreatePortHint.Text = $"已填入 {Best.Display}；另外还检测到 {Others}，需要的话手动改。"
+                End If
+            End Sub)
+        End Sub, "识别局域网端口")
     End Sub
 
     Private Sub BtnCancelCreate_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnCancelCreate.Click
