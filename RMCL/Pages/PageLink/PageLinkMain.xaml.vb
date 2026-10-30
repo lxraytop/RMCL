@@ -742,19 +742,15 @@ Public Class PageLinkMain
         End If
         If Not IsEasyTierReady Then Throw New Exception("联机模块文件不完整，请重试")
         Task.Progress = 0.05
-        '获取节点列表
+        '获取节点：任何来源都只取一个
         UpdateLoadingPage("正在获取节点列表……", "获取节点列表")
-        Dim RawPeers As List(Of String)
-        Dim CustomPeers As String = Settings.Get(Of String)("LinkCustomPeer")
-        If String.IsNullOrWhiteSpace(CustomPeers) Then
-            RawPeers = GetTargetPeers()
-        Else
-            If Not IsServerSide Then Hint("房主可能没有使用自定义节点设置，请确认你们的自定义节点设置是否一致！")
-            RawPeers = CustomPeers.Split("，,;；".ToCharArray).
-                Select(Function(p) p.Trim).Where(Function(p) Not String.IsNullOrEmpty(p)).ToList()
-            Logger.Info($"使用自定义节点：{CustomPeers}")
+        Dim ActivePeer As String = LinkGetActivePeer()
+        If String.IsNullOrWhiteSpace(ActivePeer) Then Throw New Exception("没有可用的联机节点，请检查网络连接")
+        Dim RawPeers As New List(Of String) From {ActivePeer}
+        Logger.Info($"使用节点 {ActivePeer}（来源：{LinkGetActivePeerSource()}）")
+        If LinkGetActivePeerSource() = "自定义节点" AndAlso Not IsServerSide Then
+            Hint("你填了自定义节点，请确认房主用的是同一个节点！")
         End If
-        If RawPeers Is Nothing OrElse Not RawPeers.Any Then Throw New Exception("没有可用的联机节点，请检查网络连接")
         '若刚刚的节点测试显示全部不可达，先提醒一句，避免用户白等
         If NodeResults IsNot Nothing AndAlso NodeResults.Any AndAlso
            Not NodeResults.Any(Function(r) r.Success) AndAlso NodeResults.Any(Function(r) r.Reliable) Then
@@ -829,14 +825,17 @@ Public Class PageLinkMain
         Next
     End Sub
     ''' <summary>
-    ''' 获取需要连接的社区节点列表。
-    ''' 优先使用自定义节点，否则使用内置节点并补充社区订阅中的节点。
-    ''' EasyTier 官方的公共节点与节点状态接口均已停服，故不再依赖它们。
+    ''' 获取需要连接的节点。
+    ''' 始终只有一个：自定义节点 > 远程清单 > 程序自带，具体由 LinkGetActivePeer 决定。
     ''' </summary>
     Private Function GetTargetPeers() As List(Of String)
         Dim Result As List(Of String) = LinkGetCandidatePeers()
-        If Result Is Nothing OrElse Not Result.Any Then Result = LinkGetDefaultPeers()
-        Logger.Info($"联机节点：{Result.Join("，")}")
+        If Result Is Nothing OrElse Not Result.Any Then
+            Dim Peer As String = LinkGetActivePeer()
+            If Not String.IsNullOrEmpty(Peer) Then Result = New List(Of String) From {Peer}
+        End If
+        If Result Is Nothing Then Result = New List(Of String)
+        Logger.Info($"联机节点：{Result.Join("，")}（来源：{LinkGetActivePeerSource()}）")
         Return Result
     End Function
 
@@ -996,12 +995,13 @@ Public Class PageLinkMain
         End If
         For Each Result As LinkNodeResult In NodeResults
             Dim Info As String
+            Dim SourceLabel As String = LinkGetActivePeerSource()
             If Result.Success Then
-                Info = $"{Result.Protocol.ToUpper()} · 可达 · {Result.Latency} ms"
+                Info = $"{SourceLabel} · {Result.Protocol.ToUpper()} · 可达 · {Result.Latency} ms"
             ElseIf Not Result.Reliable Then
-                Info = "UDP 类节点，无法直接测速"
+                Info = $"{SourceLabel} · UDP 类节点，无法直接测速"
             Else
-                Info = "不可达 · " & Result.Note
+                Info = $"{SourceLabel} · 不可达 · {Result.Note}"
             End If
             StackNodeList.Children.Add(New MyListItem With {
                 .Title = Result.Url,
@@ -1015,12 +1015,12 @@ Public Class PageLinkMain
         Dim ReliableList As List(Of LinkNodeResult) = NodeResults.Where(Function(r) r.Reliable).ToList()
         Dim ReliableFailed As Integer = ReliableList.Where(Function(r) Not r.Success).Count
         If ReachableCount > 0 Then
-            LabNodeState.Text = $"节点 {ReachableCount}/{NodeResults.Count} 可达"
-            LabNodeSummary.Text = $"{ReachableCount}/{NodeResults.Count} 个节点可达，可以尝试创建房间。"
+            LabNodeState.Text = "节点可达"
+            LabNodeSummary.Text = $"节点可达，可以尝试创建房间。（来源：{LinkGetActivePeerSource()}）"
         ElseIf ReliableList.Any AndAlso ReliableFailed = ReliableList.Count Then
-            LabNodeState.Text = "节点均不可达"
-            LabNodeSummary.Text = "所有节点均不可达。当前网络很可能封锁了联机端口（校园网、公司网络较常见），" &
-                "建议改用手机热点等其它网络，或在「高级设置」中填写你自己搭建的节点。"
+            LabNodeState.Text = "节点不可达"
+            LabNodeSummary.Text = "当前节点不可达。当前网络很可能封锁了联机端口（校园网、公司网络较常见），" &
+                "建议换用手机热点等其它网络，或在「高级设置」里更新节点、或填写你自己搭建的节点。"
         Else
             LabNodeState.Text = "节点状态未知"
             LabNodeSummary.Text = "没有探测到可达的 TCP 节点。UDP 类节点无法直接测速，实际连接情况以创建房间的结果为准。"
@@ -1070,7 +1070,12 @@ Public Class PageLinkMain
     '刷新节点来源的说明文字
     Private Sub RefreshPeerSourceText()
         If LabPeerSource Is Nothing Then Return
-        LabPeerSource.Text = LinkGetPeerSourceText()
+        Dim Text As String = LinkGetPeerSourceText()
+        Dim Peer As String = LinkGetActivePeer()
+        If Not String.IsNullOrEmpty(Peer) Then
+            Text &= vbCrLf & $"当前节点：{Peer}（来源：{LinkGetActivePeerSource()}）"
+        End If
+        LabPeerSource.Text = Text
     End Sub
 
     '从仓库更新内置节点：只有玩家点这个按钮时才会联网，不做任何自动更新
@@ -1103,7 +1108,8 @@ Public Class PageLinkMain
                 End If
                 LinkSaveRemotePeers(FetchedPeers)
                 RefreshPeerSourceText()
-                Hint($"节点已更新（{FetchedPeers.Count} 个），下次创建或加入房间时生效", HintType.Green)
+                Dim Extra As String = If(FetchedPeers.Count > 1, $"（清单里共 {FetchedPeers.Count} 个，只用第一个）", "")
+                Hint($"节点已更新为 {FetchedPeers(0)}{Extra}", HintType.Green)
                 RunNodeTest(Manual:=True)
             End Sub)
         End Sub)

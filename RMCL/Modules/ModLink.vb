@@ -267,9 +267,10 @@ Public Module ModLink
         Dim SavedTime As String = Settings.Get(Of String)("LinkRemotePeersTime")
         Dim SavedList As List(Of String) = LinkParsePeerList(Saved)
         If SavedList.Any Then
-            Return $"内置节点：远程清单（{SavedList.Count} 个，{If(String.IsNullOrEmpty(SavedTime), "更新时间未知", SavedTime)} 更新）"
+            Dim Extra As String = If(SavedList.Count > 1, $"，清单里另外 {SavedList.Count - 1} 个不使用", "")
+            Return $"内置节点：远程清单（{If(String.IsNullOrEmpty(SavedTime), "更新时间未知", SavedTime)} 更新{Extra}）"
         End If
-        Return $"内置节点：程序自带（{LinkDefaultPeers.Length} 个）"
+        Return "内置节点：程序自带"
     End Function
 
     ''' <summary>
@@ -446,18 +447,45 @@ Public Module ModLink
     End Function
 
     ''' <summary>
-    ''' 获取参与联机的候选节点：填写了自定义节点时只用自定义节点，
-    ''' 否则使用内置节点，并尽量补充社区订阅中的节点。
+    ''' 获取参与联机的节点。
+    ''' 优先级：自定义节点 > 远程清单 > 程序自带节点，并且**只取一个**：
+    ''' 房主和加入者只要能连到同一个节点就够，多连几个只会让界面分不清到底在走哪条线。
+    ''' 自定义节点里填了多个时同样只取第一个。
     ''' </summary>
-    Public Function LinkGetCandidatePeers(Optional IncludeSubscription As Boolean = True) As List(Of String)
+    Public Function LinkGetCandidatePeers() As List(Of String)
+        Dim Result As New List(Of String)
+        Dim Peer As String = LinkGetActivePeer()
+        If Not String.IsNullOrEmpty(Peer) Then Result.Add(Peer)
+        Return Result
+    End Function
+
+    ''' <summary>
+    ''' 当前实际使用的那个节点（已去空格）；没有任何可用节点时返回空字符串。
+    ''' </summary>
+    Public Function LinkGetActivePeer() As String
+        '1. 自定义节点
         Dim Custom As String = Settings.Get(Of String)("LinkCustomPeer")
         If Not String.IsNullOrWhiteSpace(Custom) Then
-            Return Custom.Split("，,;；".ToCharArray).
-                Select(Function(p) p.Trim()).Where(Function(p) Not String.IsNullOrEmpty(p)).ToList()
+            Dim FirstCustom As String = Custom.Split("，,;；".ToCharArray).
+                Select(Function(p) p.Trim()).
+                FirstOrDefault(Function(p) Not String.IsNullOrEmpty(p))
+            If Not String.IsNullOrWhiteSpace(FirstCustom) Then Return FirstCustom
         End If
-        Dim Result As New List(Of String)(LinkGetDefaultPeers())
-        If IncludeSubscription Then Result.AddRange(LinkFetchSubscription())
-        Return Result.Where(Function(p) Not String.IsNullOrWhiteSpace(p)).Distinct().ToList()
+        '2. 远程清单 / 3. 程序自带（LinkGetDefaultPeers 内部已经做了这个优先级）
+        Return LinkGetDefaultPeers().FirstOrDefault(Function(p) Not String.IsNullOrWhiteSpace(p))
+    End Function
+
+    ''' <summary>
+    ''' 当前节点来自哪里，用于界面提示。
+    ''' </summary>
+    Public Function LinkGetActivePeerSource() As String
+        Dim Custom As String = Settings.Get(Of String)("LinkCustomPeer")
+        If Not String.IsNullOrWhiteSpace(Custom) AndAlso
+           Custom.Split("，,;；".ToCharArray).Any(Function(p) Not String.IsNullOrWhiteSpace(p)) Then
+            Return "自定义节点"
+        End If
+        If LinkParsePeerList(Settings.Get(Of String)("LinkRemotePeers")).Any Then Return "远程清单"
+        Return "程序自带"
     End Function
 
 #End Region
