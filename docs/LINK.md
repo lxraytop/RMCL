@@ -150,8 +150,8 @@ RMCL 的联机沿用上游 PCL 的思路：用 **EasyTier** 在玩家之间建�
 内置节点会失效，所以仓库根目录放了一份 `raytcp.txt`，客户端可以按需拉取：
 
 - **只在玩家点击「高级设置 → 更新节点」时联网**，没有任何自动更新，也不开机请求
-- 拉取顺序：`cdn.jsdelivr.net/gh/lxraytop/RMCL@main/raytcp.txt` → `raw.githubusercontent.com/...` →
-  `gh-proxy.com` 反代（`ModLink.LinkPeerListUrls`）
+- 拉取顺序：`gh-proxy.com` 反代 → `raw.githubusercontent.com/...` → `cdn.jsdelivr.net/gh/...`
+  （`ModLink.LinkPeerListUrls`；实测反代最容易连上，jsDelivr 在国内部分地区反而不通）
 - 解析规则（`ModLink.LinkParsePeerList`）：一行一个节点，`#` 开头为注释，
   支持 `备注|地址`，非法地址丢弃、去重、最多 `LinkPeerListMaxCount`（16）条
 - 更新结果存在 `LinkRemotePeers` / `LinkRemotePeersTime`，界面显示「远程清单（N 个，时间 更新）」；

@@ -145,13 +145,13 @@ Public Module ModLink
 
     ''' <summary>
     ''' 远程节点清单 raytcp.txt 的候选地址，按顺序尝试。
-    ''' 主源走 jsDelivr 的仓库 CDN（国内通常比 raw.githubusercontent 更容易连上），
-    ''' 其次是 GitHub 原始地址，最后是反代。
+    ''' 实测在国内容易连上的是 gh-proxy 反代，其次 GitHub 原始地址，
+    ''' jsDelivr 的仓库 CDN 放在最后（部分地区反而连不上）。
     ''' </summary>
     Public ReadOnly LinkPeerListUrls As String() = {
-        "https://cdn.jsdelivr.net/gh/lxraytop/RMCL@main/raytcp.txt",
+        "https://gh-proxy.com/https://raw.githubusercontent.com/lxraytop/RMCL/main/raytcp.txt",
         "https://raw.githubusercontent.com/lxraytop/RMCL/main/raytcp.txt",
-        "https://gh-proxy.com/https://raw.githubusercontent.com/lxraytop/RMCL/main/raytcp.txt"
+        "https://cdn.jsdelivr.net/gh/lxraytop/RMCL@main/raytcp.txt"
     }
 
     ''' <summary>
@@ -186,7 +186,7 @@ Public Module ModLink
     ''' 从仓库拉取 raytcp.txt 并解析出节点清单。
     ''' 全部源都失败时抛出异常，由调用方提示；成功时不会自动保存。
     ''' </summary>
-    Public Function LinkFetchRemotePeers(Optional Timeout As Integer = 8000) As List(Of String)
+    Public Function LinkFetchRemotePeers(Optional Timeout As Integer = 6000) As List(Of String)
         Dim Errors As New List(Of String)
         For Each Url As String In LinkPeerListUrls
             Try
