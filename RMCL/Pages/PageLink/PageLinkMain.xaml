@@ -162,6 +162,18 @@
                                                  local:SettingService.Key="LinkExtraPorts"
                                                  ToolTip="游戏端口之外还要转发的端口，逗号分隔，例如：24454,25566&#xa;&#xa;只有当整合包里有 Mod 另开端口时才需要填（如 Simple Voice Chat 默认 24454）。&#xa;留空即不额外转发——原版联机、以及绝大多数整合包都不需要填。" />
                             </Grid>
+                            <Rectangle Height="1" Margin="0,16,0,14" Fill="{DynamicResource ColorBrushGray4}" Opacity="0.25" />
+                            <TextBlock x:Name="LabPeerSource" TextWrapping="Wrap" FontSize="13" LineHeight="18"
+                                       Foreground="{DynamicResource ColorBrushGray2}" />
+                            <TextBlock Text="节点地址随时可能失效。可以从仓库的 raytcp.txt 拉一份最新的，只有你点下面这个按钮时才会联网。"
+                                       TextWrapping="Wrap" FontSize="12" LineHeight="17" Margin="0,6,0,0"
+                                       Foreground="{DynamicResource ColorBrushGray3}" />
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <local:MyButton x:Name="BtnUpdatePeers" Text="更新节点" Width="110" Height="28" Padding="0"
+                                                ColorType="Highlight" Click="BtnUpdatePeers_Click" />
+                                <local:MyButton x:Name="BtnResetPeers" Text="恢复默认" Width="110" Height="28" Padding="0"
+                                                Margin="10,0,0,0" Click="BtnResetPeers_Click" />
+                            </StackPanel>
                         </StackPanel>
                     </local:MyCard>
                 </StackPanel>

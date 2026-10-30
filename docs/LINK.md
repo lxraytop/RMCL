@@ -142,7 +142,21 @@ RMCL 的联机沿用上游 PCL 的思路：用 **EasyTier** 在玩家之间建�
 1. **自定义节点**（`设置 → 联机 → 高级设置 → 自定义节点`）：填写后只使用这些节点，房主与加入者必须一致。
 2. **社区订阅**：`ModLink.LinkNodeSubscription`（`https://etnode.zkitefly.eu.org/node1`），
    内容为每行一个节点地址，拉取结果缓存 10 分钟；失败不影响联机。
-3. **内置节点**：`ModLink.LinkDefaultPeers`（当前 `tcp://183.66.27.22:39409`，社区维护）。
+3. **内置节点**：`ModLink.LinkDefaultPeers`（当前 `tcp://183.66.27.22:39409`，社区维护），
+   可被仓库里的 `raytcp.txt` 覆盖（见下）。
+
+#### 远程节点清单 raytcp.txt（2.18.2.0）
+
+内置节点会失效，所以仓库根目录放了一份 `raytcp.txt`，客户端可以按需拉取：
+
+- **只在玩家点击「高级设置 → 更新节点」时联网**，没有任何自动更新，也不开机请求
+- 拉取顺序：`cdn.jsdelivr.net/gh/lxraytop/RMCL@main/raytcp.txt` → `raw.githubusercontent.com/...` →
+  `gh-proxy.com` 反代（`ModLink.LinkPeerListUrls`）
+- 解析规则（`ModLink.LinkParsePeerList`）：一行一个节点，`#` 开头为注释，
+  支持 `备注|地址`，非法地址丢弃、去重、最多 `LinkPeerListMaxCount`（16）条
+- 更新结果存在 `LinkRemotePeers` / `LinkRemotePeersTime`，界面显示「远程清单（N 个，时间 更新）」；
+  点「恢复默认」清空这两个值，退回程序自带节点
+- 解析失败 / 网络失败时**保留原有节点**，只弹一句红色提示，不会把节点清空
 
 > **重要历史背景**：EasyTier 官方的公共节点 `public.easytier.cn` / `public.easytier.top` 在 2026 年前后已停服
 > —— `.top` 只是指向 `.cn` 的 CNAME，而 `.cn` 已无 A 记录，EasyTier 自身解析会报 `NoRecordsFound`；

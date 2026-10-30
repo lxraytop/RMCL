@@ -835,7 +835,7 @@ Public Class PageLinkMain
     ''' </summary>
     Private Function GetTargetPeers() As List(Of String)
         Dim Result As List(Of String) = LinkGetCandidatePeers()
-        If Result Is Nothing OrElse Not Result.Any Then Result = LinkDefaultPeers.ToList()
+        If Result Is Nothing OrElse Not Result.Any Then Result = LinkGetDefaultPeers()
         Logger.Info($"联机节点：{Result.Join("，")}")
         Return Result
     End Function
@@ -1048,6 +1048,7 @@ Public Class PageLinkMain
                 Detail.AppendLine("所有节点都不可达，通常是当前网络封锁了这些端口（校园网、公司网络较常见）。")
                 Detail.AppendLine("可以尝试：")
                 Detail.AppendLine("· 换成手机热点等其它网络")
+                Detail.AppendLine("· 在「高级设置」点「更新节点」，拉取仓库里最新的节点清单")
                 Detail.AppendLine("· 在「高级设置 → 自定义节点」填写你自己搭建的 EasyTier 节点")
                 Return Detail.ToString()
             End If
@@ -1056,6 +1057,66 @@ Public Class PageLinkMain
         Detail.AppendLine("请检查网络环境是否良好，或换用自定义节点后重试。")
         Return Detail.ToString()
     End Function
+
+#End Region
+
+#Region "内置节点（raytcp.txt）"
+
+    ''' <summary>
+    ''' 是否正在拉取节点清单。
+    ''' </summary>
+    Private IsUpdatingPeers As Boolean
+
+    '刷新节点来源的说明文字
+    Private Sub RefreshPeerSourceText()
+        If LabPeerSource Is Nothing Then Return
+        LabPeerSource.Text = LinkGetPeerSourceText()
+    End Sub
+
+    '从仓库更新内置节点：只有玩家点这个按钮时才会联网，不做任何自动更新
+    Private Sub BtnUpdatePeers_Click(sender As Object, e As MouseButtonEventArgs)
+        If IsUpdatingPeers Then Return
+        IsUpdatingPeers = True
+        BtnUpdatePeers.IsEnabled = False
+        BtnResetPeers.IsEnabled = False
+        Dim LastText As String = LabPeerSource.Text
+        LabPeerSource.Text = "正在从仓库获取节点清单……"
+        System.Threading.Tasks.Task.Run(
+        Sub()
+            Dim FetchedPeers As List(Of String) = Nothing
+            Dim Failure As String = Nothing
+            Try
+                FetchedPeers = LinkFetchRemotePeers()
+            Catch ex As Exception
+                Failure = ex.Message
+            End Try
+            RunInUi(
+            Sub()
+                IsUpdatingPeers = False
+                BtnUpdatePeers.IsEnabled = True
+                BtnResetPeers.IsEnabled = True
+                If Failure IsNot Nothing OrElse FetchedPeers Is Nothing OrElse Not FetchedPeers.Any Then
+                    LabPeerSource.Text = LastText
+                    Hint("获取节点清单失败，已保留原有节点", HintType.Red)
+                    Logger.Warn($"更新内置节点失败：{Failure}")
+                    Return
+                End If
+                LinkSaveRemotePeers(FetchedPeers)
+                RefreshPeerSourceText()
+                Hint($"节点已更新（{FetchedPeers.Count} 个），下次创建或加入房间时生效", HintType.Green)
+                RunNodeTest(Manual:=True)
+            End Sub)
+        End Sub)
+    End Sub
+
+    '恢复为程序自带的节点
+    Private Sub BtnResetPeers_Click(sender As Object, e As MouseButtonEventArgs)
+        If IsUpdatingPeers Then Return
+        LinkResetRemotePeers()
+        RefreshPeerSourceText()
+        Hint("已恢复为程序自带的节点", HintType.Green)
+        RunNodeTest(Manual:=True)
+    End Sub
 
 #End Region
 
@@ -1541,6 +1602,7 @@ Public Class PageLinkMain
         Catch ex As Exception
             Logger.Warn(ex, "刷新联机设置失败")
         End Try
+        RefreshPeerSourceText()
     End Sub
 
     ''' <summary>

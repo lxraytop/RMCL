@@ -144,6 +144,113 @@ Public Module ModLink
     }
 
     ''' <summary>
+    ''' 远程节点清单 raytcp.txt 的候选地址，按顺序尝试。
+    ''' 主源走 jsDelivr 的仓库 CDN（国内通常比 raw.githubusercontent 更容易连上），
+    ''' 其次是 GitHub 原始地址，最后是反代。
+    ''' </summary>
+    Public ReadOnly LinkPeerListUrls As String() = {
+        "https://cdn.jsdelivr.net/gh/lxraytop/RMCL@main/raytcp.txt",
+        "https://raw.githubusercontent.com/lxraytop/RMCL/main/raytcp.txt",
+        "https://gh-proxy.com/https://raw.githubusercontent.com/lxraytop/RMCL/main/raytcp.txt"
+    }
+
+    ''' <summary>
+    ''' 远程节点清单最多接受多少个节点（防止文件被改成一大串）。
+    ''' </summary>
+    Public Const LinkPeerListMaxCount As Integer = 16
+
+    ''' <summary>
+    ''' 解析节点清单文本。
+    ''' 一行一个节点，可用 "备注|地址" 的形式加备注；以 # 开头的行与空行会被忽略，
+    ''' 格式非法的地址会被丢弃，重复的地址只保留一个。
+    ''' </summary>
+    Public Function LinkParsePeerList(Text As String) As List(Of String)
+        Dim Result As New List(Of String)
+        If String.IsNullOrWhiteSpace(Text) Then Return Result
+        For Each Line As String In Text.Split(New String() {vbCrLf, vbLf, vbCr}, StringSplitOptions.RemoveEmptyEntries)
+            Dim Item As String = Line.Trim()
+            If Item.Length = 0 OrElse Item.StartsWith("#") Then Continue For
+            '允许 "备注|地址"
+            Dim BarIndex As Integer = Item.LastIndexOf("|"c)
+            If BarIndex >= 0 Then Item = Item.Substring(BarIndex + 1).Trim()
+            If Not Item.Contains("://") Then Continue For
+            If Not LinkIsValidPeer(Item) Then Continue For
+            If Result.Contains(Item) Then Continue For
+            Result.Add(Item)
+            If Result.Count >= LinkPeerListMaxCount Then Exit For
+        Next
+        Return Result
+    End Function
+
+    ''' <summary>
+    ''' 从仓库拉取 raytcp.txt 并解析出节点清单。
+    ''' 全部源都失败时抛出异常，由调用方提示；成功时不会自动保存。
+    ''' </summary>
+    Public Function LinkFetchRemotePeers(Optional Timeout As Integer = 8000) As List(Of String)
+        Dim Errors As New List(Of String)
+        For Each Url As String In LinkPeerListUrls
+            Try
+                '加时间戳，尽量绕开 CDN 缓存
+                Dim Text As String = NetRequestByClient(Url & "?t=" & Date.Now.Ticks, Timeout:=Timeout, MakeLog:=False)
+                Dim Peers As List(Of String) = LinkParsePeerList(Text)
+                If Peers.Any Then
+                    Logger.Info($"已从 {Url} 获取到 {Peers.Count} 个节点：{Peers.Join("，")}")
+                    Return Peers
+                End If
+                Errors.Add($"{Url}：内容中没有可用的节点")
+            Catch ex As Exception
+                Logger.Warn(ex, $"拉取节点清单失败：{Url}")
+                Errors.Add($"{Url}：{ex.Message}")
+            End Try
+        Next
+        Throw New Exception($"无法获取节点清单，所有源都失败了：{vbCrLf}{Errors.Join(vbCrLf)}")
+    End Function
+
+    ''' <summary>
+    ''' 把远程节点清单保存为当前的内置节点。
+    ''' </summary>
+    Public Sub LinkSaveRemotePeers(Peers As IEnumerable(Of String))
+        Dim List As List(Of String) = Peers.ToList()
+        Settings.Set("LinkRemotePeers", List.Join(vbLf))
+        Settings.Set("LinkRemotePeersTime", Date.Now.ToString("yyyy-MM-dd HH:mm"))
+        Logger.Info($"内置节点已更新为 {List.Count} 个：{List.Join("，")}")
+    End Sub
+
+    ''' <summary>
+    ''' 清除远程节点清单，恢复为程序自带的节点。
+    ''' </summary>
+    Public Sub LinkResetRemotePeers()
+        Settings.Set("LinkRemotePeers", "")
+        Settings.Set("LinkRemotePeersTime", "")
+        Logger.Info("已恢复为程序自带的内置节点")
+    End Sub
+
+    ''' <summary>
+    ''' 当前生效的内置节点：用户主动更新过就用远程清单，否则用程序自带的。
+    ''' </summary>
+    Public Function LinkGetDefaultPeers() As List(Of String)
+        Dim Saved As String = Settings.Get(Of String)("LinkRemotePeers")
+        If Not String.IsNullOrWhiteSpace(Saved) Then
+            Dim SavedList As List(Of String) = LinkParsePeerList(Saved.Replace(vbLf, vbCrLf))
+            If SavedList.Any Then Return SavedList
+        End If
+        Return LinkDefaultPeers.ToList()
+    End Function
+
+    ''' <summary>
+    ''' 内置节点的来源描述，用于设置界面展示。
+    ''' </summary>
+    Public Function LinkGetPeerSourceText() As String
+        Dim Saved As String = Settings.Get(Of String)("LinkRemotePeers")
+        Dim SavedTime As String = Settings.Get(Of String)("LinkRemotePeersTime")
+        Dim SavedList As List(Of String) = LinkParsePeerList(Saved)
+        If SavedList.Any Then
+            Return $"内置节点：远程清单（{SavedList.Count} 个，{If(String.IsNullOrEmpty(SavedTime), "更新时间未知", SavedTime)} 更新）"
+        End If
+        Return $"内置节点：程序自带（{LinkDefaultPeers.Length} 个）"
+    End Function
+
+    ''' <summary>
     ''' 社区节点订阅地址，内容为每行一个节点（例如 tcp://ip:port）。
     ''' 拉取失败不影响联机，会退回内置节点。
     ''' </summary>
@@ -326,7 +433,7 @@ Public Module ModLink
             Return Custom.Split("，,;；".ToCharArray).
                 Select(Function(p) p.Trim()).Where(Function(p) Not String.IsNullOrEmpty(p)).ToList()
         End If
-        Dim Result As New List(Of String)(LinkDefaultPeers)
+        Dim Result As New List(Of String)(LinkGetDefaultPeers())
         If IncludeSubscription Then Result.AddRange(LinkFetchSubscription())
         Return Result.Where(Function(p) Not String.IsNullOrWhiteSpace(p)).Distinct().ToList()
     End Function

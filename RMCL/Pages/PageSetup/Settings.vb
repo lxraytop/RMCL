@@ -111,6 +111,8 @@ Public Class Settings
         New Setting("LinkLaunchVersion", "", Source:=Sources.Registry),
         New Setting("LinkLatencyMode", 0, Source:=Sources.Registry),
         New Setting("LinkCustomPeer", ""),
+        New Setting("LinkRemotePeers", "", Source:=Sources.Registry),
+        New Setting("LinkRemotePeersTime", "", Source:=Sources.Registry),
         New Setting("LinkEasyTierVersion", -1, Source:=Sources.Registry),
         New Setting("LinkExtraPorts", "", Source:=Sources.Registry), '游戏端口之外还要转发的端口，逗号分隔，留空即不额外转发
         New Setting("LinkMachineId", "", Source:=Sources.Registry), 'EasyTier 的 machine-id，首次生成后固定
