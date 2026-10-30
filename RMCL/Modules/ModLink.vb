@@ -145,10 +145,12 @@ Public Module ModLink
 
     ''' <summary>
     ''' 远程节点清单 raytcp.txt 的候选地址，按顺序尝试。
-    ''' 实测在国内容易连上的是 gh-proxy 反代，其次 GitHub 原始地址，
-    ''' jsDelivr 的仓库 CDN 放在最后（部分地区反而连不上）。
+    ''' 第一个走 GitHub API：它不带 CDN 缓存，刚改完文件也能立刻读到；
+    ''' 后面依次是 gh-proxy 反代、GitHub 原始地址、jsDelivr 仓库 CDN。
+    ''' raw / 反代 都有 5 分钟以上的缓存，所以不能放在第一个。
     ''' </summary>
     Public ReadOnly LinkPeerListUrls As String() = {
+        "https://api.github.com/repos/lxraytop/RMCL/contents/raytcp.txt",
         "https://gh-proxy.com/https://raw.githubusercontent.com/lxraytop/RMCL/main/raytcp.txt",
         "https://raw.githubusercontent.com/lxraytop/RMCL/main/raytcp.txt",
         "https://cdn.jsdelivr.net/gh/lxraytop/RMCL@main/raytcp.txt"
@@ -183,6 +185,25 @@ Public Module ModLink
     End Function
 
     ''' <summary>
+    ''' 兼容两种响应体：纯文本（raw / CDN / 反代）与 GitHub API 的 base64 JSON。
+    ''' </summary>
+    Public Function LinkDecodePeerListResponse(Raw As String) As String
+        If String.IsNullOrWhiteSpace(Raw) Then Return ""
+        Dim Text As String = Raw.Trim()
+        If Not Text.StartsWith("{") Then Return Text
+        Try
+            Dim Json As JObject = Text.DeserializeJson()
+            Dim Content As String = Json("content")?.ToString
+            If String.IsNullOrWhiteSpace(Content) Then Return ""
+            Dim Clean As String = Content.Replace(vbCrLf, "").Replace(vbLf, "").Replace(" ", "")
+            Return Encoding.UTF8.GetString(Convert.FromBase64String(Clean))
+        Catch ex As Exception
+            Logger.Warn(ex, "解析 GitHub API 返回的节点清单失败")
+            Return ""
+        End Try
+    End Function
+
+    ''' <summary>
     ''' 从仓库拉取 raytcp.txt 并解析出节点清单。
     ''' 全部源都失败时抛出异常，由调用方提示；成功时不会自动保存。
     ''' </summary>
@@ -190,8 +211,9 @@ Public Module ModLink
         Dim Errors As New List(Of String)
         For Each Url As String In LinkPeerListUrls
             Try
-                '加时间戳，尽量绕开 CDN 缓存
-                Dim Text As String = NetRequestByClient(Url & "?t=" & Date.Now.Ticks, Timeout:=Timeout, MakeLog:=False)
+                'CDN 类地址加时间戳，尽量绕开缓存；API 地址不需要
+                Dim RequestUrl As String = If(Url.Contains("api.github.com"), Url, Url & "?t=" & Date.Now.Ticks)
+                Dim Text As String = LinkDecodePeerListResponse(NetRequestByClient(RequestUrl, Timeout:=Timeout, MakeLog:=False))
                 Dim Peers As List(Of String) = LinkParsePeerList(Text)
                 If Peers.Any Then
                     Logger.Info($"已从 {Url} 获取到 {Peers.Count} 个节点：{Peers.Join("，")}")
