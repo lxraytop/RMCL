@@ -62,11 +62,11 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 
 | 文件 | 大小 | 说明 |
 | --- | --- | --- |
-| `dist/RMCL 2.18.1.1/RMCL.exe` | 5.63 MB | 主程序，版本信息 `2.18.1.1 / Ray Minecraft Launcher` |
-| `dist/RMCL 2.18.1.1/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
-| `dist/RMCL-2.18.1.1-win.zip` | 2.53 MB | 上述两个文件的压缩包（sha256 `2dfff0de…`） |
+| `dist/RMCL 2.18.2.0/RMCL.exe` | 5.64 MB | 主程序，版本信息 `2.18.2.0 / Ray Minecraft Launcher` |
+| `dist/RMCL 2.18.2.0/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
+| `dist/RMCL-2.18.2.0-win.zip` | 2.54 MB | 上述两个文件的压缩包（sha256 `ef876b6c…`） |
 
-对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.18.1.1>，
-两个资产 `RMCL.exe`（5,908,992 B）与 `RMCL-2.18.1.1-win.zip`，按 tag 校验均为 `uploaded`。
+对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.18.2.0>，
+两个资产 `RMCL.exe`（5,914,624 B）与 `RMCL-2.18.2.0-win.zip`，按 tag 校验均为 `uploaded`。
 
 冒烟验证：解压后直接运行，主窗口标题为 `Ray Minecraft Launcher　`，初始化日志（`RMCL\Log1.txt`）无异常，Java 探测、Mojang 版本列表加载正常。
