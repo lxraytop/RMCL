@@ -744,10 +744,8 @@ Public Class PageLinkMain
         Task.Progress = 0.05
         '获取节点：任何来源都只取一个
         UpdateLoadingPage("正在获取节点列表……", "获取节点列表")
-        Dim ActivePeer As String = LinkGetActivePeer()
-        If String.IsNullOrWhiteSpace(ActivePeer) Then Throw New Exception("没有可用的联机节点，请检查网络连接")
-        Dim RawPeers As New List(Of String) From {ActivePeer}
-        Logger.Info($"使用节点 {ActivePeer}（来源：{LinkGetActivePeerSource()}）")
+        Dim RawPeers As List(Of String) = GetTargetPeers()
+        If RawPeers Is Nothing OrElse Not RawPeers.Any Then Throw New Exception("没有可用的联机节点，请检查网络连接")
         If LinkGetActivePeerSource() = "自定义节点" AndAlso Not IsServerSide Then
             Hint("你填了自定义节点，请确认房主用的是同一个节点！")
         End If
