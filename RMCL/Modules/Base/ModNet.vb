@@ -223,10 +223,7 @@ Retry:
             Directory.CreateDirectory(PathTemp & "Cache\Http\")
             SyncLock RequestClientLock
                 If RequestClient Is Nothing Then '延迟初始化，以避免在程序启动前加载 CacheCow 导致 DLL 加载失败
-                    RequestClient = CacheCow.Client.ClientExtensions.CreateClient(New CacheCow.Client.FileCacheStore.FileStore(PathTemp & "Cache/Http/"), New HttpClientHandler With {
-                        .AutomaticDecompression = DecompressionMethods.Deflate Or DecompressionMethods.GZip,
-                        .UseCookies = False '不设为 False 就不能从 Header 手动传入 Cookies
-                    })
+                    RequestClient = CacheCow.Client.ClientExtensions.CreateClient(New CacheCow.Client.FileCacheStore.FileStore(PathTemp & "Cache/Http/"), CreateHttpHandler(UseCookies:=False))
                 End If
             End SyncLock
             '构建请求
@@ -301,9 +298,77 @@ Retry:
 
 #Region "多线程下载引擎"
 
-    Private ThreadClient As New HttpClient(New HttpClientHandler With {
-        .AutomaticDecompression = DecompressionMethods.Deflate Or DecompressionMethods.GZip
-    })
+    '多线程下载引擎的客户端。代理开关改变后要重建，所以改成延迟创建
+    Private _ThreadClient As HttpClient = Nothing
+    Private ReadOnly ThreadClientLock As New Object
+    Private ReadOnly Property ThreadClient As HttpClient
+        Get
+            If _ThreadClient IsNot Nothing Then Return _ThreadClient
+            SyncLock ThreadClientLock
+                If _ThreadClient Is Nothing Then _ThreadClient = New HttpClient(CreateHttpHandler())
+            End SyncLock
+            Return _ThreadClient
+        End Get
+    End Property
+
+#Region "代理"
+
+    ''' <summary>
+    ''' 按当前设置创建 HttpClientHandler：是否走系统代理在这里决定。
+    ''' </summary>
+    Public Function CreateHttpHandler(Optional UseCookies As Boolean = True) As HttpClientHandler
+        Dim Handler As New HttpClientHandler With {
+            .AutomaticDecompression = DecompressionMethods.Deflate Or DecompressionMethods.GZip,
+            .UseCookies = UseCookies
+        }
+        ApplyProxySetting(Handler)
+        Return Handler
+    End Function
+
+    ''' <summary>
+    ''' 把「使用系统代理」设置应用到 handler 上。
+    ''' 关闭时显式设 UseProxy=False，让请求绕过系统代理直连。
+    ''' </summary>
+    Public Sub ApplyProxySetting(Handler As HttpClientHandler)
+        Try
+            Dim UseSystemProxy As Boolean = Settings.Get(Of Boolean)("ToolUseSystemProxy")
+            Handler.UseProxy = UseSystemProxy
+            If Not UseSystemProxy Then Handler.Proxy = Nothing
+        Catch ex As Exception
+            Logger.Warn(ex, "应用代理设置失败")
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' 代理设置变化后重建已缓存的客户端，让新设置立即生效（不必重启）。
+    ''' </summary>
+    Public Sub RefreshProxy()
+        Try
+            SyncLock RequestClientLock
+                If RequestClient IsNot Nothing Then
+                    Try
+                        RequestClient.Dispose()
+                    Catch
+                    End Try
+                    RequestClient = Nothing
+                End If
+            End SyncLock
+            SyncLock ThreadClientLock
+                If _ThreadClient IsNot Nothing Then
+                    Try
+                        _ThreadClient.Dispose()
+                    Catch
+                    End Try
+                    _ThreadClient = Nothing
+                End If
+            End SyncLock
+            Logger.Info($"网络代理已切换：{If(Settings.Get(Of Boolean)("ToolUseSystemProxy"), "使用系统代理", "直连（不使用代理）")}")
+        Catch ex As Exception
+            Logger.Warn(ex, "重建网络客户端失败")
+        End Try
+    End Sub
+
+#End Region
 
     ''' <summary>
     ''' 临时覆盖最大线程数，0 表示不覆盖。

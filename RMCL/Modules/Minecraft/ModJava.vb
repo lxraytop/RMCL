@@ -503,7 +503,132 @@ NoForcedJava:
 
 #End Region
 
-#Region "下载（均为内部工具方法，无外部调用）"
+#Region "多源下载（Adoptium / Microsoft / Zulu / Liberica）"
+
+    ''' <summary>
+    ''' 一个可以直接下载的 JDK（zip 包），与 Mojang 运行时下载区分开。
+    ''' </summary>
+    Public Class JavaDistTarget
+        ''' <summary>展示用名称，例如「Java 21（Temurin）」。</summary>
+        Public Property Display As String = ""
+        ''' <summary>下载地址（zip，Adoptium / Microsoft 会 302 到实际文件）。</summary>
+        Public Property Url As String = ""
+        ''' <summary>解压到的文件夹名（在下载根目录下）。</summary>
+        Public Property Folder As String = ""
+        ''' <summary>大版本号。</summary>
+        Public Property Major As Integer
+    End Class
+
+    ''' <summary>
+    ''' 可选的 Java 下载源。0 是 Mojang 官方运行时（走原来的按文件下载），其余为第三方 JDK。
+    ''' </summary>
+    Public ReadOnly JavaDistSourceNames As String() = {
+        "Mojang 官方运行时", "Adoptium Temurin", "Microsoft OpenJDK", "Azul Zulu", "BellSoft Liberica"
+    }
+
+    Private ReadOnly JavaDistMajors As Integer() = {8, 11, 17, 21, 25}
+
+    ''' <summary>
+    ''' 列出某个源可下载的 JDK。需要联网解析的源（Zulu / Liberica）会在这里请求接口，
+    ''' 所以必须在后台线程调用。
+    ''' </summary>
+    Public Function GetJavaDistTargets(SourceIndex As Integer) As List(Of ModJava.JavaDistTarget)
+        Dim Result As New List(Of ModJava.JavaDistTarget)
+        If SourceIndex <= 0 OrElse SourceIndex >= JavaDistSourceNames.Length Then Return Result
+        For Each Major As Integer In JavaDistMajors
+            Dim Target As New ModJava.JavaDistTarget With {.Major = Major, .Folder = $"jdk-{Major}"}
+            Try
+                Select Case SourceIndex
+                    Case 1 'Adoptium Temurin：latest/ga 直接 302 到 zip
+                        Target.Display = $"Java {Major}（Temurin）"
+                        Target.Url = $"https://api.adoptium.net/v3/binary/latest/{Major}/ga/windows/x64/jdk/hotspot/normal/eclipse"
+                        Target.Folder = $"temurin-{Major}"
+                    Case 2 'Microsoft Build of OpenJDK
+                        Target.Display = $"Java {Major}（Microsoft）"
+                        Target.Url = $"https://aka.ms/download-jdk/microsoft-jdk-{Major}-windows-x64.zip"
+                        Target.Folder = $"microsoft-{Major}"
+                    Case 3 'Azul Zulu
+                        Target.Display = $"Java {Major}（Zulu）"
+                        Target.Url = ResolveAzulUrl(Major)
+                        Target.Folder = $"zulu-{Major}"
+                    Case 4 'BellSoft Liberica
+                        Target.Display = $"Java {Major}（Liberica）"
+                        Target.Url = ResolveLibericaUrl(Major)
+                        Target.Folder = $"liberica-{Major}"
+                End Select
+                If Not String.IsNullOrEmpty(Target.Url) Then Result.Add(Target)
+            Catch ex As Exception
+                Logger.Warn(ex, $"获取 {JavaDistSourceNames(SourceIndex)} 的 Java {Major} 下载地址失败")
+            End Try
+        Next
+        Return Result
+    End Function
+
+    Private Function ResolveAzulUrl(Major As Integer) As String
+        Dim Url As String = "https://api.azul.com/metadata/v1/zulu/packages/?java_version=" & Major &
+            "&os=windows&arch=x64&archive_type=zip&java_package_type=jdk&release_status=ga&latest=true&page_size=1"
+        Dim Arr As JArray = TryCast(NetRequestByClient(Url, Timeout:=15000).DeserializeJson(), JArray)
+        If Arr Is Nothing OrElse Not Arr.Any Then Return ""
+        Return Arr(0)("download_url")?.ToString
+    End Function
+
+    Private Function ResolveLibericaUrl(Major As Integer) As String
+        Dim Url As String = "https://api.bell-sw.com/v1/liberica/releases?version-feature=" & Major &
+            "&os=windows&arch=x64&package-type=jdk&bundle-type=zip&bitness=64"
+        Dim Arr As JArray = TryCast(NetRequestByClient(Url, Timeout:=15000).DeserializeJson(), JArray)
+        If Arr Is Nothing OrElse Not Arr.Any Then Return ""
+        Return Arr(0)("downloadUrl")?.ToString
+    End Function
+
+    ''' <summary>
+    ''' 为 zip 形式的 JDK 构建下载加载器：下载 → 解压 → 刷新列表。
+    ''' 解压失败或被取消时会清掉半成品目录。
+    ''' </summary>
+    Public Function CreateJavaZipLoader(Target As ModJava.JavaDistTarget, Root As String) As LoaderCombo(Of Integer)
+        Dim BaseDir As String = PathUtils.AddSlashSuffix(Root) & Target.Folder & "\"
+        Dim ZipPath As String = PathUtils.AddSlashSuffix(Root) & Target.Folder & ".zip"
+        Logger.Info($"准备下载 {Target.Display}：{Target.Url} → {BaseDir}")
+        Dim Loader As New LoaderCombo(Of Integer)("下载 Java", {
+            New LoaderDownload("下载 Java 压缩包",
+                New List(Of NetFile) From {New NetFile({Target.Url}, ZipPath, New FileChecker With {.MinSize = 10 * 1024 * 1024})}) With {.ProgressWeight = 70},
+            New LoaderTask(Of Integer, Integer)("解压 Java",
+                Sub(Task As LoaderTask(Of Integer, Integer))
+                    DirectoryUtils.Delete(BaseDir)
+                    FileUtils.ExtractToDirectory(ZipPath, BaseDir, Task.CreateCancellationToken())
+                    FileUtils.Delete(ZipPath)
+                    Task.Progress = 1
+                End Sub) With {.ProgressWeight = 25},
+            New LoaderWorker("刷新 Java 列表", JavaListRefreshWorker)
+        }) With {.OnStateChanged =
+        Sub(RawLoader As LoaderCombo(Of Integer))
+            If RawLoader.State = LoadState.Failed OrElse RawLoader.State = LoadState.Canceled Then
+                Logger.Warn($"Java 下载未完成，清理目录：{BaseDir}")
+                DirectoryUtils.Delete(BaseDir)
+                FileUtils.Delete(ZipPath)
+            End If
+        End Sub}
+        Return Loader
+    End Function
+
+    ''' <summary>
+    ''' 在解压出来的目录里找出 java.exe 所在的 bin 目录（压缩包通常自带一层顶层文件夹）。
+    ''' </summary>
+    Public Function FindJavaBinFolder(Root As String) As String
+        Try
+            If Not DirectoryUtils.Exists(Root) Then Return ""
+            If FileUtils.Exists(Root & "bin\java.exe") Then Return Root & "bin\"
+            For Each Folder As String In DirectoryUtils.EnumerateDirectories(Root, True)
+                If FileUtils.Exists(Folder & "bin\java.exe") Then Return Folder & "bin\"
+            Next
+        Catch ex As Exception
+            Logger.Warn(ex, "在解压目录中查找 java.exe 失败")
+        End Try
+        Return ""
+    End Function
+
+#End Region
+
+#Region "下载（Mojang 官方运行时）"
 
     Public Class JavaDownloadInfo
         Public Property ComponentName As String

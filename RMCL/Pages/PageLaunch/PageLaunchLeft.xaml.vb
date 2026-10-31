@@ -107,7 +107,10 @@ Public Class PageLaunchLeft
 
         '改变页面
         Dim LoginType = Settings.Get(Of McLoginType)("LoginType")
-        If LoginType = McLoginType.Legacy OrElse LoginType = McLoginType.Ms Then CType(FindName("RadioLoginType" & LoginType), MyRadioButton).Checked = True
+        If LoginType = McLoginType.Legacy OrElse LoginType = McLoginType.Ms OrElse LoginType = McLoginType.Auth Then
+            Dim LoginControl As MyRadioButton = TryCast(FindName("RadioLoginType" & LoginType), MyRadioButton)
+            If LoginControl IsNot Nothing Then LoginControl.Checked = True
+        End If
         RefreshPage(False, False)
 
         AniControlEnabled -= 1
@@ -307,6 +310,14 @@ UnknownType:
                         Type = PageType.MsSkin
                     End If
                     Settings.Set("LoginType", McLoginType.Ms)
+                ElseIf RadioLoginType3.Checked Then
+                    '第三方认证服务器（LittleSkin 等）
+                    If Settings.Get(Of String)("CacheAuthAccess") = "" Then
+                        Type = PageType.Auth
+                    Else
+                        Type = PageType.AuthSkin
+                    End If
+                    Settings.Set("LoginType", McLoginType.Auth)
                 Else
                     Type = PageType.Legacy
                     Settings.Set("LoginType", McLoginType.Legacy)
@@ -315,6 +326,7 @@ UnknownType:
                 PanTypeOne.Visibility = Visibility.Collapsed
                 RadioLoginType5.Visibility = Visibility.Visible
                 RadioLoginType0.Visibility = Visibility.Visible
+                RadioLoginType3.Visibility = Visibility.Visible
             Case 1 '仅正版
                 If Settings.Get(Of String)("CacheMsV2Access") = "" Then
                     Type = PageType.Ms
@@ -353,11 +365,13 @@ UnknownType:
                     Type = PageType.AuthSkin
                 End If
                 Settings.Set("LoginType", McLoginType.Auth)
-                PanType.Visibility = Visibility.Collapsed
-                PanTypeOne.Visibility = Visibility.Visible
-                PathTypeOne.Data = (New GeometryConverter).ConvertFromString(Logo.IconButtonCard)
-                LabTypeOne.Text = If(McInstanceSelected Is Nothing, Settings.Get(Of String)("CacheAuthServerName"), Settings.Get(Of String)("VersionServerAuthName", Instance:=McInstanceSelected))
-                If LabTypeOne.Text = "" Then LabTypeOne.Text = "第三方登录"
+                '保留「正版 / 离线 / 第三方」的切换条，方便随时换回去
+                PanType.Visibility = Visibility.Visible
+                PanTypeOne.Visibility = Visibility.Collapsed
+                RadioLoginType5.Visibility = Visibility.Visible
+                RadioLoginType0.Visibility = Visibility.Visible
+                RadioLoginType3.Visibility = Visibility.Visible
+                RadioLoginType3.Checked = True
             Case Else
                 Logger.Error($"未知的登录页面：{LoginPageType}", LogBehavior.Toast)
                 GoTo UnknownType
@@ -368,9 +382,36 @@ UnknownType:
         Dim Control As MyRadioButton = FindName("RadioLoginType" & Settings.Get(Of McLoginType)("LoginType"))
         If Control IsNot Nothing Then Control.Checked = True
     End Sub
-    Private Sub RadioLoginType_Change(sender As Object, raiseByMouse As Boolean) Handles RadioLoginType0.Check, RadioLoginType5.Check
-        If raiseByMouse Then RefreshPage(True, True)
+    Private Sub RadioLoginType_Change(sender As Object, raiseByMouse As Boolean) Handles RadioLoginType0.Check, RadioLoginType5.Check, RadioLoginType3.Check
+        If Not raiseByMouse Then Return
+        If RadioLoginType3.Checked Then
+            '从来没配过第三方服务器时，先让玩家填一个，填成功才真正切过去
+            If Not AuthServerList().Any Then
+                If Not PromptAddAuthServer() Then
+                    RadioLoginType0.Checked = True '放弃切换，避免停在半截状态
+                    Return
+                End If
+            End If
+            Settings.Set("LoginPageType", 4)
+        Else
+            Settings.Set("LoginPageType", 0)
+        End If
+        RefreshPage(True, True)
     End Sub
+
+    ''' <summary>
+    ''' 让玩家输入一个第三方认证服务器地址并立即切换过去。
+    ''' 返回是否成功添加。
+    ''' </summary>
+    Public Shared Function PromptAddAuthServer() As Boolean
+        Dim Url As String = MyMsgBoxInput("添加第三方认证服务器",
+            $"填写 Yggdrasil / Authlib-Injector 地址，例如：{vbCrLf}https://littleskin.cn/api/yggdrasil",
+            HintText:="https://littleskin.cn/api/yggdrasil")
+        If String.IsNullOrWhiteSpace(Url) Then Return False
+        SetActiveAuthServer(Url)
+        Hint($"已添加并切换到 {AuthServerHost(Url)}", HintType.Green)
+        Return True
+    End Function
 
 #End Region
 

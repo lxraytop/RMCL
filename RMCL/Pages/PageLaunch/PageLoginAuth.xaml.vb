@@ -6,6 +6,7 @@ Public Class PageLoginAuth
     Public Sub Reload(KeepInput As Boolean)
         '记住密码
         CheckRemember.Checked = Settings.Get(Of Boolean)("LoginRemember")
+        RefreshServerList()
         If KeepInput AndAlso Not IsFirstLoad Then '避免第一次就以 KeepInput 的方式加载，导致文本框里没东西
             '保留输入，只刷新下拉框列表
             Dim Input As String = ComboName.Text
@@ -82,5 +83,61 @@ Public Class PageLoginAuth
         Dim Address As String = If(McInstanceSelected IsNot Nothing, Settings.Get(Of String)("VersionServerAuthRegister", Instance:=McInstanceSelected), Settings.Get(Of String)("CacheAuthServerRegister"))
         BtnLink.Visibility = If(String.IsNullOrEmpty(New ValidateHttp().Validate(Address)), Visibility.Visible, Visibility.Collapsed)
     End Sub
+
+#Region "第三方服务器切换"
+
+    ''' <summary>
+    ''' 是否正在由代码填充服务器下拉框（用于忽略由此触发的事件）。
+    ''' </summary>
+    Private IsRefreshingServer As Boolean
+
+    ''' <summary>
+    ''' 刷新「服务器」下拉框：列出添加过的第三方认证服务器，末尾是「+ 添加服务器……」。
+    ''' </summary>
+    Private Sub RefreshServerList()
+        If ComboServer Is Nothing Then Return
+        Dim Servers As List(Of AuthServerEntry) = AuthServerList()
+        Dim Active As String = ActiveAuthServerUrl()
+        IsRefreshingServer = True
+        Try
+            ComboServer.Items.Clear()
+            Dim Target As MyComboBoxItem = Nothing
+            For Each Server As AuthServerEntry In Servers
+                Dim Item As New MyComboBoxItem With {.Content = Server.Name, .Tag = Server.Url}
+                ComboServer.Items.Add(Item)
+                If String.Equals(Server.Url, Active, StringComparison.OrdinalIgnoreCase) Then Target = Item
+            Next
+            ComboServer.Items.Add(New MyComboBoxItem With {.Content = "+ 添加服务器……", .Tag = Nothing})
+            If Target Is Nothing AndAlso ComboServer.Items.Count > 0 Then Target = TryCast(ComboServer.Items(0), MyComboBoxItem)
+            ComboServer.SelectedItem = Target
+        Finally
+            IsRefreshingServer = False
+        End Try
+    End Sub
+
+    Private Sub ComboServer_SelectionChanged(sender As MyComboBox, e As SelectionChangedEventArgs) Handles ComboServer.SelectionChanged
+        If IsRefreshingServer Then Return
+        Dim Item As MyComboBoxItem = TryCast(ComboServer.SelectedItem, MyComboBoxItem)
+        If Item Is Nothing Then Return
+        Dim Url As String = TryCast(Item.Tag, String)
+        If String.IsNullOrEmpty(Url) Then
+            '选的是「+ 添加服务器……」
+            If Not PageLaunchLeft.PromptAddAuthServer() Then
+                RefreshServerList()
+                Return
+            End If
+            Settings.Set("CacheAuthAccess", "")
+            RefreshServerList()
+            Reload(False)
+            Return
+        End If
+        '切换到已有的服务器：清掉缓存的登录凭据，强制用新服务器的账号重新登录
+        SetActiveAuthServer(Url, Item.Content.ToString())
+        Settings.Set("CacheAuthAccess", "")
+        Hint($"已切换到 {Item.Content}", HintType.Green)
+        Reload(False)
+    End Sub
+
+#End Region
 
 End Class

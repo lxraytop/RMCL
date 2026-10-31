@@ -75,6 +75,7 @@ Public Class Settings
         New Setting("LoginNideEmail", "", Source:=Sources.Registry, Encrypted:=True),
         New Setting("LoginNidePass", "", Source:=Sources.Registry, Encrypted:=True),
         New Setting("LoginAuthEmail", "", Source:=Sources.Registry, Encrypted:=True),
+        New Setting("LoginAuthServers", "", Source:=Sources.Registry), '已保存的第三方认证服务器，格式「名称|地址」，每行一个
         New Setting("LoginAuthPass", "", Source:=Sources.Registry, Encrypted:=True),
         New Setting("LoginType", McLoginType.Legacy, Source:=Sources.Registry),
         New Setting("LoginPageType", 0),
@@ -122,6 +123,7 @@ Public Class Settings
         New Setting("FrpJoinInstanceName", "", Source:=Sources.Registry), '上次用「加入好友的世界」启动的版本名
         New Setting("ToolHelpChinese", True, Source:=Sources.Registry),
         New Setting("ToolDownloadThread", 63, Source:=Sources.Registry),
+        New Setting("ToolUseSystemProxy", True, Source:=Sources.Registry, OnChanged:=AddressOf ModNet.RefreshProxy),
         New Setting("ToolDownloadSpeed", 42, Source:=Sources.Registry, OnChanged:=AddressOf ModNet.UpdateNetTaskSpeedLimitHigh),
         New Setting("ToolDownloadSource", 1, Source:=Sources.Registry),
         New Setting("ToolDownloadVersion", 1, Source:=Sources.Registry),

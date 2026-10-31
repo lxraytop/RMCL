@@ -2199,4 +2199,94 @@ IgnoreCustomSkin:
 
 #End Region
 
+#Region "第三方认证服务器"
+
+    ''' <summary>
+    ''' 已保存的第三方认证服务器（Yggdrasil / Authlib-Injector）。
+    ''' 存成「名称|地址」每行一个，列表里第一个就是当前正在用的。
+    ''' </summary>
+    Public Function AuthServerList() As List(Of AuthServerEntry)
+        Dim Result As New List(Of AuthServerEntry)
+        Dim Raw As String = Settings.Get(Of String)("LoginAuthServers")
+        For Each Line As String In Raw.Split(New String() {vbCrLf, vbLf, vbCr}, StringSplitOptions.RemoveEmptyEntries)
+            Dim Text As String = Line.Trim()
+            Dim Index As Integer = Text.IndexOf("|"c)
+            If Index <= 0 OrElse Index >= Text.Length - 1 Then Continue For
+            Result.Add(New AuthServerEntry With {
+                .Name = Text.Substring(0, Index).Trim(),
+                .Url = Text.Substring(Index + 1).Trim()
+            })
+        Next
+        '兼容旧版本只存了一个服务器的情况
+        If Not Result.Any Then
+            Dim OldUrl As String = Settings.Get(Of String)("CacheAuthServerServer")
+            Dim OldName As String = Settings.Get(Of String)("CacheAuthServerName")
+            If Not String.IsNullOrWhiteSpace(OldUrl) Then
+                Result.Add(New AuthServerEntry With {
+                    .Url = OldUrl,
+                    .Name = If(String.IsNullOrWhiteSpace(OldName), AuthServerHost(OldUrl), OldName)
+                })
+                SaveAuthServerList(Result)
+            End If
+        End If
+        Return Result
+    End Function
+
+    Public Class AuthServerEntry
+        Public Property Name As String = ""
+        Public Property Url As String = ""
+        Public Overrides Function ToString() As String
+            Return If(String.IsNullOrEmpty(Name), Url, Name)
+        End Function
+    End Class
+
+    Public Sub SaveAuthServerList(List As List(Of AuthServerEntry))
+        Settings.Set("LoginAuthServers", List.Select(Function(x) $"{x.Name}|{x.Url}").Join(vbLf))
+    End Sub
+
+    ''' <summary>从地址里取出主机名，用作服务器的默认名称。</summary>
+    Public Function AuthServerHost(Url As String) As String
+        Try
+            Dim Text As String = Url.Trim()
+            If Not Text.Contains("://") Then Text = "https://" & Text
+            Return New Uri(Text).Host
+        Catch
+            Return Url
+        End Try
+    End Function
+
+    ''' <summary>
+    ''' 把某个第三方服务器设为当前使用，并把它挪到列表最前面。
+    ''' 版本已经选定的话，同时写入该版本的独立设置，保证启动时用的就是它。
+    ''' </summary>
+    Public Sub SetActiveAuthServer(Url As String, Optional Name As String = Nothing)
+        If String.IsNullOrWhiteSpace(Url) Then Return
+        Dim Normalized As String = Url.Trim()
+        If Not Normalized.Contains("://") Then Normalized = "https://" & Normalized
+        Normalized = Normalized.TrimEnd("/"c)
+        If String.IsNullOrWhiteSpace(Name) Then Name = AuthServerHost(Normalized)
+        Settings.Set("CacheAuthServerServer", Normalized)
+        Settings.Set("CacheAuthServerName", Name)
+        If McInstanceSelected IsNot Nothing Then
+            Settings.Set("VersionServerAuthServer", Normalized, Instance:=McInstanceSelected)
+            Settings.Set("VersionServerAuthName", Name, Instance:=McInstanceSelected)
+        End If
+        Dim Servers As List(Of AuthServerEntry) = AuthServerList()
+        Servers.RemoveAll(Function(x) String.Equals(x.Url, Normalized, StringComparison.OrdinalIgnoreCase))
+        Servers.Insert(0, New AuthServerEntry With {.Name = Name, .Url = Normalized})
+        SaveAuthServerList(Servers)
+        Logger.Info($"第三方认证服务器已切换为：{Name}（{Normalized}）")
+    End Sub
+
+    ''' <summary>当前使用的第三方认证服务器地址，没配置时返回空字符串。</summary>
+    Public Function ActiveAuthServerUrl() As String
+        Dim Server As String = If(McInstanceSelected Is Nothing,
+            Settings.Get(Of String)("CacheAuthServerServer"),
+            Settings.Get(Of String)("VersionServerAuthServer", Instance:=McInstanceSelected))
+        If String.IsNullOrWhiteSpace(Server) Then Server = Settings.Get(Of String)("CacheAuthServerServer")
+        Return If(Server, "")
+    End Function
+
+#End Region
+
 End Module
