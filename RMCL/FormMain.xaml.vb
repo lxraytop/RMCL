@@ -984,7 +984,9 @@ Public Class FormMain
             e.Effects = DragDropEffects.None
             If e.Data.GetDataPresent(DataFormats.Text) Then
                 Dim Str As String = e.Data.GetData(DataFormats.Text)
-                If Str.StartsWithF("authlib-injector:yggdrasil-server:") Then
+                If Str.StartsWithF("authlib-injector:yggdrasil-server:") OrElse
+                   ((Str.StartsWithF("https://", True) OrElse Str.StartsWithF("http://", True)) AndAlso
+                    (Str.ContainsIgnoreCase("yggdrasil") OrElse Str.ContainsIgnoreCase("authlib"))) Then
                     e.Effects = DragDropEffects.Copy
                 ElseIf Str.StartsWithF("file:///") Then
                     e.Effects = DragDropEffects.Copy
@@ -1010,11 +1012,19 @@ Public Class FormMain
                 Try
                     Dim Str As String = e.Data.GetData(DataFormats.Text)
                     Logger.Info($"接受文本拖拽：{Str}")
+                    '除了 authlib-injector 协议链接，也支持直接把 Yggdrasil 地址拖进来
+                    Dim DragAuthServer As String = ""
                     If Str.StartsWithF("authlib-injector:yggdrasil-server:") Then
+                        DragAuthServer = StringUtils.FormUrlUnescape(Str.Substring("authlib-injector:yggdrasil-server:".Length)).Trim()
+                    ElseIf (Str.StartsWithF("https://", True) OrElse Str.StartsWithF("http://", True)) AndAlso
+                           (Str.ContainsIgnoreCase("yggdrasil") OrElse Str.ContainsIgnoreCase("authlib")) Then
+                        DragAuthServer = Str.Trim()
+                    End If
+                    If DragAuthServer <> "" Then
                         'Authlib 拖拽
                         e.Handled = True
                         e.Effects = DragDropEffects.Copy
-                        Dim AuthlibServer As String = StringUtils.FormUrlUnescape(Str.Substring("authlib-injector:yggdrasil-server:".Length))
+                        Dim AuthlibServer As String = DragAuthServer
                         Logger.Info($"Authlib 拖拽：{AuthlibServer}")
                         If Not String.IsNullOrEmpty(New ValidateHttp().Validate(AuthlibServer)) Then
                             Hint($"输入的 Authlib 验证服务器不符合网址格式（{AuthlibServer}）！", HintType.Red)
@@ -1032,9 +1042,9 @@ Public Class FormMain
                                 Return
                             End If
                             Settings.Set("VersionServerLogin", 4, Instance:=Target)
-                            Settings.Set("VersionServerAuthServer", "https://littleskin.cn/api/yggdrasil", Instance:=Target)
                             Settings.Set("VersionServerAuthRegister", "https://littleskin.cn/auth/register", Instance:=Target)
-                            Settings.Set("VersionServerAuthName", "LittleSkin 登录", Instance:=Target)
+                            '统一入口：同时写全局缓存、版本设置和服务器列表，避免只改一处导致下拉框/登录用的还是旧地址
+                            SetActiveAuthServer("https://littleskin.cn/api/yggdrasil", "LittleSkin 登录", Target)
                         Else
                             '第三方 Authlib 服务器
                             If MyMsgBox($"是否要在版本 {Target.Name} 中开启第三方登录？" & vbCrLf &
@@ -1043,9 +1053,8 @@ Public Class FormMain
                                 Return
                             End If
                             Settings.Set("VersionServerLogin", 4, Instance:=Target)
-                            Settings.Set("VersionServerAuthServer", AuthlibServer, Instance:=Target)
                             Settings.Set("VersionServerAuthRegister", AuthlibServer.Replace("api/yggdrasil", "auth/register"), Instance:=Target)
-                            Settings.Set("VersionServerAuthName", "", Instance:=Target)
+                            SetActiveAuthServer(AuthlibServer, Nothing, Target)
                         End If
                         If PageCurrent = PageType.InstanceSetup AndAlso PageCurrentSub = PageSubType.InstanceSetup Then
                             '正在服务器选项页，需要刷新设置项显示

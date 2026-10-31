@@ -111,6 +111,12 @@ Public Class PageLoginAuth
                 If String.Equals(Server.Url, Active, StringComparison.OrdinalIgnoreCase) Then Target = Item
             Next
             ComboServer.Items.Add(New MyComboBoxItem With {.Content = "+ 添加服务器……", .Tag = Nothing})
+            '当前地址不在列表里（比如刚通过拖拽/版本设置写入）时，也让它显示出来，避免下拉框显示成别的服务器
+            If Target Is Nothing AndAlso Not String.IsNullOrEmpty(Active) Then
+                Dim Extra As New MyComboBoxItem With {.Content = $"{AuthServerHost(Active)}（当前）", .Tag = Active}
+                ComboServer.Items.Insert(0, Extra)
+                Target = Extra
+            End If
             If Target Is Nothing AndAlso ComboServer.Items.Count > 0 Then Target = TryCast(ComboServer.Items(0), MyComboBoxItem)
             ComboServer.SelectedItem = Target
         Finally

@@ -2260,7 +2260,13 @@ IgnoreCustomSkin:
     ''' 把某个第三方服务器设为当前使用，并把它挪到列表最前面。
     ''' 版本已经选定的话，同时写入该版本的独立设置，保证启动时用的就是它。
     ''' </summary>
-    Public Sub SetActiveAuthServer(Url As String, Optional Name As String = Nothing)
+    ''' <summary>
+    ''' 把某个第三方服务器设为当前使用，并把它挪到列表最前面。
+    ''' 会同时写全局缓存（CacheAuthServer*）、指定版本的独立设置（VersionServerAuth*）
+    ''' 和设置里的服务器列表（LoginAuthServers），保证三处一致。
+    ''' </summary>
+    ''' <param name="Instance">要写入哪个版本；Nothing 表示当前选中的版本（没有选中就只写全局）。</param>
+    Public Sub SetActiveAuthServer(Url As String, Optional Name As String = Nothing, Optional Instance As McInstance = Nothing)
         If String.IsNullOrWhiteSpace(Url) Then Return
         Dim Normalized As String = Url.Trim()
         If Not Normalized.Contains("://") Then Normalized = "https://" & Normalized
@@ -2268,9 +2274,10 @@ IgnoreCustomSkin:
         If String.IsNullOrWhiteSpace(Name) Then Name = AuthServerHost(Normalized)
         Settings.Set("CacheAuthServerServer", Normalized)
         Settings.Set("CacheAuthServerName", Name)
-        If McInstanceSelected IsNot Nothing Then
-            Settings.Set("VersionServerAuthServer", Normalized, Instance:=McInstanceSelected)
-            Settings.Set("VersionServerAuthName", Name, Instance:=McInstanceSelected)
+        Dim Target As McInstance = If(Instance, McInstanceSelected)
+        If Target IsNot Nothing Then
+            Settings.Set("VersionServerAuthServer", Normalized, Instance:=Target)
+            Settings.Set("VersionServerAuthName", Name, Instance:=Target)
         End If
         Dim Servers As List(Of AuthServerEntry) = AuthServerList()
         Servers.RemoveAll(Function(x) String.Equals(x.Url, Normalized, StringComparison.OrdinalIgnoreCase))
@@ -2285,6 +2292,11 @@ IgnoreCustomSkin:
             Settings.Get(Of String)("CacheAuthServerServer"),
             Settings.Get(Of String)("VersionServerAuthServer", Instance:=McInstanceSelected))
         If String.IsNullOrWhiteSpace(Server) Then Server = Settings.Get(Of String)("CacheAuthServerServer")
+        '两者都没有时退回到列表第一项（最近使用过的那个）
+        If String.IsNullOrWhiteSpace(Server) Then
+            Dim Servers As List(Of AuthServerEntry) = AuthServerList()
+            If Servers.Any Then Server = Servers(0).Url
+        End If
         Return If(Server, "")
     End Function
 
