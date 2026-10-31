@@ -1,4 +1,4 @@
-Public Module ModJava
+﻿Public Module ModJava
 
     ''' <summary>
     ''' 初始化 Java 列表。
@@ -503,7 +503,7 @@ NoForcedJava:
 
 #End Region
 
-#Region "多源下载（Adoptium / Microsoft / Zulu / Liberica）"
+#Region "多源下载（Adoptium / Microsoft / Zulu）"
 
     ''' <summary>
     ''' 一个可以直接下载的 JDK（zip 包），与 Mojang 运行时下载区分开。
@@ -523,13 +523,13 @@ NoForcedJava:
     ''' 可选的 Java 下载源。0 是 Mojang 官方运行时（走原来的按文件下载），其余为第三方 JDK。
     ''' </summary>
     Public ReadOnly JavaDistSourceNames As String() = {
-        "Mojang 官方运行时", "Adoptium Temurin", "Microsoft OpenJDK", "Azul Zulu", "BellSoft Liberica"
+        "Mojang 官方运行时", "Adoptium Temurin", "Microsoft OpenJDK", "Azul Zulu"
     }
 
     Private ReadOnly JavaDistMajors As Integer() = {8, 11, 17, 21, 25}
 
     ''' <summary>
-    ''' 列出某个源可下载的 JDK。需要联网解析的源（Zulu / Liberica）会在这里请求接口，
+    ''' 列出某个源可下载的 JDK。需要联网解析的源（Zulu）会在这里请求接口，
     ''' 所以必须在后台线程调用。
     ''' </summary>
     Public Function GetJavaDistTargets(SourceIndex As Integer) As List(Of ModJava.JavaDistTarget)
@@ -551,10 +551,6 @@ NoForcedJava:
                         Target.Display = $"Java {Major}（Zulu）"
                         Target.Url = ResolveAzulUrl(Major)
                         Target.Folder = $"zulu-{Major}"
-                    Case 4 'BellSoft Liberica
-                        Target.Display = $"Java {Major}（Liberica）"
-                        Target.Url = ResolveLibericaUrl(Major)
-                        Target.Folder = $"liberica-{Major}"
                 End Select
                 If Not String.IsNullOrEmpty(Target.Url) Then Result.Add(Target)
             Catch ex As Exception
@@ -570,14 +566,6 @@ NoForcedJava:
         Dim Arr As JArray = TryCast(NetRequestByClient(Url, Timeout:=15000).DeserializeJson(), JArray)
         If Arr Is Nothing OrElse Not Arr.Any Then Return ""
         Return Arr(0)("download_url")?.ToString
-    End Function
-
-    Private Function ResolveLibericaUrl(Major As Integer) As String
-        Dim Url As String = "https://api.bell-sw.com/v1/liberica/releases?version-feature=" & Major &
-            "&os=windows&arch=x64&package-type=jdk&bundle-type=zip&bitness=64"
-        Dim Arr As JArray = TryCast(NetRequestByClient(Url, Timeout:=15000).DeserializeJson(), JArray)
-        If Arr Is Nothing OrElse Not Arr.Any Then Return ""
-        Return Arr(0)("downloadUrl")?.ToString
     End Function
 
     ''' <summary>

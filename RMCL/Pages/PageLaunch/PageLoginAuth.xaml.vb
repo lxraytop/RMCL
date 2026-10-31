@@ -28,7 +28,9 @@ Public Class PageLoginAuth
     ''' 获取当前页面的登录信息。
     ''' </summary>
     Public Shared Function GetLoginData() As McLoginServer
-        Dim Server As String = If(IsNothing(McInstanceSelected), Settings.Get(Of String)("CacheAuthServerServer"), Settings.Get(Of String)("VersionServerAuthServer", Instance:=McInstanceSelected)) & "/authserver"
+        '用统一的规范化取址，避免拿到空地址后拼出 "/authserver" 这种相对 URI
+        Dim Base As String = AuthServerBase()
+        Dim Server As String = If(Base = "", "", Base & "/authserver")
         If FrmLoginAuth Is Nothing Then
             Return New McLoginServer(McLoginType.Auth) With {.Token = "Auth", .BaseUrl = Server, .UserName = "", .Password = "", .Description = "Authlib-Injector", .Type = McLoginType.Auth}
         Else
@@ -39,6 +41,7 @@ Public Class PageLoginAuth
     ''' 当前页面的登录信息是否有效。
     ''' </summary>
     Public Shared Function IsVaild(LoginData As McLoginServer) As String
+        If String.IsNullOrEmpty(LoginData.BaseUrl) Then Return "还没有设置第三方认证服务器，请先在「服务器」里选一个，或点「+ 添加服务器……」。"
         If LoginData.UserName = "" Then Return "账号不能为空！"
         If LoginData.Password = "" Then Return "密码不能为空！"
         Return ""

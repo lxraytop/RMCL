@@ -123,7 +123,9 @@ Public Class Settings
         New Setting("FrpJoinInstanceName", "", Source:=Sources.Registry), '上次用「加入好友的世界」启动的版本名
         New Setting("ToolHelpChinese", True, Source:=Sources.Registry),
         New Setting("ToolDownloadThread", 63, Source:=Sources.Registry),
-        New Setting("ToolUseSystemProxy", True, Source:=Sources.Registry, OnChanged:=AddressOf ModNet.RefreshProxy),
+        New Setting("ToolProxyMode", 1, Source:=Sources.Registry, OnChanged:=AddressOf ModNet.RefreshProxy), '0 直连 / 1 系统代理 / 2 自定义
+        New Setting("ToolProxyHost", "127.0.0.1", Source:=Sources.Registry),
+        New Setting("ToolProxyPort", "7890", Source:=Sources.Registry),
         New Setting("ToolDownloadSpeed", 42, Source:=Sources.Registry, OnChanged:=AddressOf ModNet.UpdateNetTaskSpeedLimitHigh),
         New Setting("ToolDownloadSource", 1, Source:=Sources.Registry),
         New Setting("ToolDownloadVersion", 1, Source:=Sources.Registry),

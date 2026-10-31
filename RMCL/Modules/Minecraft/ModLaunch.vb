@@ -1256,7 +1256,8 @@ NextInstance:
         'Authlib-Injector
         If McLoginLoader.Output.Type = "Auth" Then
             If McLaunchJavaSelected.Version.Major >= 6 Then Args.Add("-Djavax.net.ssl.trustStoreType=WINDOWS-ROOT") '信任系统根证书（5252#）
-            Dim Server As String = Settings.Get(Of String)("VersionServerAuthServer", Instance:=McInstanceSelected)
+            Dim Server As String = AuthServerBase()
+            If Server = "" Then Throw New Exception("还没有设置第三方认证服务器，无法启动 Authlib-Injector 登录")
             Try
                 McLaunchLog($"开始 Authlib Injector Prefetch")
                 Dim Response As String = NetRequestByClientRetry(Server, Encoding:=Encoding.UTF8)
@@ -2285,6 +2286,23 @@ IgnoreCustomSkin:
             Settings.Get(Of String)("VersionServerAuthServer", Instance:=McInstanceSelected))
         If String.IsNullOrWhiteSpace(Server) Then Server = Settings.Get(Of String)("CacheAuthServerServer")
         Return If(Server, "")
+    End Function
+
+    ''' <summary>
+    ''' 规范化后的认证服务器根地址（绝对地址、无结尾斜杠）。
+    ''' 没配置时返回空字符串，调用方要自行提示，不能直接拼 "/authserver"，
+    ''' 否则会得到相对 URI，HttpClient 会抛「请求的 URI 必须为绝对 URI」。
+    ''' </summary>
+    Public Function AuthServerBase() As String
+        Dim Server As String = ActiveAuthServerUrl().Trim()
+        If String.IsNullOrWhiteSpace(Server) Then Return ""
+        If Not Server.Contains("://") Then Server = "https://" & Server
+        Server = Server.TrimEnd("/"c)
+        '用户可能填的是 …/api/yggdrasil 结尾，也可能已经带了 /authserver
+        If Server.EndsWith("/authserver", StringComparison.OrdinalIgnoreCase) Then
+            Server = Server.Substring(0, Server.Length - "/authserver".Length).TrimEnd("/"c)
+        End If
+        Return Server
     End Function
 
 #End Region

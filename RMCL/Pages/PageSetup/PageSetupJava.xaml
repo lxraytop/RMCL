@@ -40,7 +40,7 @@
                                 <StackPanel>
                                     <TextBlock Text="下载源" FontSize="12.5" Opacity="0.7" Margin="1,0,0,6" />
                                     <local:MyComboBox x:Name="ComboJavaSource" Width="220" Height="28"
-                                                      ToolTip="Mojang 官方运行时最稳妥；Temurin / Microsoft 支持长期维护的 LTS 版本；Zulu / Liberica 适合需要特殊构建的场景。" />
+                                                      ToolTip="Mojang 官方运行时最稳妥；Temurin / Microsoft 支持长期维护的 LTS 版本；Zulu 适合需要特殊构建的场景。" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
                                     <TextBlock Text="（换源会重新读取版本列表）" FontSize="11.5" Opacity="0.55" Margin="0,0,0,8" />

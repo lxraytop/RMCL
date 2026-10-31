@@ -19,6 +19,7 @@
     End Sub
     Public Sub Reload()
         SettingService.RefreshSettings(Me)
+        UpdateProxyInputs()
     End Sub
     Public Sub Reset()
         Try
@@ -61,6 +62,20 @@
     '调试模式
     Private Sub CheckDebugMode_Change() Handles CheckDebugMode.Change
         If AniControlEnabled = 0 Then Hint("部分调试信息将在刷新或启动器重启后切换显示！",, False)
+    End Sub
+
+    '代理：只有「自定义代理」时才允许填地址
+    Private Sub ComboProxyMode_SelectionChanged(sender As Object, e As SelectionChangedEventArgs) Handles ComboProxyMode.SelectionChanged
+        UpdateProxyInputs()
+    End Sub
+
+    Private Sub UpdateProxyInputs()
+        If TextProxyHost Is Nothing OrElse TextProxyPort Is Nothing OrElse ComboProxyMode Is Nothing Then Return
+        Dim Custom As Boolean = ComboProxyMode.SelectedIndex = 2
+        TextProxyHost.IsEnabled = Custom
+        TextProxyPort.IsEnabled = Custom
+        TextProxyHost.Opacity = If(Custom, 1, 0.45)
+        TextProxyPort.Opacity = If(Custom, 1, 0.45)
     End Sub
 
     '自动更新

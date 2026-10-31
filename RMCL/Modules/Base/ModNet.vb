@@ -326,18 +326,48 @@ Retry:
     End Function
 
     ''' <summary>
-    ''' 把「使用系统代理」设置应用到 handler 上。
-    ''' 关闭时显式设 UseProxy=False，让请求绕过系统代理直连。
+    ''' 把代理设置应用到 handler 上。
+    ''' 0 = 直连，1 = 跟随系统代理，2 = 自定义 HTTP 代理（主机 + 端口）。
     ''' </summary>
     Public Sub ApplyProxySetting(Handler As HttpClientHandler)
         Try
-            Dim UseSystemProxy As Boolean = Settings.Get(Of Boolean)("ToolUseSystemProxy")
-            Handler.UseProxy = UseSystemProxy
-            If Not UseSystemProxy Then Handler.Proxy = Nothing
+            Dim Mode As Integer = Settings.Get(Of Integer)("ToolProxyMode")
+            Select Case Mode
+                Case 0 '直连
+                    Handler.UseProxy = False
+                    Handler.Proxy = Nothing
+                Case 2 '自定义
+                    Dim Host As String = Settings.Get(Of String)("ToolProxyHost").Trim()
+                    Dim Port As Integer = 0
+                    Integer.TryParse(Settings.Get(Of String)("ToolProxyPort").Trim(), Port)
+                    If String.IsNullOrWhiteSpace(Host) OrElse Port <= 0 OrElse Port > 65535 Then
+                        Logger.Warn($"自定义代理配置无效（{Host}:{Port}），本次请求改为直连")
+                        Handler.UseProxy = False
+                        Handler.Proxy = Nothing
+                    Else
+                        Handler.UseProxy = True
+                        Handler.Proxy = New Net.WebProxy($"http://{Host}:{Port}", True)
+                    End If
+                Case Else '系统代理
+                    Handler.UseProxy = True
+                    Handler.Proxy = Nothing 'Nothing 表示使用系统默认代理
+            End Select
         Catch ex As Exception
             Logger.Warn(ex, "应用代理设置失败")
         End Try
     End Sub
+
+    ''' <summary>当前代理设置的文字描述，用于日志与提示。</summary>
+    Public Function GetProxyDescription() As String
+        Select Case Settings.Get(Of Integer)("ToolProxyMode")
+            Case 0
+                Return "直连（不使用代理）"
+            Case 2
+                Return $"自定义代理 {Settings.Get(Of String)("ToolProxyHost")}:{Settings.Get(Of String)("ToolProxyPort")}"
+            Case Else
+                Return "系统代理"
+        End Select
+    End Function
 
     ''' <summary>
     ''' 代理设置变化后重建已缓存的客户端，让新设置立即生效（不必重启）。
@@ -362,7 +392,7 @@ Retry:
                     _ThreadClient = Nothing
                 End If
             End SyncLock
-            Logger.Info($"网络代理已切换：{If(Settings.Get(Of Boolean)("ToolUseSystemProxy"), "使用系统代理", "直连（不使用代理）")}")
+            Logger.Info($"网络代理已切换：{GetProxyDescription()}")
         Catch ex As Exception
             Logger.Warn(ex, "重建网络客户端失败")
         End Try
