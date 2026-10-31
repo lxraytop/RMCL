@@ -384,6 +384,7 @@ UnknownType:
     End Sub
     Private Sub RadioLoginType_Change(sender As Object, raiseByMouse As Boolean) Handles RadioLoginType0.Check, RadioLoginType5.Check, RadioLoginType3.Check
         If Not raiseByMouse Then Return
+        Dim TargetType As Integer
         If RadioLoginType3.Checked Then
             '从来没配过第三方服务器时，先让玩家填一个，填成功才真正切过去
             If Not AuthServerList().Any Then
@@ -392,10 +393,30 @@ UnknownType:
                     Return
                 End If
             End If
-            Settings.Set("LoginPageType", 4)
+            TargetType = 4
         Else
-            Settings.Set("LoginPageType", 0)
+            TargetType = 0
         End If
+        '关键：登录页种类是按版本存的（VersionServerLogin），只写全局的 LoginPageType
+        '在已选版本时会被版本设置覆盖，表现就是「点了没反应，还停在原来的页面」
+        Settings.Set("LoginPageType", TargetType)
+        If McInstanceSelected IsNot Nothing Then
+            Settings.Set("VersionServerLogin", TargetType, Instance:=McInstanceSelected)
+        End If
+        RefreshPage(True, True)
+    End Sub
+
+    ''' <summary>
+    ''' 点左上角那行「正版登录 / 仅离线」标签时，解除该版本的登录方式锁定，
+    ''' 让三个选项重新出现。整合包强制某种登录方式时就是这个锁。
+    ''' </summary>
+    Private Sub PanTypeOne_MouseLeftButtonUp(sender As Object, e As MouseButtonEventArgs)
+        If McInstanceSelected Is Nothing Then Return
+        Dim Current As Integer = Settings.Get(Of Integer)("VersionServerLogin", Instance:=McInstanceSelected)
+        If Current = 0 Then Return '本来就是可切换的
+        Settings.Set("VersionServerLogin", 0, Instance:=McInstanceSelected)
+        Settings.Set("LoginPageType", 0)
+        Hint("已解除该版本的登录方式锁定，现在可以自由切换正版 / 离线 / 第三方", HintType.Green)
         RefreshPage(True, True)
     End Sub
 
