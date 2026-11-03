@@ -29,6 +29,86 @@ Friend Module ModUpdate
     Public Const UpdateThreadLimit As Integer = 24
 
     ''' <summary>
+    ''' 更新源。GitHub 的两个源不需要授权；官方源是自建服务器，下载前必须通过验证码授权。
+    ''' </summary>
+    Public Enum UpdateSource
+        ''' <summary>GitHub 原生：检查与下载都走 github.com。</summary>
+        GitHubNative = 0
+        ''' <summary>GitHub 镜像：检查与下载都先经用户自填的镜像地址，失败再回退官方。</summary>
+        GitHubMirror = 1
+        ''' <summary>官方源：自建更新服务器，需要验证码授权，授权到期后拒绝更新。</summary>
+        Official = 2
+    End Enum
+
+    ''' <summary>默认镜像地址，用户可以在设置里改。</summary>
+    Public Const DefaultMirrorBase As String = "https://gh-proxy.com/"
+
+    ''' <summary>当前选择的更新源。</summary>
+    Public ReadOnly Property CurrentUpdateSource As UpdateSource
+        Get
+            Try
+                Select Case Settings.Get(Of Integer)("UpdateSourceMode")
+                    Case 1
+                        Return UpdateSource.GitHubMirror
+                    Case 2
+                        Return UpdateSource.Official
+                    Case Else
+                        Return UpdateSource.GitHubNative
+                End Select
+            Catch ex As Exception
+                Logger.Warn(ex, "读取更新源设置失败")
+                Return UpdateSource.GitHubNative
+            End Try
+        End Get
+    End Property
+
+    ''' <summary>镜像地址，保证以 / 结尾且带协议。</summary>
+    Public ReadOnly Property MirrorBase As String
+        Get
+            Dim Raw As String = ""
+            Try
+                Raw = Settings.Get(Of String)("UpdateMirrorUrl")
+            Catch ex As Exception
+                Logger.Warn(ex, "读取镜像地址失败")
+            End Try
+            If String.IsNullOrWhiteSpace(Raw) Then Raw = DefaultMirrorBase
+            Raw = Raw.Trim().Replace("\", "/")
+            If Not Raw.StartsWithF("http://", True) AndAlso Not Raw.StartsWithF("https://", True) Then
+                Raw = "https://" & Raw
+            End If
+            If Not Raw.EndsWithF("/") Then Raw &= "/"
+            Return Raw
+        End Get
+    End Property
+
+    Private Function MirrorUrl(Original As String) As String
+        If String.IsNullOrEmpty(Original) Then Return Original
+        Return MirrorBase & Original
+    End Function
+
+    ''' <summary>当前源是否只能通过授权使用。</summary>
+    Public ReadOnly Property NeedsLicense As Boolean
+        Get
+            Return CurrentUpdateSource = UpdateSource.Official
+        End Get
+    End Property
+
+    ''' <summary>更新源的一行说明，供设置页与提示使用。</summary>
+    Public ReadOnly Property SourceDescription As String
+        Get
+            Select Case CurrentUpdateSource
+                Case UpdateSource.GitHubNative
+                    Return $"GitHub 原生源（{UpdateRepo}）"
+                Case UpdateSource.GitHubMirror
+                    Return $"GitHub 镜像源（{MirrorBase}）"
+                Case Else
+                    Dim Url As String = ModUpdateServer.ConfiguredServerUrl
+                    Return If(Url = "", "官方源（尚未填写服务器地址）", $"官方源（{Url}）")
+            End Select
+        End Get
+    End Property
+
+    ''' <summary>
     ''' 一次更新检查的结果。
     ''' </summary>
     Public Class UpdateInfo
@@ -50,9 +130,16 @@ Friend Module ModUpdate
         Public PublishedAt As String = ""
         ''' <summary>发布时间，已换算到本地时区；取不到时为 Nothing。</summary>
         Public PublishedLocal As DateTime? = Nothing
+        ''' <summary>官方源上的发布 ID，用于换取下载票据；非官方源为 0。</summary>
+        Public ReleaseId As Integer = 0
+        ''' <summary>发布包的大小写无关 SHA-256；为空表示服务器没提供，跳过校验。</summary>
+        Public Sha256 As String = ""
+        ''' <summary>是否来自自建官方源（需要授权、下载前换票据）。</summary>
+        Public IsOfficial As Boolean = False
         ''' <summary>是否带有可下载的 exe。</summary>
         Public ReadOnly Property HasAsset As Boolean
             Get
+                If IsOfficial Then Return ReleaseId > 0
                 Return Not String.IsNullOrEmpty(AssetUrl)
             End Get
         End Property
@@ -215,18 +302,64 @@ Friend Module ModUpdate
 #Region "检查"
 
     ''' <summary>
-    ''' 获取最新 Release。失败时抛出异常。
-    ''' </summary>
-    ''' <summary>
-    ''' 获取最新 Release。失败时抛出异常。
+    ''' 按当前设置的更新源获取最新版本。失败时抛出异常；
+    ''' 官方源的授权问题会抛 ModUpdateServer.UpdateLicenseException，供上层区分处理。
     ''' </summary>
     Public Function FetchLatest() As UpdateInfo
-        Dim Raw As JObject
-        Try
-            Raw = NetRequestByClientRetry(UpdateApi, RequireJson:=True).DeserializeJson()
-        Catch ex As Exception
-            Throw New Exception($"无法连接更新服务器（{UpdateRepo}）", ex)
-        End Try
+        If CurrentUpdateSource = UpdateSource.Official Then
+            Return FetchLatestFromServer()
+        Else
+            Return FetchLatestFromGitHub()
+        End If
+    End Function
+
+    ''' <summary>官方源：先校验授权，再取最新版本。</summary>
+    Private Function FetchLatestFromServer() As UpdateInfo
+        Dim Rel As ModUpdateServer.ServerRelease = ModUpdateServer.FetchRelease()
+        Dim Info As New UpdateInfo With {
+            .Version = Rel.Version,
+            .Title = If(String.IsNullOrEmpty(Rel.Title), "RMCL " & Rel.Version, Rel.Title),
+            .Notes = CleanNotes(Rel.Notes),
+            .PageUrl = If(ModUpdateServer.ConfiguredServerUrl = "", UpdatePage, ModUpdateServer.ConfiguredServerUrl),
+            .AssetName = Rel.FileName,
+            .AssetSize = Rel.Size,
+            .Sha256 = Rel.Sha256,
+            .ReleaseId = Rel.ReleaseId,
+            .IsOfficial = True
+        }
+        If Rel.PublishedAt > 0 Then
+            Info.PublishedAt = Rel.PublishedAt.ToString()
+            Info.PublishedLocal = DateTimeOffset.FromUnixTimeSeconds(Rel.PublishedAt).ToLocalTime().DateTime
+        End If
+        Logger.Info($"检查更新（官方源）：最新版本 {Info.Version}，文件 {Info.AssetName}，" &
+                    $"剩余授权 {Rel.RemainingDays} 天")
+        Return Info
+    End Function
+
+    ''' <summary>GitHub：原生源直连，镜像源先经镜像再回退官方。</summary>
+    Private Function FetchLatestFromGitHub() As UpdateInfo
+        Dim UseMirror As Boolean = CurrentUpdateSource = UpdateSource.GitHubMirror
+        Dim Raw As JObject = Nothing
+        Dim MirrorFailure As Exception = Nothing
+
+        If UseMirror Then
+            Try
+                Raw = NetRequestByClientRetry(MirrorUrl(UpdateApi), RequireJson:=True).DeserializeJson()
+            Catch ex As Exception
+                '很多镜像只代理 Release 资产，不代理 api.github.com，所以失败就回退官方接口
+                MirrorFailure = ex
+                Logger.Warn(ex, $"经镜像获取版本信息失败，回退官方接口：{MirrorUrl(UpdateApi)}")
+            End Try
+        End If
+
+        If Raw Is Nothing Then
+            Try
+                Raw = NetRequestByClientRetry(UpdateApi, RequireJson:=True).DeserializeJson()
+            Catch ex As Exception
+                Throw New Exception($"无法连接更新服务器（{UpdateRepo}）", If(MirrorFailure Is Nothing, ex, New AggregateException(MirrorFailure, ex)))
+            End Try
+        End If
+
         If Raw Is Nothing Then Throw New Exception("更新服务器返回了空内容")
         Dim Info As UpdateInfo = ParseRelease(Raw)
         Logger.Info($"检查更新：最新版本 {Info.Version}，exe 资产 {(If(Info.HasAsset, Info.AssetName, "无"))}")
@@ -239,6 +372,8 @@ Friend Module ModUpdate
     ''' </summary>
     Public Function FetchByTag(Version As String) As UpdateInfo
         If String.IsNullOrEmpty(Version) Then Return Nothing
+        '官方源没有按版本查询的接口，公告在下载过程中已经展示过，这里直接跳过
+        If CurrentUpdateSource = UpdateSource.Official Then Return Nothing
         'tag 通常带 v 前缀，也兼容不带前缀的情况
         For Each Url As String In {
                 $"https://api.github.com/repos/{UpdateRepo}/releases/tags/v{Version}",
@@ -333,28 +468,35 @@ Friend Module ModUpdate
 #Region "下载与安装"
 
     ''' <summary>
-    ''' 可用的 GitHub 资产下载反代。国内直连 github.com 的 Release 资产经常连不上，
-    ''' 实测官方地址 10~20s 后中断而反代可用（下载结果与官方 sha256 一致）。
+    ''' 生成下载源列表。
+    ''' 官方源：先用授权换一张短时票据，地址里带票据，过期就下载不了；
+    ''' GitHub 原生：官方优先，连不上 github 资产时退回镜像；
+    ''' GitHub 镜像：镜像优先，失败再退回官方。
     ''' </summary>
-    Private ReadOnly AssetMirrors As String() = {"https://gh-proxy.com/"}
-
-    ''' <summary>
-    ''' 生成下载源列表。默认镜像优先（国内直连 GitHub 资产基本下不动），用户可在设置里改成官方优先。
-    ''' </summary>
-    Private Function BuildDownloadUrls(Url As String) As List(Of String)
+    Private Function BuildDownloadUrls(Info As UpdateInfo) As List(Of String)
         Dim Urls As New List(Of String)
-        If Not (Url.Contains("github.com/") OrElse Url.Contains("githubusercontent.com")) Then
+
+        If Info.IsOfficial Then
+            '票据只有几分钟有效期，所以放在真正开始下载时再换，不能在检查更新时提前换
+            Urls.Add(ModUpdateServer.CreateTicket(Info.ReleaseId))
+            Return Urls
+        End If
+
+        Dim Url As String = Info.AssetUrl
+        If String.IsNullOrEmpty(Url) Then Return Urls
+
+        Dim IsGitHub As Boolean = Url.Contains("github.com/") OrElse Url.Contains("githubusercontent.com")
+        If Not IsGitHub Then
             Urls.Add(Url)
             Return Urls
         End If
-        Dim Mirrored As String = AssetMirrors(0) & Url
-        '0 = 镜像优先（默认），1 = 官方优先
-        If Settings.Get(Of Integer)("ToolLauncherUpdateSource") = 1 Then
+
+        If CurrentUpdateSource = UpdateSource.GitHubMirror Then
+            Urls.Add(MirrorUrl(Url))
             Urls.Add(Url)
-            Urls.Add(Mirrored)
         Else
-            Urls.Add(Mirrored)
             Urls.Add(Url)
+            Urls.Add(MirrorUrl(Url))
         End If
         Return Urls
     End Function
@@ -385,7 +527,10 @@ Friend Module ModUpdate
         Dim Target As String = Folder & "RMCL_new.exe"
         FileUtils.Delete(Target)
 
-        Dim File As New NetFile(BuildDownloadUrls(Info.AssetUrl), Target, SimulateBrowserHeaders:=True)
+        Dim Urls As List(Of String) = BuildDownloadUrls(Info)
+        If Urls.Count = 0 Then Throw New Exception("该版本没有提供可用的下载地址")
+
+        Dim File As New NetFile(Urls, Target, SimulateBrowserHeaders:=True)
         Dim Task As New LoaderDownload("下载启动器更新", New List(Of NetFile) From {File})
         ActiveTask = Task
         '压低并发后再开始，见 UpdateThreadLimit 的说明
@@ -428,6 +573,18 @@ Friend Module ModUpdate
         If Info.AssetSize > 0 AndAlso Length <> Info.AssetSize Then
             FileUtils.Delete(Target)
             Throw New Exception($"下载的更新文件大小与发布信息不一致（{FormatSize(Length)} / {FormatSize(Info.AssetSize)}），请稍后重试")
+        End If
+
+        '官方源会给出 sha256：大小对得上不代表内容对得上，中间被替换过就必须丢掉
+        If Not String.IsNullOrEmpty(Info.Sha256) Then
+            SetPhase("正在校验文件完整性……")
+            Dim Actual As String = ModUpdateServer.Sha256File(Target)
+            If Not String.Equals(Actual, Info.Sha256, StringComparison.OrdinalIgnoreCase) Then
+                FileUtils.Delete(Target)
+                Throw New Exception($"更新文件的 SHA-256 校验未通过，已丢弃该文件（实际 {Actual.Substring(0, Math.Min(12, Actual.Length))}…，" &
+                                    $"期望 {Info.Sha256.Substring(0, Math.Min(12, Info.Sha256.Length))}…）")
+            End If
+            Logger.Info("更新文件 SHA-256 校验通过")
         End If
         Logger.Info($"更新文件下载完成：{Target}（{FormatSize(Length)}）")
         SetPhase("")
@@ -544,26 +701,101 @@ Friend Module ModUpdate
     Public Sub Check(Optional Manual As Boolean = False)
         If Status = UpdateStatus.Checking OrElse Status = UpdateStatus.Downloading Then Return
         SetStatus(UpdateStatus.Checking, "")
-        Try
-            Dim Info As UpdateInfo = FetchLatest()
-            If Info Is Nothing OrElse String.IsNullOrEmpty(Info.Version) Then
-                SetStatus(UpdateStatus.Failed, "更新服务器没有返回版本信息", Nothing, 0)
-                If Manual Then Hint("检查更新失败：更新服务器没有返回版本信息", HintType.Red)
+
+        Dim Attempt As Integer = 0
+        Do
+            Attempt += 1
+            Try
+                '官方源：本地没有有效令牌时先要授权。启动时的静默检查不打扰用户，直接跳过
+                If CurrentUpdateSource = UpdateSource.Official AndAlso Not ModUpdateServer.HasValidLicense Then
+                    If Not Manual Then
+                        SetStatus(UpdateStatus.Failed, "官方源尚未授权，已跳过自动检查", Nothing, 0)
+                        Logger.Info("自动检查更新：官方源尚未授权，本次跳过")
+                        Return
+                    End If
+                    If Not AskLicenseCode() Then
+                        SetStatus(UpdateStatus.Failed, "尚未授权，无法使用官方源检查更新", Nothing, 0)
+                        Return
+                    End If
+                End If
+
+                Dim Info As UpdateInfo = FetchLatest()
+                If Info Is Nothing OrElse String.IsNullOrEmpty(Info.Version) Then
+                    SetStatus(UpdateStatus.Failed, "更新服务器没有返回版本信息", Nothing, 0)
+                    If Manual Then Hint("检查更新失败：更新服务器没有返回版本信息", HintType.Red)
+                    Return
+                End If
+                If IsNewer(Info.Version) Then
+                    SetStatus(UpdateStatus.Available, "", Info, 0)
+                    If Manual Then Hint($"发现新版本 {Info.Version}（当前 {VersionBaseName}）", HintType.Blue)
+                Else
+                    SetStatus(UpdateStatus.UpToDate, "", Info, 0)
+                    If Manual Then Hint($"已是最新版本（{VersionBaseName}）", HintType.Green)
+                End If
                 Return
-            End If
-            If IsNewer(Info.Version) Then
-                SetStatus(UpdateStatus.Available, "", Info, 0)
-                If Manual Then Hint($"发现新版本 {Info.Version}（当前 {VersionBaseName}）", HintType.Blue)
-            Else
-                SetStatus(UpdateStatus.UpToDate, "", Info, 0)
-                If Manual Then Hint($"已是最新版本（{VersionBaseName}）", HintType.Green)
-            End If
-        Catch ex As Exception
-            Logger.Warn(ex, "检查启动器更新失败")
-            SetStatus(UpdateStatus.Failed, ex.Message, Nothing, 0)
-            If Manual Then Hint($"检查更新失败：{ex.Message}", HintType.Red)
-        End Try
+
+            Catch lex As ModUpdateServer.UpdateLicenseException
+                Logger.Warn(lex, $"官方源授权校验失败（{lex.ErrorCode}）")
+                '令牌失效类问题：让用户重输一次验证码，成功后重来一轮
+                If Manual AndAlso Attempt = 1 AndAlso lex.NeedActivate AndAlso AskLicenseCode(lex.Message) Then
+                    Continue Do
+                End If
+                '已到期或被停用：本地令牌已经没有意义，清掉，界面就会显示未授权
+                If lex.ErrorCode = ModUpdateServer.ErrExpired OrElse lex.ErrorCode = ModUpdateServer.ErrCodeDisabled Then
+                    ModUpdateServer.ClearLicense()
+                End If
+                SetStatus(UpdateStatus.Failed, lex.Message, Nothing, 0)
+                If Manual Then Hint($"检查更新失败：{lex.Message}", HintType.Red)
+                Return
+
+            Catch ex As Exception
+                Logger.Warn(ex, "检查启动器更新失败")
+                SetStatus(UpdateStatus.Failed, ex.Message, Nothing, 0)
+                If Manual Then Hint($"检查更新失败：{ex.Message}", HintType.Red)
+                Return
+            End Try
+        Loop While Attempt < 2
     End Sub
+
+    ''' <summary>
+    ''' 弹输入框让用户填验证码并激活，返回是否成功。
+    ''' 内部会切到 UI 线程弹窗，所以必须从后台线程调用（Check 本身就在后台线程跑）。
+    ''' </summary>
+    Private Function AskLicenseCode(Optional Reason As String = "") As Boolean
+        Dim Input As String = RunInUiWait(Function()
+            Dim Text As String =
+                "官方源需要授权后才能检查与下载更新。" & vbCrLf &
+                "请输入管理员提供的验证码；一张码默认绑定一台设备，" & vbCrLf &
+                "授权到期后自动失效，需要续期才能继续更新。"
+            If Not String.IsNullOrEmpty(Reason) Then Text = Reason & vbCrLf & vbCrLf & Text
+            Return MyMsgBoxInput("更新授权", Text, "", Nothing, "XXXX-XXXX-XXXX-XXXX", "激活", "取消")
+        End Function)
+        If String.IsNullOrEmpty(Input) Then
+            Logger.Info("用户取消了更新授权输入")
+            Return False
+        End If
+
+        Dim State As ModUpdateServer.LicenseInfo = Nothing
+        Dim Failure As String = ""
+        Try
+            SetPhase("正在向官方源激活……")
+            Logger.Info("正在向官方源激活更新授权……")
+            State = ModUpdateServer.Activate(Input)
+        Catch ex As ModUpdateServer.UpdateLicenseException
+            Failure = ex.Message
+        Catch ex As Exception
+            Failure = ex.Message
+        Finally
+            SetPhase("")
+        End Try
+
+        If State Is Nothing Then
+            RunInUiWait(Sub() MyMsgBox("激活失败：" & Failure, "更新授权", "知道了", IsWarn:=True))
+            Return False
+        End If
+        Hint($"授权成功，剩余 {State.RemainingDays} 天（{State.ExpireText} 到期）", HintType.Green)
+        Return True
+    End Function
 
     ''' <summary>
     ''' 下载最新版本并登记为待安装。状态会同步到界面；本方法会阻塞，调用方应放到后台线程。
@@ -613,6 +845,11 @@ Friend Module ModUpdate
     Public Sub AutoCheck()
         RunInNewThread(
         Sub()
+            '官方源尚未授权时既不该打扰用户，也不该把状态写成「失败」，直接跳过
+            If CurrentUpdateSource = UpdateSource.Official AndAlso Not ModUpdateServer.HasValidLicense Then
+                Logger.Info("自动更新：官方源尚未授权，本次跳过")
+                Return
+            End If
             Check()
             Dim Info As UpdateInfo = Latest
             If Info Is Nothing Then
@@ -765,6 +1002,23 @@ Friend Module ModUpdate
                 Dim LocalPath As String = StagedPath
                 If String.IsNullOrEmpty(LocalPath) Then Return
                 RunInUi(Sub() PromptInstallAfterDownload(Info, LocalPath))
+            Catch lex As ModUpdateServer.UpdateLicenseException
+                '换票据时被拒：授权到期、被停用或换了设备。本地令牌在这种情况已经没用了
+                Logger.Warn(lex, $"官方源下载被拒绝（{lex.ErrorCode}）")
+                If lex.ErrorCode = ModUpdateServer.ErrExpired OrElse lex.ErrorCode = ModUpdateServer.ErrCodeDisabled Then
+                    ModUpdateServer.ClearLicense()
+                End If
+                Dim Message As String = lex.Message
+                Dim NeedActivate As Boolean = lex.NeedActivate
+                SetStatus(UpdateStatus.Failed, Message, Info, 0)
+                RunInUi(Sub()
+                            Hint("更新下载失败：" & Message, HintType.Red)
+                            MyMsgBox("无法继续下载：" & Message & vbCrLf & vbCrLf &
+                                     If(NeedActivate,
+                                        "请到「设置 → 功能 → 软件更新」点「输入验证码」重新激活后再试。",
+                                        "授权到期或被停用后，更新会被服务器直接拒绝。请联系管理员续期。"),
+                                     "更新授权", "知道了", IsWarn:=True)
+                        End Sub)
             Catch ex As Exception
                 RunInUi(Sub() Hint("更新下载失败：" & ex.Message, HintType.Red))
             End Try

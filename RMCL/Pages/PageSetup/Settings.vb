@@ -135,8 +135,14 @@ Public Class Settings
         New Setting("ToolModLocalNameStyle", 0, Source:=Sources.Registry),
         New Setting("ToolUpdateRelease", False, Source:=Sources.Registry),
         New Setting("ToolLauncherUpdateAuto", False, Source:=Sources.Registry), '启动时自动检查并下载启动器更新
-        New Setting("ToolLauncherUpdateSource", 0, Source:=Sources.Registry), '0 镜像优先，1 官方优先
+        New Setting("ToolLauncherUpdateSource", 0, Source:=Sources.Registry), '（已废弃）旧版下载源偏好，2.19 起改用 UpdateSourceMode
         New Setting("ToolLauncherUpdateInstalled", "", Source:=Sources.Registry), '刚由更新器装上、还没给用户看过公告的版本号
+        New Setting("UpdateSourceMode", 0, Source:=Sources.Registry), '更新源：0 GitHub 原生，1 GitHub 镜像，2 官方源（需授权）
+        New Setting("UpdateMirrorUrl", "", Source:=Sources.Registry), 'GitHub 镜像地址前缀，留空用内置默认值
+        New Setting("UpdateDeviceId", "", Source:=Sources.Registry, Encrypted:=True), '设备标识，由 MachineGuid 派生，换机时在服务端解绑
+        New Setting("UpdateLicenseToken", "", Source:=Sources.Registry, Encrypted:=True), '官方源授权令牌
+        New Setting("UpdateLicenseExpire", 0L, Source:=Sources.Registry), '官方源授权到期时间（Unix 秒）
+        New Setting("UpdateLicenseMask", "", Source:=Sources.Registry), '授权码掩码，仅用于界面展示
         New Setting("ToolUpdateSnapshot", False, Source:=Sources.Registry),
         New Setting("ToolUpdateReleaseLast", "", Source:=Sources.Registry),
         New Setting("ToolUpdateSnapshotLast", "", Source:=Sources.Registry),

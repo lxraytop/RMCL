@@ -25,6 +25,7 @@
     End Sub
     Public Sub Reload()
         SettingService.RefreshSettings(Me)
+        RefreshSourcePanels()
     End Sub
     Public Sub Reset()
         Try
@@ -197,6 +198,132 @@
         If UpdateListener IsNot Nothing Then ModUpdate.UnregisterListener(UpdateListener)
     End Sub
 
+    ''' <summary>下拉框当前选择。直接读控件，避免设置还没落盘时读到旧值。</summary>
+    Private Function SelectedSource() As ModUpdate.UpdateSource
+        Select Case ComboUpdateSource.SelectedIndex
+            Case 1
+                Return ModUpdate.UpdateSource.GitHubMirror
+            Case 2
+                Return ModUpdate.UpdateSource.Official
+            Case Else
+                Return ModUpdate.UpdateSource.GitHubNative
+        End Select
+    End Function
+
+    Private Function SourceShortName() As String
+        Select Case SelectedSource()
+            Case ModUpdate.UpdateSource.GitHubMirror
+                Return "GitHub 镜像"
+            Case ModUpdate.UpdateSource.Official
+                Return "官方源"
+            Case Else
+                Return "GitHub"
+        End Select
+    End Function
+
+    ''' <summary>切换更新源时，显示对应的设置区。</summary>
+    Private Sub ComboUpdateSource_SelectionChanged(sender As Object, e As SelectionChangedEventArgs)
+        RefreshSourcePanels()
+    End Sub
+
+    Private Sub RefreshSourcePanels()
+        Try
+            Dim Mode As ModUpdate.UpdateSource = SelectedSource()
+            PanMirrorSettings.Visibility = If(Mode = ModUpdate.UpdateSource.GitHubMirror, Visibility.Visible, Visibility.Collapsed)
+            PanOfficialSettings.Visibility = If(Mode = ModUpdate.UpdateSource.Official, Visibility.Visible, Visibility.Collapsed)
+            RefreshLicenseView()
+            RefreshUpdateView()
+        Catch ex As Exception
+            Logger.Warn(ex, "刷新更新源界面失败")
+        End Try
+    End Sub
+
+    ''' <summary>刷新官方源的授权状态文字。</summary>
+    Private Sub RefreshLicenseView()
+        Try
+            Dim Token As String = ModUpdateServer.CurrentToken()
+            Dim Expire As Long = ModUpdateServer.CurrentExpire()
+
+            If String.IsNullOrEmpty(Token) Then
+                LabLicenseInfo.Text = "授权状态：未授权"
+                LabLicenseDetail.Text = "检查与下载更新前需要通过验证码授权，一张码默认绑定一台设备。"
+                BtnLicenseClear.IsEnabled = False
+                Return
+            End If
+
+            BtnLicenseClear.IsEnabled = True
+            If Expire <= GetUnixTimestampUtc() Then
+                LabLicenseInfo.Text = "授权状态：已到期"
+                LabLicenseDetail.Text = $"{ModUpdateServer.LicenseSummary()}。到期后服务器会拒绝更新，请联系管理员续期。"
+                Return
+            End If
+
+            LabLicenseInfo.Text = "授权状态：" & ModUpdateServer.LicenseSummary()
+            Dim Mask As String = ModUpdateServer.CurrentMask()
+            LabLicenseDetail.Text = If(String.IsNullOrEmpty(Mask),
+                                       "检查与下载更新都会校验这份授权。",
+                                       $"当前验证码：{Mask}")
+        Catch ex As Exception
+            Logger.Warn(ex, "刷新授权状态失败")
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' 弹窗输入验证码并激活，返回是否成功。设置页按钮与「下载前授权检查」共用。
+    ''' 必须在 UI 线程调用（内部要弹模态框）。
+    ''' </summary>
+    Private Function ActivateLicenseInteractive() As Boolean
+        Dim Input As String = MyMsgBoxInput("更新授权",
+            "请输入管理员提供的验证码。一张码默认绑定一台设备；" & vbCrLf &
+            "授权到期后会自动失效，需要续期才能继续更新。", "",
+            Nothing, "XXXX-XXXX-XXXX-XXXX", "激活", "取消")
+        If String.IsNullOrEmpty(Input) Then Return False
+
+        '网络请求不能放在 UI 线程（NetRequestByClient 会直接拒绝），这里另起线程跑完再回来
+        Dim State As ModUpdateServer.LicenseInfo = Nothing
+        Dim Failure As String = ""
+        Dim Worker As New Thread(
+            Sub()
+                Try
+                    State = ModUpdateServer.Activate(Input)
+                Catch ex As ModUpdateServer.UpdateLicenseException
+                    Failure = ex.Message
+                Catch ex As Exception
+                    Failure = ex.Message
+                End Try
+            End Sub)
+        Worker.IsBackground = True
+        Worker.Start()
+        If Not Worker.Join(20000) Then Failure = "激活请求超时，请检查服务器地址与网络连接"
+
+        If State Is Nothing Then
+            Logger.Warn($"激活更新授权失败：{Failure}")
+            MyMsgBox("激活失败：" & Failure, "更新授权", "知道了", IsWarn:=True)
+            Return False
+        End If
+
+        Hint($"授权成功，剩余 {State.RemainingDays} 天（{State.ExpireText} 到期）", HintType.Green)
+        RefreshLicenseView()
+        RefreshUpdateView()
+        Return True
+    End Function
+
+    Private Sub BtnLicenseActivate_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnLicenseActivate.Click
+        If Not BtnLicenseActivate.IsEnabled Then Return
+        ActivateLicenseInteractive()
+    End Sub
+
+    Private Sub BtnLicenseClear_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnLicenseClear.Click
+        If Not BtnLicenseClear.IsEnabled Then Return
+        If MyMsgBox("解除后本机需要重新输入验证码才能使用官方源。" & vbCrLf &
+                    "验证码本身不会被注销；换机时请让管理员在后台解绑那台设备。",
+                    "解除本地授权", "解除", "取消", IsWarn:=True) <> 1 Then Return
+        ModUpdateServer.ClearLicense()
+        Hint("已解除本地授权", HintType.Green)
+        RefreshLicenseView()
+        RefreshUpdateView()
+    End Sub
+
     ''' <summary>
     ''' 按共享状态刷新整个卡片。自动更新与手动更新走同一份状态，界面不会各说各话。
     ''' </summary>
@@ -227,11 +354,14 @@
 
             Select Case CurStatus
                 Case ModUpdate.UpdateStatus.Idle
-                    LabUpdateInfo.Text = VersionText & vbCrLf & $"更新源：{ModUpdate.UpdateRepo}（GitHub Release）"
+                    LabUpdateInfo.Text = VersionText & vbCrLf & $"更新源：{ModUpdate.SourceDescription}"
+                    If SelectedSource() = ModUpdate.UpdateSource.Official Then
+                        LabUpdateInfo.Text &= vbCrLf & "授权状态：" & ModUpdateServer.LicenseSummary()
+                    End If
                     BtnUpdateInstall.Visibility = Visibility.Collapsed
                     HideUpdateNotes()
                 Case ModUpdate.UpdateStatus.Checking
-                    LabUpdateInfo.Text = VersionText & vbCrLf & "正在从 GitHub 检查更新……"
+                    LabUpdateInfo.Text = VersionText & vbCrLf & $"正在从{SourceShortName()}检查更新……"
                     BtnUpdateInstall.Visibility = Visibility.Collapsed
                     HideUpdateNotes()
                 Case ModUpdate.UpdateStatus.UpToDate
@@ -297,6 +427,11 @@
             Return
         End If
         If ModUpdate.Status = ModUpdate.UpdateStatus.Downloading Then Return
+
+        '官方源：下载前再确认一次授权。过期时直接引导重新激活，免得下到一半被服务器拒绝
+        If Info.IsOfficial AndAlso Not ModUpdateServer.HasValidLicense Then
+            If Not ActivateLicenseInteractive() Then Return
+        End If
 
         Dim SizeText As String = If(Info.AssetSize > 0, FormatSize(Info.AssetSize), "大小未知")
         If MyMsgBox($"即将下载 RMCL {Info.Version}（{SizeText}）。" & vbCrLf &

@@ -1,0 +1,23 @@
+# 禁止目录列表
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # /api/latest  →  index.php?action=latest
+    RewriteRule ^api/([a-z]+)/?$ index.php?action=$1 [L,QSA]
+
+    # /download/<ticket>  →  index.php?action=download&ticket=<ticket>
+    RewriteRule ^download/([A-Fa-f0-9]+)/?$ index.php?action=download&ticket=$1 [L,QSA]
+</IfModule>
+
+# 别把数据库、密码哈希、发布包当静态文件吐出去
+<FilesMatch "\.(sqlite|sqlite3|db|hash|bin)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
