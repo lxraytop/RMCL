@@ -75,7 +75,7 @@ if ($authorized) {
             add_check('已发布版本', true, $release['version'] . '（' . round(((int) $release['size']) / 1048576, 2) . ' MB）');
 
             $ticket = create_ticket($context, (int) $release['id']);
-            add_check('签发下载票据', true, substr($ticket['ticket'], 0, 12) . '…（10 分钟有效）');
+            add_check('签发下载票据', true, substr($ticket['ticket'], 0, 12) . '…（30 分钟有效）');
 
             $body = @file_get_contents($ticket['url'], false, stream_context_create([
                 'http' => ['timeout' => 8, 'header' => "Range: bytes=0-15\r\n", 'ignore_errors' => true],
@@ -86,6 +86,11 @@ if ($authorized) {
             } else {
                 add_check('下载地址可达', strlen($body) > 0, '通过 Range 请求拿到 ' . strlen($body) . ' 字节');
             }
+
+            // 一次下载应当只记一次，不能因为分段请求被重复计数
+            $countRow = db_one('SELECT COUNT(*) AS n FROM downloads WHERE code_id = ?', [$context['code_id']]);
+            $counted = (int) ($countRow['n'] ?? 0);
+            add_check('下载计数', $counted === 1, '本次自检记了 ' . $counted . ' 次（应为 1）');
         }
     } catch (Throwable $e) {
         add_check('授权链路', false, $e->getMessage());
@@ -98,6 +103,7 @@ if ($authorized) {
                     db_exec('DELETE FROM devices WHERE code_id = ?', [$id]);
                     db_exec('DELETE FROM tokens WHERE code_id = ?', [$id]);
                     db_exec('DELETE FROM tickets WHERE code_id = ?', [$id]);
+                    db_exec('DELETE FROM downloads WHERE code_id = ?', [$id]);
                     db_exec('DELETE FROM codes WHERE id = ?', [$id]);
                 }
             } catch (Throwable $e) {

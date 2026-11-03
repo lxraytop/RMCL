@@ -20,7 +20,8 @@ index.php          入口与全部 API
 admin.php          管理后台
 config.php         配置（按需修改）
 lib/core.php       配置 / 数据库 / 日志
-lib/license.php    验证码、设备绑定、令牌、票据
+lib/license.php    验证码、设备绑定、令牌、票据、下载统计
+lib/github.php     从 GitHub Release 拉取版本、公告与 exe
 lib/admin_*.php    后台的登录页与视图
 data/              SQLite 与发布包（必须禁止直接访问，仓库自带 .htaccess）
 .htaccess          路由与保护
@@ -87,6 +88,26 @@ location ~ ^/rmcl-update/download/([A-Fa-f0-9]+)$ {
 
 > PHP 的 `upload_max_filesize` / `post_max_size` 通常只有 2M/8M。启动器 exe 有十几 MB 时请走「FTP + 下拉选择」这条路，后台页面上会显示当前的上传上限。
 
+### 从 GitHub 一次性同步（推荐）
+
+发版流程如果本来就是「在 GitHub 建 Release 并上传 `RMCL.exe`」，就不用再手工上传一遍：
+
+1. 后台 →「版本发布 → 从 GitHub 同步版本」，填仓库（默认 `config.php` 里的 `github_repo`），Tag 留空取最新；
+2. 点「获取 Release 信息」，会带出 tag、标题、**原始更新公告**和 exe 资产（大小、GitHub 上的下载量）；
+3. 版本号、标题、公告都可以改，勾「同版本覆盖」可以重发同一版本；
+4. 点「下载并发布」——文件由**服务器**去 GitHub 抓，落到 `data/releases/`，自动算 sha256 后入库。
+
+相关配置在 `config.php`：
+
+| 配置 | 说明 |
+| --- | --- |
+| `github_repo` | 默认仓库，`owner/name` |
+| `github_mirror` | 直连失败时的加速前缀，默认 `https://gh-proxy.com/`；留空表示只用直连 |
+| `github_token` | 可选。未认证时 GitHub API 限额 60 次/小时，同步私有仓库也必须填 |
+
+> 同步是同步阻塞的：十几 MB 的文件在慢速服务器上可能要几十秒，页面会一直转圈直到下载完成，别中途关掉。
+> 服务器完全连不上 GitHub（且镜像也失败）时，仍然可以走上面的「上传 / FTP + 下拉选择」。
+
 ---
 
 ## 3. 签发验证码
@@ -103,6 +124,16 @@ location ~ ^/rmcl-update/download/([A-Fa-f0-9]+)$ {
 
 **续期**：列表里「更多 → 续期」，在原到期时间上叠加天数；已过期的从当前时间重新起算。
 **停用**：立刻失效，已签发的令牌一并作废。
+
+### 下载次数怎么算
+
+- 「验证码」列表每行有一列「下载 N 次」，是该用户累计真正下载过几次；
+- 「版本发布」列表里每个版本也有「下载次数」，验证码页顶部的统计卡还有累计总数；
+- 口径：**一张下载票据只记一次**。客户端是多线程分段下载，一张票会打几十个 `Range` 请求，
+  按请求计数会把一次下载算成几十次，所以只在票据首次被使用时记一笔；
+- 记录写在 `downloads` 表（`release_id / version / code_id / device_id / ts / ip`），
+  不受票据过期回收影响，可以直接导出对账；
+- 用户断网重试会换一张新票据，因此算两次——这是「下载动作次数」，不是「安装成功次数」。
 
 ---
 
@@ -133,7 +164,7 @@ location ~ ^/rmcl-update/download/([A-Fa-f0-9]+)$ {
 | GET | `?action=health` | — | 健康检查，不需要授权 |
 | POST | `?action=activate` | `code` `device_id` `device_name` `app_version` | 激活验证码，返回 `token` 与到期信息 |
 | POST | `?action=verify` | `token` `device_id` | 校验授权，返回剩余天数 |
-| GET | `?action=latest` | `token` `device_id` `channel?` | 取最新版本信息（需要有效授权） |
+| GET | `?action=latest` | `token` `device_id` `channel?` | 取最新版本信息（需要有效授权），返回里带 `downloads`（本站累计下载次数） |
 | POST | `?action=ticket` | `token` `device_id` `release_id` | 换下载票据，返回 `url` |
 | GET | `?action=download` | `ticket` | 输出文件，支持 `Range` |
 
@@ -177,4 +208,4 @@ curl -o RMCL.exe "返回的 url"
 
 - SQLite 适合单机、几百到几千个验证码的规模；量级再大请换 MySQL（只需改 `lib/core.php` 里的 `db()`）。
 - 设备标识由客户端根据 Windows `MachineGuid` 派生，重装系统会变，此时用后台「解绑」。
-- 下载票据在有效期内可重复使用（客户端是多线程分段下载，必须如此），有效期默认 10 分钟、单票据上限 800 次。
+- 下载票据在有效期内可重复使用（客户端是多线程分段下载，必须如此），有效期默认 30 分钟、单票据上限 800 次。

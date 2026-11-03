@@ -81,103 +81,125 @@ function db(): PDO
 
 function db_migrate(PDO $pdo): void
 {
-    // 每次请求都跑一遍建表语句是浪费：用 user_version 标记版本，只有首次或升级时才建
+    // 用 PRAGMA user_version 记录结构版本，只有首次或升级时才执行建表
     $version = (int) $pdo->query('PRAGMA user_version')->fetchColumn();
-    if ($version >= 1) {
-        return;
+
+    if ($version < 1) {
+        $pdo->exec(<<<'SQL'
+    CREATE TABLE IF NOT EXISTS codes (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        code         TEXT    NOT NULL UNIQUE,
+        note         TEXT    NOT NULL DEFAULT '',
+        mode         TEXT    NOT NULL DEFAULT 'day',      -- day(激活起算) | date(固定到期日)
+        days         INTEGER NOT NULL DEFAULT 30,
+        fixed_expire TEXT    NOT NULL DEFAULT '',          -- mode=date 时的 YYYY-MM-DD
+        device_limit INTEGER NOT NULL DEFAULT 1,
+        status       TEXT    NOT NULL DEFAULT 'unused',    -- unused | active | disabled
+        activated_at INTEGER NOT NULL DEFAULT 0,
+        expire_at    INTEGER NOT NULL DEFAULT 0,
+        created_at   INTEGER NOT NULL DEFAULT 0,
+        last_seen_at INTEGER NOT NULL DEFAULT 0,
+        last_ip      TEXT    NOT NULL DEFAULT '',
+        last_device  TEXT    NOT NULL DEFAULT '',
+        unbind_count INTEGER NOT NULL DEFAULT 0
+    );
+    SQL
+        );
+        $pdo->exec(<<<'SQL'
+    CREATE TABLE IF NOT EXISTS devices (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        code_id     INTEGER NOT NULL REFERENCES codes(id) ON DELETE CASCADE,
+        device_id   TEXT    NOT NULL,
+        device_name TEXT    NOT NULL DEFAULT '',
+        first_seen  INTEGER NOT NULL DEFAULT 0,
+        last_seen   INTEGER NOT NULL DEFAULT 0,
+        ip          TEXT    NOT NULL DEFAULT '',
+        app_version TEXT    NOT NULL DEFAULT '',
+        UNIQUE (code_id, device_id)
+    );
+    SQL
+        );
+        $pdo->exec(<<<'SQL'
+    CREATE TABLE IF NOT EXISTS tokens (
+        token      TEXT    PRIMARY KEY,
+        code_id    INTEGER NOT NULL REFERENCES codes(id) ON DELETE CASCADE,
+        device_id  TEXT    NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT 0,
+        expire_at  INTEGER NOT NULL DEFAULT 0
+    );
+    SQL
+        );
+        $pdo->exec(<<<'SQL'
+    CREATE TABLE IF NOT EXISTS tickets (
+        ticket     TEXT    PRIMARY KEY,
+        code_id    INTEGER NOT NULL,
+        device_id  TEXT    NOT NULL,
+        release_id INTEGER NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT 0,
+        expire_at  INTEGER NOT NULL DEFAULT 0,
+        uses       INTEGER NOT NULL DEFAULT 0
+    );
+    SQL
+        );
+        $pdo->exec(<<<'SQL'
+    CREATE TABLE IF NOT EXISTS releases (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        version      TEXT    NOT NULL,
+        sort_key     TEXT    NOT NULL,                    -- 0002.0019.0000.0000，用于按版本排序
+        title        TEXT    NOT NULL DEFAULT '',
+        notes        TEXT    NOT NULL DEFAULT '',
+        file_name    TEXT    NOT NULL,                    -- 展示给用户的文件名
+        stored_name  TEXT    NOT NULL,                    -- data/releases 下的实际文件名（随机）
+        size         INTEGER NOT NULL DEFAULT 0,
+        sha256       TEXT    NOT NULL DEFAULT '',
+        channel      TEXT    NOT NULL DEFAULT 'stable',
+        status       TEXT    NOT NULL DEFAULT 'published', -- published | draft
+        published_at INTEGER NOT NULL DEFAULT 0,
+        downloads    INTEGER NOT NULL DEFAULT 0
+    );
+    SQL
+        );
+        $pdo->exec(<<<'SQL'
+    CREATE TABLE IF NOT EXISTS logs (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts        INTEGER NOT NULL DEFAULT 0,
+        event     TEXT    NOT NULL,
+        code_id   INTEGER NOT NULL DEFAULT 0,
+        device_id TEXT    NOT NULL DEFAULT '',
+        ip        TEXT    NOT NULL DEFAULT '',
+        detail    TEXT    NOT NULL DEFAULT ''
+    );
+    SQL
+        );
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts DESC)');
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_tokens_code ON tokens(code_id)');
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_tickets_expire ON tickets(expire_at)');
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_releases_sort ON releases(channel, status, sort_key DESC)');
+        $version = 1;
     }
 
-    $pdo->exec(<<<'SQL'
-CREATE TABLE IF NOT EXISTS codes (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    code         TEXT    NOT NULL UNIQUE,
-    note         TEXT    NOT NULL DEFAULT '',
-    mode         TEXT    NOT NULL DEFAULT 'day',      -- day(激活起算) | date(固定到期日)
-    days         INTEGER NOT NULL DEFAULT 30,
-    fixed_expire TEXT    NOT NULL DEFAULT '',          -- mode=date 时的 YYYY-MM-DD
-    device_limit INTEGER NOT NULL DEFAULT 1,
-    status       TEXT    NOT NULL DEFAULT 'unused',    -- unused | active | disabled
-    activated_at INTEGER NOT NULL DEFAULT 0,
-    expire_at    INTEGER NOT NULL DEFAULT 0,
-    created_at   INTEGER NOT NULL DEFAULT 0,
-    last_seen_at INTEGER NOT NULL DEFAULT 0,
-    last_ip      TEXT    NOT NULL DEFAULT '',
-    last_device  TEXT    NOT NULL DEFAULT '',
-    unbind_count INTEGER NOT NULL DEFAULT 0
+    if ($version < 2) {
+        // v2：真实下载记录。票据过期一小时就会被回收，下载次数必须单独存一份；
+        // 客户端是多线程分段下载，同一张票据会打很多次，所以只在「票据首次使用」时记一次。
+        $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS downloads (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    release_id INTEGER NOT NULL DEFAULT 0,
+    version    TEXT    NOT NULL DEFAULT '',
+    code_id    INTEGER NOT NULL DEFAULT 0,
+    device_id  TEXT    NOT NULL DEFAULT '',
+    ts         INTEGER NOT NULL DEFAULT 0,
+    ip         TEXT    NOT NULL DEFAULT ''
 );
 SQL
-    );
-    $pdo->exec(<<<'SQL'
-CREATE TABLE IF NOT EXISTS devices (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    code_id     INTEGER NOT NULL REFERENCES codes(id) ON DELETE CASCADE,
-    device_id   TEXT    NOT NULL,
-    device_name TEXT    NOT NULL DEFAULT '',
-    first_seen  INTEGER NOT NULL DEFAULT 0,
-    last_seen   INTEGER NOT NULL DEFAULT 0,
-    ip          TEXT    NOT NULL DEFAULT '',
-    app_version TEXT    NOT NULL DEFAULT '',
-    UNIQUE (code_id, device_id)
-);
-SQL
-    );
-    $pdo->exec(<<<'SQL'
-CREATE TABLE IF NOT EXISTS tokens (
-    token      TEXT    PRIMARY KEY,
-    code_id    INTEGER NOT NULL REFERENCES codes(id) ON DELETE CASCADE,
-    device_id  TEXT    NOT NULL,
-    created_at INTEGER NOT NULL DEFAULT 0,
-    expire_at  INTEGER NOT NULL DEFAULT 0
-);
-SQL
-    );
-    $pdo->exec(<<<'SQL'
-CREATE TABLE IF NOT EXISTS tickets (
-    ticket     TEXT    PRIMARY KEY,
-    code_id    INTEGER NOT NULL,
-    device_id  TEXT    NOT NULL,
-    release_id INTEGER NOT NULL,
-    created_at INTEGER NOT NULL DEFAULT 0,
-    expire_at  INTEGER NOT NULL DEFAULT 0,
-    uses       INTEGER NOT NULL DEFAULT 0
-);
-SQL
-    );
-    $pdo->exec(<<<'SQL'
-CREATE TABLE IF NOT EXISTS releases (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    version      TEXT    NOT NULL,
-    sort_key     TEXT    NOT NULL,                    -- 0002.0019.0000.0000，用于按版本排序
-    title        TEXT    NOT NULL DEFAULT '',
-    notes        TEXT    NOT NULL DEFAULT '',
-    file_name    TEXT    NOT NULL,                    -- 展示给用户的文件名
-    stored_name  TEXT    NOT NULL,                    -- data/releases 下的实际文件名（随机）
-    size         INTEGER NOT NULL DEFAULT 0,
-    sha256       TEXT    NOT NULL DEFAULT '',
-    channel      TEXT    NOT NULL DEFAULT 'stable',
-    status       TEXT    NOT NULL DEFAULT 'published', -- published | draft
-    published_at INTEGER NOT NULL DEFAULT 0,
-    downloads    INTEGER NOT NULL DEFAULT 0
-);
-SQL
-    );
-    $pdo->exec(<<<'SQL'
-CREATE TABLE IF NOT EXISTS logs (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts        INTEGER NOT NULL DEFAULT 0,
-    event     TEXT    NOT NULL,
-    code_id   INTEGER NOT NULL DEFAULT 0,
-    device_id TEXT    NOT NULL DEFAULT '',
-    ip        TEXT    NOT NULL DEFAULT '',
-    detail    TEXT    NOT NULL DEFAULT ''
-);
-SQL
-    );
-    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts DESC)');
-    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_tokens_code ON tokens(code_id)');
-    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_tickets_expire ON tickets(expire_at)');
-    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_releases_sort ON releases(channel, status, sort_key DESC)');
-    $pdo->exec('PRAGMA user_version = 1');
+        );
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_downloads_code ON downloads(code_id)');
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_downloads_release ON downloads(release_id)');
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_downloads_ts ON downloads(ts DESC)');
+        $version = 2;
+    }
+
+    $pdo->exec('PRAGMA user_version = ' . $version);
 }
 
 function db_one(string $sql, array $params = []): ?array

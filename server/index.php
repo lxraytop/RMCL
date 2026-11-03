@@ -238,6 +238,7 @@ try {
                     'title' => $rel['title'],
                     'notes' => $rel['notes'],
                     'published_at' => (int) $rel['published_at'],
+                    'downloads' => (int) $rel['downloads'],
                     'asset' => [
                         'name' => $rel['file_name'],
                         'size' => (int) $rel['size'],

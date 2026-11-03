@@ -14,6 +14,9 @@ $stats = db_one("SELECT
         SUM(CASE WHEN activated_at > 0 AND expire_at <= " . time() . " THEN 1 ELSE 0 END) AS expired
     FROM codes") ?: ['total' => 0, 'disabled' => 0, 'unused' => 0, 'active' => 0, 'expired' => 0];
 
+$downloadTotalRow = db_one('SELECT COUNT(*) AS n FROM downloads');
+$downloadTotal = (int) ($downloadTotalRow['n'] ?? 0);
+
 $uploadMax = ini_get('upload_max_filesize');
 $postMax = ini_get('post_max_size');
 ?>
@@ -109,6 +112,7 @@ $postMax = ini_get('post_max_size');
         <div class="stat"><b><?= (int) $stats['unused'] ?></b><span>未使用</span></div>
         <div class="stat"><b><?= (int) $stats['expired'] ?></b><span>已过期</span></div>
         <div class="stat"><b><?= (int) $stats['disabled'] ?></b><span>已停用</span></div>
+        <div class="stat"><b><?= $downloadTotal ?></b><span>累计下载次数</span></div>
     </div>
 
     <div class="card">
@@ -188,15 +192,24 @@ $postMax = ini_get('post_max_size');
         $total = (int) ($totalRow['n'] ?? 0);
         $pages = max(1, (int) ceil($total / $per));
         $rows = db_all("SELECT * FROM codes {$where} ORDER BY id DESC LIMIT {$per} OFFSET {$offset}", $params);
+
+        // 每张码的累计下载次数（一个用户下载一次记一次，不是分段数）
+        $downloadCounts = [];
+        if ($rows) {
+            $ids = implode(',', array_map('intval', array_column($rows, 'id')));
+            foreach (db_all("SELECT code_id, COUNT(*) AS n FROM downloads WHERE code_id IN ({$ids}) GROUP BY code_id") as $item) {
+                $downloadCounts[(int) $item['code_id']] = (int) $item['n'];
+            }
+        }
         ?>
 
         <table>
             <thead><tr>
-                <th>验证码</th><th>备注</th><th>有效期</th><th>状态</th><th>绑定设备</th><th>到期时间</th><th>操作</th>
+                <th>验证码</th><th>备注</th><th>有效期</th><th>状态</th><th>绑定设备</th><th>下载</th><th>到期时间</th><th>操作</th>
             </tr></thead>
             <tbody>
             <?php if (!$rows): ?>
-                <tr><td colspan="7" class="muted">还没有验证码，先在上方生成一批。</td></tr>
+                <tr><td colspan="8" class="muted">还没有验证码，先在上方生成一批。</td></tr>
             <?php endif; ?>
             <?php foreach ($rows as $row):
                 [$label, $color] = code_status_label($row);
@@ -225,6 +238,7 @@ $postMax = ini_get('post_max_size');
                             </div>
                         <?php endforeach; endif; ?>
                     </td>
+                    <td class="muted"><?= (int) ($downloadCounts[(int) $row['id']] ?? 0) ?> 次</td>
                     <td class="muted">
                         <?php if ($expireAt > 0): ?>
                             <?= h(fmt_time($expireAt)) ?><br>
@@ -279,8 +293,76 @@ $postMax = ini_get('post_max_size');
     </div>
 
 <?php elseif ($tab === 'releases'): ?>
+    <?php
+    $ghRelease = $_SESSION['gh_release'] ?? null;
+    $ghRepo = (string) ($_SESSION['gh_repo'] ?? cfg('github_repo', 'lxraytop/RMCL'));
+    ?>
     <div class="card">
-        <h2>发布新版本</h2>
+        <h2>从 GitHub 同步版本</h2>
+        <p class="desc">
+            拉取本仓库（或任意公开仓库）的 Release，自动带出 tag、更新公告与 exe 资产；确认后点「下载并发布」，
+            服务器会把文件抓到 <span class="mono">data/releases/</span> 并算好 sha256。
+            服务器直连 GitHub 失败时会用 <span class="mono">config.php</span> 里配置的镜像重试。
+        </p>
+        <form method="post" action="admin.php">
+            <input type="hidden" name="do" value="github_preview">
+            <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
+            <div class="row">
+                <div class="field" style="min-width:220px"><label>仓库</label>
+                    <input type="text" name="repo" value="<?= h($ghRepo) ?>" placeholder="owner/name" style="width:100%"></div>
+                <div class="field"><label>Tag（留空取 latest）</label>
+                    <input type="text" name="tag" placeholder="v2.19.0.0" style="width:170px"></div>
+                <button class="primary" type="submit">获取 Release 信息</button>
+            </div>
+        </form>
+    </div>
+
+    <?php if (is_array($ghRelease)): ?>
+        <div class="card">
+            <h2>待发布：<?= h($ghRelease['version'] ?: '（无 tag）') ?><?= !empty($ghRelease['prerelease']) ? '（预发布）' : '' ?></h2>
+            <p class="desc">
+                tag <span class="mono"><?= h((string) $ghRelease['tag']) ?></span> ·
+                发布于 <?= h(date('Y-m-d H:i', (int) $ghRelease['published_at'])) ?> ·
+                <?php if (!empty($ghRelease['asset'])): ?>
+                    资产 <span class="mono"><?= h($ghRelease['asset']['name']) ?></span>
+                    （<?= round(((int) $ghRelease['asset']['size']) / 1048576, 2) ?> MB，GitHub 上已有 <?= (int) $ghRelease['asset']['downloads'] ?> 次下载）
+                <?php else: ?>
+                    <span style="color:#c0392b">该 Release 没有 .exe 资产，只能手动上传发布包</span>
+                <?php endif; ?>
+                <?php if (!empty($ghRelease['html_url'])): ?>
+                    · <a href="<?= h($ghRelease['html_url']) ?>" target="_blank" rel="noreferrer">在 GitHub 查看</a>
+                <?php endif; ?>
+            </p>
+            <form method="post" action="admin.php">
+                <input type="hidden" name="do" value="github_publish">
+                <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
+                <div class="row" style="margin-bottom:12px">
+                    <div class="field"><label>版本号</label>
+                        <input type="text" name="version" value="<?= h((string) $ghRelease['version']) ?>" style="width:140px"></div>
+                    <div class="field"><label>标题</label>
+                        <input type="text" name="title" value="<?= h((string) $ghRelease['title']) ?>" style="width:220px"></div>
+                    <div class="field"><label>渠道</label>
+                        <select name="channel">
+                            <option value="stable">stable</option>
+                            <option value="beta" <?= !empty($ghRelease['prerelease']) ? 'selected' : '' ?>>beta</option>
+                        </select></div>
+                    <div class="field"><label>状态</label>
+                        <select name="status"><option value="published">立即上架</option><option value="draft">草稿</option></select></div>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:#5c6572;height:32px">
+                        <input type="checkbox" name="overwrite" value="1" style="height:auto"> 同版本覆盖
+                    </label>
+                </div>
+                <div class="field" style="margin-bottom:12px"><label>更新公告（已带出 Release 原文，客户端会自行去掉 Markdown 标记）</label>
+                    <textarea name="notes" rows="8" style="width:100%"><?= h((string) $ghRelease['notes']) ?></textarea></div>
+                <button class="primary" type="submit" <?= empty($ghRelease['asset']) ? 'disabled' : '' ?>>下载并发布</button>
+                <a class="btn" href="admin.php?do=github_cancel" style="line-height:30px">取消</a>
+                <span class="muted" style="margin-left:8px">下载由服务器完成，十几 MB 通常几秒到几十秒，请等页面返回。</span>
+            </form>
+        </div>
+    <?php endif; ?>
+
+    <div class="card">
+        <h2>手动发布</h2>
         <p class="desc">
             客户端按版本号比较大小，取 channel=stable 里版本号最大的已上架版本。
             当前 PHP 上传上限：upload_max_filesize = <?= h((string) $uploadMax) ?>，post_max_size = <?= h((string) $postMax) ?>。
@@ -331,12 +413,12 @@ $postMax = ini_get('post_max_size');
         <?php
         $rels = db_all('SELECT * FROM releases ORDER BY sort_key DESC, id DESC LIMIT 50');
         $dl = [];
-        foreach (db_all('SELECT release_id, SUM(uses) AS u FROM tickets GROUP BY release_id') as $r) {
-            $dl[(int) $r['release_id']] = (int) $r['u'];
+        foreach (db_all('SELECT release_id, COUNT(*) AS n FROM downloads GROUP BY release_id') as $r) {
+            $dl[(int) $r['release_id']] = (int) $r['n'];
         }
         ?>
         <table>
-            <thead><tr><th>版本</th><th>状态</th><th>文件</th><th>大小</th><th>sha256</th><th>发布时间</th><th>下载段数</th><th>操作</th></tr></thead>
+            <thead><tr><th>版本</th><th>状态</th><th>文件</th><th>大小</th><th>sha256</th><th>发布时间</th><th>下载次数</th><th>操作</th></tr></thead>
             <tbody>
             <?php if (!$rels): ?>
                 <tr><td colspan="8" class="muted">还没有发布任何版本，客户端会提示「服务器上还没有发布任何版本」。</td></tr>

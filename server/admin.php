@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/lib/core.php';
 require __DIR__ . '/lib/license.php';
+require __DIR__ . '/lib/github.php';
 
 session_name('rmcl_admin');
 session_set_cookie_params([
@@ -236,6 +237,113 @@ try {
             redirect('codes');
             break;
 
+        case 'github_preview':
+            $repo = trim((string) ($_POST['repo'] ?? ''));
+            if ($repo === '') {
+                $repo = (string) cfg('github_repo', 'lxraytop/RMCL');
+            }
+            $tag = trim((string) ($_POST['tag'] ?? ''));
+            $release = gh_fetch_release($repo, $tag);
+            $_SESSION['gh_release'] = $release;
+            $_SESSION['gh_repo'] = $repo;
+            log_event('admin.sync_preview', ['detail' => 'GitHub ' . $repo . ' ' . $release['version']]);
+            flash('已获取 ' . $repo . ' 的 ' . $release['version'] . '，确认内容后点「下载并发布」'
+                . (empty($release['asset']) ? '（该 Release 里没有 .exe 资产）' : ''));
+            redirect('releases');
+            break;
+
+        case 'github_cancel':
+            unset($_SESSION['gh_release']);
+            redirect('releases');
+            break;
+
+        case 'github_publish':
+            $release = $_SESSION['gh_release'] ?? null;
+            if (!is_array($release) || empty($release['asset'])) {
+                throw new RuntimeException('请先获取 Release 信息，且该 Release 需要带 .exe 资产');
+            }
+
+            $version = trim((string) ($_POST['version'] ?? ''));
+            if ($version === '') {
+                $version = (string) $release['version'];
+            }
+            if (!preg_match('/^\d+(\.\d+){1,3}$/', $version)) {
+                throw new RuntimeException('版本号格式应为 2.19.0.0（取自 tag：' . $release['tag'] . '）');
+            }
+            $channel = preg_replace('/[^a-z]/', '', strtolower((string) ($_POST['channel'] ?? 'stable'))) ?: 'stable';
+            $status = ($_POST['status'] ?? 'published') === 'draft' ? 'draft' : 'published';
+
+            $existing = db_one(
+                'SELECT * FROM releases WHERE version = ? AND channel = ? ORDER BY id DESC LIMIT 1',
+                [$version, $channel]
+            );
+            if ($existing !== null && empty($_POST['overwrite'])) {
+                throw new RuntimeException("版本 {$version}（{$channel}）已存在，若要替换请勾选「同版本覆盖」");
+            }
+
+            // 下载可能持续几十秒，别让默认的 30 秒执行时间把请求掐断
+            @set_time_limit(0);
+            @ini_set('memory_limit', '256M');
+
+            $assetName = (string) $release['asset']['name'];
+            $ext = strtolower(pathinfo($assetName, PATHINFO_EXTENSION)) ?: 'exe';
+            $storedName = bin2hex(random_bytes(12)) . '.' . $ext . '.bin';
+            $target = release_dir() . '/' . $storedName;
+
+            $result = gh_download_asset((string) $release['asset']['url'], $target);
+            if (empty($result['ok'])) {
+                @unlink($target);
+                throw new RuntimeException($result['message'] ?? '从 GitHub 下载失败');
+            }
+
+            $size = (int) filesize($target);
+            $expected = (int) ($release['asset']['size'] ?? 0);
+            if ($size <= 0) {
+                @unlink($target);
+                throw new RuntimeException('下载到的文件为空');
+            }
+            if ($expected > 0 && $size !== $expected) {
+                @unlink($target);
+                throw new RuntimeException("下载的文件大小与 GitHub 不一致（{$size} / {$expected}），已丢弃");
+            }
+
+            $sha = hash_file('sha256', $target) ?: '';
+            $notes = (string) ($_POST['notes'] ?? $release['notes']);
+            $title = trim((string) ($_POST['title'] ?? ''));
+            if ($title === '') {
+                $title = $release['title'] !== '' ? $release['title'] : ('RMCL ' . $version);
+            }
+            $publishedAt = (int) ($release['published_at'] ?? time());
+            $via = $result['via'] ?? '直连 GitHub';
+
+            if ($existing !== null) {
+                db_exec(
+                    'UPDATE releases SET version = ?, sort_key = ?, title = ?, notes = ?, file_name = ?, stored_name = ?,
+                            size = ?, sha256 = ?, channel = ?, status = ?, published_at = ? WHERE id = ?',
+                    [$version, version_sort_key($version), $title, $notes, $assetName, $storedName,
+                     $size, $sha, $channel, $status, $publishedAt, (int) $existing['id']]
+                );
+                $oldPath = release_dir() . '/' . basename((string) $existing['stored_name']);
+                if ($oldPath !== $target && is_file($oldPath)) {
+                    @unlink($oldPath);
+                }
+                log_event('admin.release', ['detail' => "覆盖发布 {$version}（{$assetName}，经{$via}）"]);
+                flash("已用 GitHub 上的文件覆盖 {$version}，sha256 " . substr($sha, 0, 12) . '…');
+            } else {
+                db_exec(
+                    'INSERT INTO releases (version, sort_key, title, notes, file_name, stored_name, size, sha256, channel, status, published_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    [$version, version_sort_key($version), $title, $notes, $assetName, $storedName,
+                     $size, $sha, $channel, $status, $publishedAt]
+                );
+                log_event('admin.release', ['detail' => "同步发布 {$version}（{$assetName}，经{$via}）"]);
+                flash("已从 GitHub 同步 {$version}（" . round($size / 1048576, 2) . " MB），sha256 " . substr($sha, 0, 12) . '…');
+            }
+
+            unset($_SESSION['gh_release']);
+            redirect('releases');
+            break;
+
         case 'publish':
             $version = trim((string) ($_POST['version'] ?? ''));
             if (!preg_match('/^\d+(\.\d+){1,3}$/', $version)) {
@@ -319,10 +427,17 @@ try {
     }
 } catch (ApiError $e) {
     flash($e->getMessage(), 'error');
-    redirect('codes');
+    redirect(error_tab($action));
 } catch (Throwable $e) {
     flash($e->getMessage(), 'error');
-    redirect('codes');
+    redirect(error_tab($action));
+}
+
+/** 出错时回到操作发生的那一页，而不是统统弹回验证码列表 */
+function error_tab(string $action): string
+{
+    $releaseActions = ['publish', 'github_preview', 'github_publish', 'release_status', 'release_delete'];
+    return in_array($action, $releaseActions, true) ? 'releases' : 'codes';
 }
 
 // 没有动作时落到下面的视图渲染

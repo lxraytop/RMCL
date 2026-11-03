@@ -308,8 +308,45 @@ function consume_ticket(string $ticket): array
     if ((int) $row['uses'] > (int) cfg('ticket_max_use', 800)) {
         throw new ApiError('E_TICKET_USES', '下载凭证使用次数超限，请重新发起更新', 429);
     }
-    db_exec('UPDATE tickets SET uses = uses + 1 WHERE ticket = ?', [$ticket]);
+
+    // 只有「第一次用到这张票据」才算一次真实下载：客户端是多线程分段下载，
+    // 同一张票会被打几十次，按请求计数会把一次下载算成几十次。
+    $first = db_exec('UPDATE tickets SET uses = uses + 1 WHERE ticket = ? AND uses = 0', [$ticket]) > 0;
+    if ($first) {
+        record_download((int) $row['release_id'], (int) $row['code_id'], (string) $row['device_id']);
+    } else {
+        db_exec('UPDATE tickets SET uses = uses + 1 WHERE ticket = ?', [$ticket]);
+    }
+
     return $row;
+}
+
+/**
+ * 记一次真实下载，供后台按用户与版本统计。
+ * 单独建表而不是累加 releases.downloads：票据一小时后就被回收，累计值会跟票据一起失真。
+ */
+function record_download(int $releaseId, int $codeId, string $deviceId): void
+{
+    try {
+        $version = '';
+        $release = db_one('SELECT version FROM releases WHERE id = ?', [$releaseId]);
+        if ($release !== null) {
+            $version = (string) $release['version'];
+        }
+        db_exec(
+            'INSERT INTO downloads (release_id, version, code_id, device_id, ts, ip) VALUES (?, ?, ?, ?, ?, ?)',
+            [$releaseId, $version, $codeId, $deviceId, time(), client_ip()]
+        );
+        // 顺手把汇总值也加上：明细表用来对账，汇总字段用来给客户端/列表直接读
+        db_exec('UPDATE releases SET downloads = downloads + 1 WHERE id = ?', [$releaseId]);
+        log_event('download', [
+            'code_id' => $codeId,
+            'device_id' => $deviceId,
+            'detail' => '下载 ' . ($version !== '' ? $version : ('#' . $releaseId)),
+        ]);
+    } catch (Throwable $e) {
+        // 统计失败不能影响下载本身
+    }
 }
 
 /** 后台：解除某验证码的全部设备绑定（到期时间不变） */

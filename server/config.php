@@ -25,8 +25,8 @@ return [
     'token_ttl' => 0,
 
     // 下载票据有效期（秒）。客户端是多线程分段下载，同一张票据会在有效期内被反复使用（带 Range 请求），
-    // 因此不能做成「一次即失效」。10 分钟足够下完一个 50MB 的 exe。
-    'ticket_ttl' => 600,
+    // 因此不能做成「一次即失效」。给 30 分钟，慢速网络下也不会下到一半就断。
+    'ticket_ttl' => 1800,
 
     // 单张票据的最大使用次数，防止票据被疯狂刷
     'ticket_max_use' => 800,
@@ -40,4 +40,16 @@ return [
 
     // 管理后台路径（改成不常见的名字可以少被扫描器骚扰，例如 'console-7f3a.php'）
     'admin_path' => 'admin.php',
+
+    // ---- 从 GitHub 同步版本（后台「版本发布 → 从 GitHub 同步」）----
+
+    // 默认仓库，形如 owner/name。后台里可以临时改成别的仓库。
+    'github_repo' => 'lxraytop/RMCL',
+
+    // 加速镜像前缀。服务器直连 api.github.com / 资产下载失败时，会用这个前缀重试一次。
+    // 留空表示只用直连。格式与 gh-proxy 一致：https://gh-proxy.com/https://github.com/...
+    'github_mirror' => 'https://gh-proxy.com/',
+
+    // 可选：GitHub Token。填了能提高 API 限额（未认证 60 次/小时），同步私有仓库时必须填。
+    'github_token' => '',
 ];
