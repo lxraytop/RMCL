@@ -3,7 +3,7 @@
 '''
 ''' 发送流程：
 '''   1. 管理后台「联网通知」新建一条（标题、正文、级别、生效窗口、版本区间、是否只弹一次）；
-'''   2. 客户端启动完成 → 延迟 4 秒 → 距上次拉取超过 5 分钟才请求 ?action=notices&amp;app_version=x.y.z；
+'''   2. 客户端启动完成 → 延迟 4 秒 → 距上次拉取超过 4 小时才请求 ?action=notices&amp;app_version=x.y.z；
 '''   3. 服务端按 enabled + 时间窗口 + 版本区间过滤后返回；
 '''   4. 客户端本地再过滤掉已读的（once=1 且 ID 在已读列表里）；
 '''   5. 多条同时生效时只弹级别最高、ID 最大的一条，其余留到下次启动；
@@ -22,10 +22,10 @@ Friend Module ModNotice
     ''' </summary>
     Private Const StartupDelayMs As Integer = 4000
     ''' <summary>
-    ''' 两次拉取的最小间隔。只做防抖用，不承担「省流量」的职责 ——
-    ''' 一次请求几百字节，把间隔拉长到一天只会让新公告迟迟发不出去。
+    ''' 两次拉取的最小间隔。一次请求只有几百字节，这里主要是防止用户反复重启时刷接口；
+    ''' 4 小时能保证当天发布的通知当天就能触达大部分用户，又不会每次都请求。
     ''' </summary>
-    Private Const FetchIntervalSec As Long = 300
+    Private Const FetchIntervalSec As Long = 4 * 3600
     ''' <summary>本地留存的已读通知 ID 上限，超出后按先进先出丢弃。</summary>
     Private Const MaxReadIds As Integer = 100
 
@@ -39,7 +39,7 @@ Friend Module ModNotice
         Sub()
             Try
                 If Not ShouldFetchNow() Then
-                    Logger.Info("联网通知：距上次拉取不足 5 分钟，本次跳过")
+                    Logger.Info("联网通知：距上次拉取不足 4 小时，本次跳过")
                     Return
                 End If
 

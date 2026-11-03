@@ -1,4 +1,4 @@
-# 构建说明（RMCL 2.19.1.0）
+# 构建说明（RMCL 2.19.2.0）
 
 RMCL 基于上游 2.14.0.0 开源基线重构，技术栈与上游一致：**.NET Framework 4.8 + WPF + VB.NET**（主工程为传统 vbproj，`RMCLCS` 与 `MeloongCore` 为 SDK 风格 csproj）。
 
@@ -81,12 +81,22 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 
 | 文件 | 大小 | 说明 |
 | --- | --- | --- |
-| `dist/RMCL 2.19.1.0/RMCL.exe` | 5.68 MB | 主程序，版本信息 `2.19.1.0 / Ray Minecraft Launcher` |
-| `dist/RMCL 2.19.1.0/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
-| `dist/RMCL-2.19.1.0-win.zip` | 2.55 MB | 上述两个文件的压缩包（sha256 `71c494ef3f57…`） |
+| `dist/RMCL 2.19.2.0/RMCL.exe` | 5.68 MB | 主程序，版本信息 `2.19.2.0 / Ray Minecraft Launcher` |
+| `dist/RMCL 2.19.2.0/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
+| `dist/RMCL-2.19.2.0-win.zip` | 2.55 MB | 上述两个文件的压缩包（sha256 `bc3f61fbcce7…`） |
 
-对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.19.1.0>，
-资产 `RMCL.exe`（5,955,072 B，sha256 `b72e4523c033…`）与 `RMCL-2.19.1.0-win.zip`（2,671,555 B）。
+对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.19.2.0>，
+资产 `RMCL.exe`（5,960,704 B，sha256 `a1239fa58430…`）与 `RMCL-2.19.2.0-win.zip`（2,673,129 B）。
+
+### 2.19.2.0 主要变更
+
+- 修复：用官方源更新完成后看不到该版本的更新公告（服务端新增 `?action=release` 按版本查询）。
+- 官方源授权到期、被停用或绑在别的设备时，检查更新会提示输入新的验证码；
+  如果选择放弃，会自动切回 GitHub 官方源并继续检查，不会再卡在「官方源用不了」的状态。
+- 新增联网通知：公告文案全部由更新服务器下发，客户端不硬编码。启动后延迟 4 秒拉取，
+  4 小时内不重复请求；多条同时生效时只弹级别最高的一条，展示后回报触达次数。
+- 服务端新增「联网通知」管理页（标题/正文/级别/生效窗口/版本区间/仅一次），
+  通知不需要授权即可接收，未激活或已到期的用户同样能收到。
 
 ### 2.19.1.0 主要变更
 
