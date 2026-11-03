@@ -414,7 +414,8 @@
     End Sub
 
     Private Sub ShowUpdateNotes(Info As ModUpdate.UpdateInfo)
-        If Info Is Nothing Then
+        '没有公告就整块收起来，别在设置页留一个空面板
+        If Info Is Nothing OrElse String.IsNullOrEmpty(Info.Notes) Then
             HideUpdateNotes()
             Return
         End If

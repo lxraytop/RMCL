@@ -483,7 +483,9 @@ Friend Module ModUpdate
     ''' 把 Release 公告里的 Markdown 标记去掉，变成可以直接显示的纯文本。
     ''' </summary>
     Private Function CleanNotes(RawText As String) As String
-        If String.IsNullOrEmpty(RawText) Then Return "该版本没有提供更新公告。"
+        '没有公告就返回空串，由调用方决定怎么处理 —— 以前这里返回「该版本没有提供更新公告。」，
+        '结果「更新完成」弹窗被这条兜底文案骗成「有公告」，白弹一个空窗
+        If String.IsNullOrEmpty(RawText) Then Return ""
         Dim Text As String = RawText.Replace(vbCrLf, vbLf)
         Text = Regex.Replace(Text, "^#{1,6}[ \t]*", "", RegexOptions.Multiline)         '标题
         Text = Regex.Replace(Text, "^\s*[-*+][ \t]+", "· ", RegexOptions.Multiline)     '无序列表
@@ -1002,11 +1004,10 @@ Friend Module ModUpdate
     ''' </summary>
     Private Sub ShowUpdateNotes(Version As String, Info As UpdateInfo)
         Try
+            '没有公告就不弹窗了，只给一个气泡 —— 空弹窗除了打断用户没有别的作用
             If Info Is Nothing OrElse String.IsNullOrEmpty(Info.Notes) Then
-                MyMsgBox($"已更新到 RMCL {Version}。" & vbCrLf & vbCrLf &
-                         "这次的更新公告没能取到，可以到发布页查看。",
-                         "更新完成", "知道了", "打开发布页",
-                         Button2Action:=Sub() OpenWebsite(UpdatePage))
+                Logger.Info($"已更新到 {Version}，但该版本没有更新公告，跳过弹窗")
+                Hint($"已更新到 RMCL {Version}", HintType.Green)
                 Return
             End If
 
@@ -1039,9 +1040,9 @@ Friend Module ModUpdate
             If Notes.Length > 600 Then
                 Notes = Notes.Substring(0, 600) & "……" & vbCrLf & "（公告较长，完整内容请点「查看公告」）"
             End If
-            Dim Text As String = $"发现新版本 {Info.Version}（当前 {VersionBaseName}）" & vbCrLf & vbCrLf &
-                                 Notes & vbCrLf & vbCrLf &
-                                 "更新会在下载完成后、退出启动器时自动安装。"
+            Dim Text As String = $"发现新版本 {Info.Version}（当前 {VersionBaseName}）"
+            If Not String.IsNullOrEmpty(Notes) Then Text &= vbCrLf & vbCrLf & Notes
+            Text &= vbCrLf & vbCrLf & "更新会在下载完成后、退出启动器时自动安装。"
             Dim Result As Integer = MyMsgBox(Text, "发现新版本", "立即更新", "稍后", "查看公告",
                                             Button3Action:=Sub() OpenWebsite(Info.PageUrl))
             If Result <> 1 Then
