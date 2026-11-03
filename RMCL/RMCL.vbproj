@@ -261,6 +261,7 @@
     <Compile Include="Modules\ModLink.vb" />
     <Compile Include="Modules\ModFeature.vb" />
     <Compile Include="Modules\ModUpdate.vb" />
+    <Compile Include="Modules\ModUpdateServer.vb" />
     <Compile Include="Modules\ModFrp.vb" />
     <Compile Include="Controls\MyUpdateProgress.vb" />
     <Compile Include="Pages\PageDownload\Resource\PageResource.xaml.vb">
