@@ -199,7 +199,49 @@ SQL
         $version = 2;
     }
 
+    if ($version < 3) {
+        // v3：联网通知。所有文案都由服务端下发，客户端不硬编码任何公告内容。
+        // once_only=1 表示每台设备只弹一次（客户端本地记已读），0 表示每次启动都可以弹。
+        $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS notices (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    title       TEXT    NOT NULL DEFAULT '',
+    body        TEXT    NOT NULL DEFAULT '',
+    level       INTEGER NOT NULL DEFAULT 0,
+    min_version TEXT    NOT NULL DEFAULT '',
+    max_version TEXT    NOT NULL DEFAULT '',
+    start_at    INTEGER NOT NULL DEFAULT 0,
+    end_at      INTEGER NOT NULL DEFAULT 0,
+    once_only   INTEGER NOT NULL DEFAULT 1,
+    enabled     INTEGER NOT NULL DEFAULT 1,
+    created_at  INTEGER NOT NULL DEFAULT 0,
+    seen_count  INTEGER NOT NULL DEFAULT 0
+);
+SQL
+        );
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_notices_enabled ON notices(enabled, start_at, end_at)');
+        $version = 3;
+    }
+
     $pdo->exec('PRAGMA user_version = ' . $version);
+}
+
+/** 版本区间是否命中（空区间表示不限版本） */
+function notice_matches_version(array $notice, string $appVersion): bool
+{
+    $appVersion = ltrim(trim($appVersion), 'vV');
+    if ($appVersion === '') {
+        return true;
+    }
+    $min = trim((string) $notice['min_version']);
+    $max = trim((string) $notice['max_version']);
+    if ($min !== '' && version_compare($appVersion, $min, '<')) {
+        return false;
+    }
+    if ($max !== '' && version_compare($appVersion, $max, '>')) {
+        return false;
+    }
+    return true;
 }
 
 function db_one(string $sql, array $params = []): ?array

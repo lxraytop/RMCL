@@ -143,6 +143,8 @@ Public Class Settings
         New Setting("UpdateLicenseToken", "", Source:=Sources.Registry, Encrypted:=True), '官方源授权令牌
         New Setting("UpdateLicenseExpire", 0L, Source:=Sources.Registry), '官方源授权到期时间（Unix 秒）
         New Setting("UpdateLicenseMask", "", Source:=Sources.Registry), '授权码掩码，仅用于界面展示
+        New Setting("NoticeLastFetch", 0L, Source:=Sources.Registry), '上次拉取联网通知的时间（Unix 秒），用于 24 小时节流
+        New Setting("NoticeReadIds", "", Source:=Sources.Registry), '已读的联网通知 ID，逗号分隔
         New Setting("ToolUpdateSnapshot", False, Source:=Sources.Registry),
         New Setting("ToolUpdateReleaseLast", "", Source:=Sources.Registry),
         New Setting("ToolUpdateSnapshotLast", "", Source:=Sources.Registry),

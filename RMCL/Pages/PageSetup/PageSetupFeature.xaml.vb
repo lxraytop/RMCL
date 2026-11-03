@@ -238,6 +238,22 @@
         End Try
     End Sub
 
+    ''' <summary>
+    ''' 设置里的更新源与下拉框选中项不一致时同步过来。
+    ''' 退出官方源时会由 ModUpdate 自动切到 GitHub，用户不必自己再去改一次。
+    ''' </summary>
+    Private Sub SyncSourceSelection()
+        Try
+            Dim Saved As Integer = CInt(Settings.Get(Of Integer)("UpdateSourceMode"))
+            If Saved < 0 OrElse Saved >= ComboUpdateSource.Items.Count Then Return
+            If ComboUpdateSource.SelectedIndex = Saved Then Return
+            Logger.Info($"更新源已被自动切换为 {Saved}，同步下拉框")
+            ComboUpdateSource.SelectedIndex = Saved
+        Catch ex As Exception
+            Logger.Warn(ex, "同步更新源下拉框失败")
+        End Try
+    End Sub
+
     ''' <summary>刷新官方源的授权状态文字。</summary>
     Private Sub RefreshLicenseView()
         Try
@@ -329,6 +345,8 @@
     ''' </summary>
     Private Sub RefreshUpdateView()
         Try
+            '更新源可能被自动切换（例如官方源授权到期后回退到 GitHub），下拉框要跟着走
+            SyncSourceSelection()
             Dim Info As ModUpdate.UpdateInfo = ModUpdate.Latest
             Dim CurStatus As ModUpdate.UpdateStatus = ModUpdate.Status
             Dim VersionText As String = $"当前版本：{VersionBaseName}"

@@ -1,7 +1,7 @@
 <?php
 /** 管理后台主视图（由 admin.php 在已登录后引入，共享其作用域） */
 
-$tab = in_array($_GET['tab'] ?? '', ['codes', 'releases', 'logs'], true) ? $_GET['tab'] : 'codes';
+$tab = in_array($_GET['tab'] ?? '', ['codes', 'releases', 'notices', 'logs'], true) ? $_GET['tab'] : 'codes';
 $flash = take_flash();
 $csrf = csrf_token();
 $siteUrl = base_url();
@@ -92,6 +92,7 @@ $postMax = ini_get('post_max_size');
         <nav>
             <a href="admin.php?tab=codes" class="<?= $tab === 'codes' ? 'on' : '' ?>">验证码</a>
             <a href="admin.php?tab=releases" class="<?= $tab === 'releases' ? 'on' : '' ?>">版本发布</a>
+            <a href="admin.php?tab=notices" class="<?= $tab === 'notices' ? 'on' : '' ?>">联网通知</a>
             <a href="admin.php?tab=logs" class="<?= $tab === 'logs' ? 'on' : '' ?>">日志</a>
         </nav>
         <div class="who">
@@ -444,6 +445,111 @@ $postMax = ini_get('post_max_size');
                             <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
                             <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
                             <button type="submit" class="danger" onclick="return confirm('同时删除服务器上的文件，确定？')">删除</button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+
+<?php elseif ($tab === 'notices'): ?>
+    <div class="card">
+        <h2>新建通知</h2>
+        <p class="desc">
+            客户端启动后拉取这里的通知并弹窗展示，文案全部由服务端下发，客户端不硬编码任何公告。
+            触发时机：启动完成 → 延迟 8 秒 → 24 小时内没拉过则请求一次；
+            多条同时生效时只弹级别最高的那条，其余等下次启动。
+        </p>
+        <form method="post" action="admin.php">
+            <input type="hidden" name="do" value="create_notice">
+            <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
+            <div class="row" style="margin-bottom:12px">
+                <div class="field" style="flex:1;min-width:260px"><label>标题</label>
+                    <input type="text" name="title" placeholder="例如：2.20.0.0 已发布" style="width:100%"></div>
+                <div class="field"><label>级别</label>
+                    <select name="level">
+                        <option value="0">普通</option>
+                        <option value="1">重要</option>
+                        <option value="2">紧急（红色弹窗）</option>
+                    </select></div>
+            </div>
+            <div class="field" style="margin-bottom:12px"><label>正文（纯文本，支持换行）</label>
+                <textarea name="body" rows="5" style="width:100%" placeholder="这次更新了什么、需要注意什么……"></textarea></div>
+            <div class="row" style="margin-bottom:12px">
+                <div class="field"><label>起始时间</label>
+                    <input type="text" name="start_at" placeholder="留空=立即" style="width:170px"></div>
+                <div class="field"><label>结束时间</label>
+                    <input type="text" name="end_at" placeholder="留空=永久" style="width:170px"></div>
+                <div class="field"><label>起始版本</label>
+                    <input type="text" name="min_version" placeholder="留空=不限" style="width:120px"></div>
+                <div class="field"><label>结束版本</label>
+                    <input type="text" name="max_version" placeholder="留空=不限" style="width:120px"></div>
+            </div>
+            <div class="row" style="margin-bottom:12px">
+                <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:#5c6572;height:32px">
+                    <input type="checkbox" name="once_only" value="1" checked style="height:auto"> 每台设备只弹一次
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:#5c6572;height:32px">
+                    <input type="checkbox" name="enabled" value="1" checked style="height:auto"> 立即启用
+                </label>
+            </div>
+            <button class="primary" type="submit">创建通知</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>全部通知</h2>
+        <?php $notices = db_all('SELECT * FROM notices ORDER BY id DESC LIMIT 100'); ?>
+        <table>
+            <thead><tr><th>ID</th><th>标题 / 摘要</th><th>级别</th><th>状态</th><th>生效窗口</th><th>版本区间</th><th>触达</th><th>操作</th></tr></thead>
+            <tbody>
+            <?php if (!$notices): ?>
+                <tr><td colspan="8" class="muted">还没有通知。客户端不会请求，也不会弹任何东西。</td></tr>
+            <?php endif; ?>
+            <?php foreach ($notices as $n):
+                $nowTs = time();
+                $startTs = (int) $n['start_at'];
+                $endTs = (int) $n['end_at'];
+                $active = (int) $n['enabled'] === 1
+                    && ($startTs === 0 || $startTs <= $nowTs)
+                    && ($endTs === 0 || $endTs >= $nowTs);
+                $levelName = ['普通', '重要', '紧急'][(int) $n['level']] ?? '普通';
+                $levelColor = ['gray', 'blue', 'red'][(int) $n['level']] ?? 'gray';
+            ?>
+                <tr>
+                    <td class="muted">#<?= (int) $n['id'] ?></td>
+                    <td>
+                        <b><?= h($n['title'] ?: '（无标题）') ?></b>
+                        <div class="muted" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                            <?= h(str_limit((string) $n['body'], 40)) ?>
+                        </div>
+                    </td>
+                    <td><span class="tag <?= $levelColor ?>"><?= $levelName ?></span></td>
+                    <td>
+                        <span class="tag <?= $active ? 'green' : 'gray' ?>">
+                            <?= $active ? '生效中' : ((int) $n['enabled'] === 1 ? '未到时间 / 已过期' : '已停用') ?>
+                        </span>
+                        <div class="muted"><?= (int) $n['once_only'] === 1 ? '仅一次' : '每次启动' ?></div>
+                    </td>
+                    <td class="muted" style="white-space:nowrap">
+                        <?= $startTs > 0 ? h(date('Y-m-d H:i', $startTs)) : '立即' ?>
+                        → <?= $endTs > 0 ? h(date('Y-m-d H:i', $endTs)) : '永久' ?>
+                    </td>
+                    <td class="muted"><?= h($n['min_version'] !== '' ? $n['min_version'] : '不限') ?> ~ <?= h($n['max_version'] !== '' ? $n['max_version'] : '不限') ?></td>
+                    <td class="muted"><?= (int) $n['seen_count'] ?> 次</td>
+                    <td style="white-space:nowrap">
+                        <form class="inline" method="post" action="admin.php">
+                            <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
+                            <input type="hidden" name="id" value="<?= (int) $n['id'] ?>">
+                            <input type="hidden" name="do" value="toggle_notice">
+                            <button type="submit"><?= (int) $n['enabled'] === 1 ? '停用' : '启用' ?></button>
+                        </form>
+                        <form class="inline" method="post" action="admin.php">
+                            <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
+                            <input type="hidden" name="id" value="<?= (int) $n['id'] ?>">
+                            <input type="hidden" name="do" value="delete_notice">
+                            <button type="submit" class="danger" onclick="return confirm('确定删除这条通知？')">删除</button>
                         </form>
                     </td>
                 </tr>

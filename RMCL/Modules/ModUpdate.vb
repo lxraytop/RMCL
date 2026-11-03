@@ -766,10 +766,21 @@ Friend Module ModUpdate
 
             Catch lex As ModUpdateServer.UpdateLicenseException
                 Logger.Warn(lex, $"官方源授权校验失败（{lex.ErrorCode}）")
-                '令牌失效类问题：让用户重输一次验证码，成功后重来一轮
-                If Manual AndAlso Attempt = 1 AndAlso lex.NeedActivate AndAlso AskLicenseCode(lex.Message) Then
+
+                '两类情况都值得让用户重输一次验证码：
+                '  1) 令牌失效（换机、管理员解绑）—— 原来那张码还能用
+                '  2) 授权到期 / 被停用 / 绑在别的设备 —— 用户可能已经从管理员那里拿到了新的码
+                Dim CanRetry As Boolean = lex.NeedActivate OrElse IsRenewalRequired(lex.ErrorCode)
+                If Manual AndAlso Attempt = 1 AndAlso CanRetry Then
+                    If AskLicenseCode(lex.Message, Renewal:=Not lex.NeedActivate) Then
+                        Continue Do
+                    End If
+                    '用户放弃续期：别让他卡在「官方源用不了、又不知道怎么办」的状态，
+                    '直接退回 GitHub 官方源，然后用新源重新检查一次
+                    FallbackToGitHubSource(lex.Message)
                     Continue Do
                 End If
+
                 '已到期或被停用：本地令牌已经没有意义，清掉，界面就会显示未授权
                 If lex.ErrorCode = ModUpdateServer.ErrExpired OrElse lex.ErrorCode = ModUpdateServer.ErrCodeDisabled Then
                     ModUpdateServer.ClearLicense()
@@ -791,14 +802,21 @@ Friend Module ModUpdate
     ''' 弹输入框让用户填验证码并激活，返回是否成功。
     ''' 内部会切到 UI 线程弹窗，所以必须从后台线程调用（Check 本身就在后台线程跑）。
     ''' </summary>
-    Private Function AskLicenseCode(Optional Reason As String = "") As Boolean
+    Private Function AskLicenseCode(Optional Reason As String = "", Optional Renewal As Boolean = False) As Boolean
         Dim Input As String = RunInUiWait(Function()
-            Dim Text As String =
-                "官方源需要授权后才能检查与下载更新。" & vbCrLf &
-                "请输入管理员提供的验证码；一张码默认绑定一台设备，" & vbCrLf &
-                "授权到期后自动失效，需要续期才能继续更新。"
+            Dim Text As String
+            If Renewal Then
+                Text = "当前授权已不可用（可能是到期、被停用，或已经绑在别的设备上）。" & vbCrLf &
+                       "如果已经续期或拿到了新的验证码，可以直接在这里输入。" & vbCrLf &
+                       "暂时不续期的话点「取消」，会自动改用 GitHub 官方源继续检查更新。"
+            Else
+                Text = "官方源需要授权后才能检查与下载更新。" & vbCrLf &
+                       "请输入管理员提供的验证码；一张码默认绑定一台设备，" & vbCrLf &
+                       "授权到期后自动失效，需要续期才能继续更新。"
+            End If
             If Not String.IsNullOrEmpty(Reason) Then Text = Reason & vbCrLf & vbCrLf & Text
-            Return MyMsgBoxInput("更新授权", Text, "", Nothing, "XXXX-XXXX-XXXX-XXXX", "激活", "取消")
+            Return MyMsgBoxInput(If(Renewal, "更新授权已失效", "更新授权"), Text, "", Nothing,
+                                 "XXXX-XXXX-XXXX-XXXX", "激活", "取消")
         End Function)
         If String.IsNullOrEmpty(Input) Then
             Logger.Info("用户取消了更新授权输入")
@@ -826,6 +844,35 @@ Friend Module ModUpdate
         Hint($"授权成功，剩余 {State.RemainingDays} 天（{State.ExpireText} 到期）", HintType.Green)
         Return True
     End Function
+
+    ''' <summary>
+    ''' 这些错误码意味着「当前授权不能用了，但换一张码有机会继续」：
+    ''' 到期、被停用、绑在别的设备、码被删。换机类（令牌失效）另由 NeedActivate 判断。
+    ''' </summary>
+    Private Function IsRenewalRequired(ErrorCode As String) As Boolean
+        Select Case ErrorCode
+            Case ModUpdateServer.ErrExpired, ModUpdateServer.ErrCodeDisabled, _
+                 ModUpdateServer.ErrDeviceBound, ModUpdateServer.ErrCodeNotFound
+                Return True
+            Case Else
+                Return False
+        End Select
+    End Function
+
+    ''' <summary>
+    ''' 用户放弃续期时，把更新源切回 GitHub 原生源并提示。
+    ''' 这里只改设置、不继续检查 —— 由调用方用新源再跑一轮，避免两条链路互相等。
+    ''' </summary>
+    Private Sub FallbackToGitHubSource(Reason As String)
+        Try
+            ModUpdateServer.ClearLicense()
+            Settings.Set("UpdateSourceMode", CInt(UpdateSource.GitHubNative))
+            Logger.Info($"官方源授权不可用（{Reason}），已自动切换为 GitHub 官方源")
+            Hint("已自动切换为 GitHub 官方源，后续更新将从 GitHub 检查", HintType.Blue)
+        Catch ex As Exception
+            Logger.Warn(ex, "自动切换更新源失败")
+        End Try
+    End Sub
 
     ''' <summary>
     ''' 下载最新版本并登记为待安装。状态会同步到界面；本方法会阻塞，调用方应放到后台线程。

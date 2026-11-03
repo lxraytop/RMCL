@@ -284,6 +284,44 @@ try {
             ]);
             break;
 
+        case 'notices':
+            // 联网通知：不需要授权，未授权/已到期的用户也应该能看到公告
+            $appVersion = (string) input('app_version');
+            $now = time();
+            $rows = db_all(
+                'SELECT * FROM notices WHERE enabled = 1 AND (start_at = 0 OR start_at <= ?)
+                   AND (end_at = 0 OR end_at >= ?) ORDER BY level DESC, id DESC LIMIT 20',
+                [$now, $now]
+            );
+            $list = [];
+            foreach ($rows as $row) {
+                if (!notice_matches_version($row, $appVersion)) {
+                    continue;
+                }
+                $list[] = [
+                    'id' => (int) $row['id'],
+                    'title' => $row['title'],
+                    'body' => $row['body'],
+                    'level' => (int) $row['level'],
+                    'once' => (int) $row['once_only'] === 1,
+                ];
+            }
+            json_ok(['notices' => $list, 'server_time' => $now]);
+            break;
+
+        case 'notice_ack':
+            // 客户端展示过某条通知后回报一次，后台可以看到触达次数
+            if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+                throw new ApiError('E_METHOD', '请使用 POST', 405);
+            }
+            $noticeId = (int) input('id', 0);
+            if ($noticeId <= 0) {
+                throw new ApiError('E_PARAM', '缺少 id', 400);
+            }
+            db_exec('UPDATE notices SET seen_count = seen_count + 1 WHERE id = ?', [$noticeId]);
+            json_ok([]);
+            break;
+
         case 'ticket':
             if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
                 throw new ApiError('E_METHOD', '请使用 POST', 405);

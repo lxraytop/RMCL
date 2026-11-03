@@ -98,6 +98,17 @@ Friend Module ModUpdateServer
         Public CodeMask As String = ""
     End Class
 
+    ''' <summary>服务端下发的一条联网通知。</summary>
+    Friend Class ServerNotice
+        Public Id As Integer = 0
+        Public Title As String = ""
+        Public Body As String = ""
+        ''' <summary>0 普通，1 重要，2 紧急（红色弹窗）。</summary>
+        Public Level As Integer = 0
+        ''' <summary>true 表示每台设备只弹一次。</summary>
+        Public OnceOnly As Boolean = True
+    End Class
+
 #End Region
 
 #Region "本地状态"
@@ -357,6 +368,43 @@ Friend Module ModUpdateServer
         End If
         Return Info
     End Function
+
+    ''' <summary>
+    ''' 拉取联网通知。不需要授权——未授权或授权到期的用户同样应该收到公告。
+    ''' </summary>
+    Public Function FetchNotices(AppVersion As String) As List(Of ServerNotice)
+        Dim Result As New List(Of ServerNotice)
+        Dim Url As String = ApiUrl("notices") & "&app_version=" & Uri.EscapeDataString(AppVersion)
+        Dim Data As JObject = RequestJson(Url)
+        Dim Items = TryCast(Data("notices"), JArray)
+        If Items Is Nothing Then Return Result
+
+        For Each Item As JToken In Items
+            Dim Obj As JObject = TryCast(Item, JObject)
+            If Obj Is Nothing Then Continue For
+            Dim OnceToken = Obj("once")
+            Result.Add(New ServerNotice With {
+                .Id = CInt(JsonLong(Obj, "id")),
+                .Title = If(Obj("title")?.ToString, ""),
+                .Body = If(Obj("body")?.ToString, ""),
+                .Level = CInt(JsonLong(Obj, "level")),
+                .OnceOnly = If(OnceToken IsNot Nothing AndAlso OnceToken.Type = JTokenType.Boolean,
+                                OnceToken.Value(Of Boolean)(), True)
+            })
+        Next
+        Return Result
+    End Function
+
+    ''' <summary>上报一次通知触达，失败不影响展示。</summary>
+    Public Sub AcknowledgeNotice(Id As Integer)
+        Try
+            Dim Body As New JObject()
+            Body("id") = Id
+            RequestJson(ApiUrl("notice_ack"), HttpMethod.Post, Body.ToString())
+        Catch ex As Exception
+            Logger.Warn(ex, $"上报通知触达失败（#{Id}）")
+        End Try
+    End Sub
 
     ''' <summary>
     ''' 换取下载票据，返回可直接交给下载引擎的地址。票据有效期只有几分钟，所以每次下载前都新换一张。

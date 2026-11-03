@@ -149,6 +149,37 @@ location ~ ^/rmcl-update/download/([A-Fa-f0-9]+)$ {
 另外两个更新源不需要授权：GitHub 原生源、GitHub 镜像源（地址可自己填，默认 `https://gh-proxy.com/`）。
 注意这是**客户端**（用户机器，通常在国内）下载 GitHub 资产用的，和服务器能不能直连 GitHub 是两件事。
 
+## 4.5、联网通知
+
+公告文案全部由服务端下发，客户端不硬编码任何内容。在后台「联网通知」页新建即可。
+
+### 触发时机
+
+| 时机 | 行为 |
+| --- | --- |
+| 启动完成 | 初始化线程里调用一次，**延迟 8 秒**再请求，避开启动动画和「发现新版本」弹窗 |
+| 24 小时内再次启动 | 跳过（本地记 `NoticeLastFetch`），不重复请求 |
+| 运行过程中 | **不轮询**，只有下次启动才会再拉 |
+
+一次请求就是一个 `?action=notices&app_version=x.y.z`，返回几百字节，流量可以忽略。
+
+### 发送流程
+
+1. 后台创建通知：标题、正文、级别（普通 / 重要 / 紧急）、生效窗口、版本区间、是否只弹一次；
+2. 客户端请求 `notices`，服务端按 `enabled=1` + 时间窗口 + 版本区间过滤后返回命中的通知；
+3. 客户端本地再过滤掉已读的（`once=1` 且 ID 在本地已读列表里）；
+4. 多条同时命中时**只弹级别最高、ID 最大的一条**，其余留到下次启动；
+5. 弹窗 → 记录已读 → 回报一次 `notice_ack`（后台「触达」列 +1）。
+
+`once=0` 的通知每次启动都能弹，弹窗会多一个「不再提示」按钮，用户点它才会被本地屏蔽。
+
+### 几个注意点
+
+- 通知**不需要授权**：未授权、授权已到期的用户同样能收到，适合发「该续期了」这类提醒；
+- 版本区间用 `version_compare` 比较，填 `2.19.0.0` ~ `2.19.9.9` 就是只发给 2.19 系列；
+- 一次只弹一条，别一次攒太多，否则用户要启动好几次才看得完；
+- 紧急级别（`level=2`）是红色弹窗，只留给真正要紧的事（服务迁移、需要立刻换码）。
+
 ---
 
 ## 5. 接口
@@ -169,6 +200,8 @@ location ~ ^/rmcl-update/download/([A-Fa-f0-9]+)$ {
 | GET | `?action=release` | `token` `device_id` `version` | 按版本号取发布信息（更新完成后展示该版本公告用） |
 | POST | `?action=ticket` | `token` `device_id` `release_id` | 换下载票据，返回 `url` |
 | GET | `?action=download` | `ticket` | 输出文件，支持 `Range` |
+| GET | `?action=notices` | `app_version` | 拉取联网通知（**不需要授权**） |
+| POST | `?action=notice_ack` | `id` | 上报一次通知触达，用于后台统计 |
 
 错误码：`E_NO_TOKEN` `E_TOKEN_INVALID` `E_TOKEN_EXPIRED` `E_TOKEN_DEVICE` `E_CODE_NOT_FOUND`
 `E_CODE_FORMAT` `E_CODE_DISABLED` `E_DEVICE_BOUND` `E_EXPIRED` `E_NO_RELEASE` `E_TICKET*` `E_TOO_MANY`。

@@ -344,6 +344,59 @@ try {
             redirect('releases');
             break;
 
+        case 'create_notice':
+            $title = trim((string) ($_POST['title'] ?? ''));
+            $body = trim((string) ($_POST['body'] ?? ''));
+            if ($title === '' && $body === '') {
+                throw new RuntimeException('标题和正文不能都为空');
+            }
+            $level = max(0, min(2, (int) ($_POST['level'] ?? 0)));
+            $minVersion = trim((string) ($_POST['min_version'] ?? ''));
+            $maxVersion = trim((string) ($_POST['max_version'] ?? ''));
+            foreach ([$minVersion, $maxVersion] as $ver) {
+                if ($ver !== '' && !preg_match('/^\d+(\.\d+){1,3}$/', $ver)) {
+                    throw new RuntimeException('版本区间格式应为 2.19.1.0，留空表示不限');
+                }
+            }
+            $startRaw = trim((string) ($_POST['start_at'] ?? ''));
+            $endRaw = trim((string) ($_POST['end_at'] ?? ''));
+            $startAt = $startRaw === '' ? time() : (strtotime($startRaw) ?: time());
+            $endAt = $endRaw === '' ? 0 : (strtotime($endRaw) ?: 0);
+            if ($endAt > 0 && $endAt <= $startAt) {
+                throw new RuntimeException('结束时间必须晚于开始时间');
+            }
+            $onceOnly = empty($_POST['once_only']) ? 0 : 1;
+            $enabled = empty($_POST['enabled']) ? 0 : 1;
+
+            db_exec(
+                'INSERT INTO notices (title, body, level, min_version, max_version, start_at, end_at, once_only, enabled, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [$title, $body, $level, $minVersion, $maxVersion, $startAt, $endAt, $onceOnly, $enabled, time()]
+            );
+            log_event('admin.notice', ['detail' => '新建通知：' . $title]);
+            flash('通知已创建' . ($enabled ? '' : '（当前为停用状态，客户端不会收到）'));
+            redirect('notices');
+            break;
+
+        case 'toggle_notice':
+            $id = (int) ($_POST['id'] ?? 0);
+            $row = db_one('SELECT * FROM notices WHERE id = ?', [$id]);
+            if ($row !== null) {
+                $next = (int) $row['enabled'] === 1 ? 0 : 1;
+                db_exec('UPDATE notices SET enabled = ? WHERE id = ?', [$next, $id]);
+                flash($next === 1 ? '已启用该通知' : '已停用该通知');
+            }
+            redirect('notices');
+            break;
+
+        case 'delete_notice':
+            $id = (int) ($_POST['id'] ?? 0);
+            db_exec('DELETE FROM notices WHERE id = ?', [$id]);
+            log_event('admin.notice_delete', ['detail' => '删除通知 #' . $id]);
+            flash('已删除该通知');
+            redirect('notices');
+            break;
+
         case 'publish':
             $version = trim((string) ($_POST['version'] ?? ''));
             if (!preg_match('/^\d+(\.\d+){1,3}$/', $version)) {
@@ -437,7 +490,14 @@ try {
 function error_tab(string $action): string
 {
     $releaseActions = ['publish', 'github_preview', 'github_publish', 'release_status', 'release_delete'];
-    return in_array($action, $releaseActions, true) ? 'releases' : 'codes';
+    if (in_array($action, $releaseActions, true)) {
+        return 'releases';
+    }
+    $noticeActions = ['create_notice', 'toggle_notice', 'delete_notice'];
+    if (in_array($action, $noticeActions, true)) {
+        return 'notices';
+    }
+    return 'codes';
 }
 
 // 没有动作时落到下面的视图渲染

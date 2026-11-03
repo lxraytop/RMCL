@@ -440,6 +440,12 @@ Public Class FormMain
             Catch ex As Exception
                 Logger.Warn(ex, "自动检查启动器更新失败")
             End Try
+            '联网通知：文案全部由更新服务器下发，内部延迟 8 秒且每天最多拉一次
+            Try
+                ModNotice.StartupCheck()
+            Catch ex As Exception
+                Logger.Warn(ex, "启动联网通知失败")
+            End Try
             '上报
             '注：开源版本说明弹窗已移除（联网通知暂未启用，不再提示）
         End Sub, "初始化", ThreadPriority.Lowest)
