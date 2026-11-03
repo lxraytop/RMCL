@@ -1,3 +1,6 @@
 # 数据目录不纳入版本库，只保留访问控制文件
 data/*
 !data/.htaccess
+
+# server 目录的打包产物（FTP 上传用的 zip），不进版本库
+*.zip
