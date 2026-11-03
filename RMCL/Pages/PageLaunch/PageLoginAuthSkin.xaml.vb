@@ -21,7 +21,7 @@ Public Class PageLoginAuthSkin
     ''' 获取当前页面的登录信息。
     ''' </summary>
     Public Shared Function GetLoginData() As McLoginServer
-        Dim Server As String = If(IsNothing(McInstanceSelected), Settings.Get(Of String)("CacheAuthServerServer"), Settings.Get(Of String)("VersionServerAuthServer", Instance:=McInstanceSelected)) & "/authserver"
+        Dim Server As String = AuthServerCurrent() & "/authserver"
         Return New McLoginServer(McLoginType.Auth) With {.Token = "Auth", .BaseUrl = Server, .UserName = Settings.Get(Of String)("CacheAuthUsername"), .Password = Settings.Get(Of String)("CacheAuthPass"), .Description = "Authlib-Injector", .Type = McLoginType.Auth}
     End Function
 
@@ -70,6 +70,8 @@ Public Class PageLoginAuthSkin
         End Sub)
     End Sub
     Public Shared Sub ExitLogin() Handles BtnExit.Click
+        '只清掉当前服务器的会话，账号密码仍留在列表里，下次可以一键重登
+        AuthServerClearSession(Settings.Get(Of String)("CacheAuthServerServer"), Settings.Get(Of String)("CacheAuthUsername"))
         Settings.Set("CacheAuthAccess", "")
         Settings.Set("CacheAuthUuid", "")
         Settings.Set("CacheAuthName", "")

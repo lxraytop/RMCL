@@ -200,17 +200,23 @@ Public Module ModMinecraft
             If Settings.Get(Of Integer)("VersionServerLogin", Instance:=value) = 3 Then
                 Settings.Set("CacheNideServer", Settings.Get(Of String)("VersionServerNide", Instance:=value))
             End If
-            'Authlib-Injector 重判
-            If AniControlEnabled = 0 AndAlso
-               Settings.Get(Of String)("VersionServerAuthServer", Instance:=value) <> Settings.Get(Of String)("CacheAuthServerServer") AndAlso
-               Settings.Get(Of Integer)("VersionServerLogin", Instance:=value) = 4 Then
-                Settings.Set("CacheAuthAccess", "")
-                Logger.Info("服务器改变，要求重新登录 Authlib-Injector")
-            End If
+            'Authlib-Injector 重判：先归一化再比较，避免同一服务器因写法不同（末尾斜杠、/authserver）被误判成换服而清掉登录态
+            Dim VersionAuthServer As String = AuthServerNormalize(Settings.Get(Of String)("VersionServerAuthServer", Instance:=value))
+            Dim IsAuthServerChanged As Boolean = VersionAuthServer <> "" AndAlso
+                VersionAuthServer <> AuthServerNormalize(Settings.Get(Of String)("CacheAuthServerServer"))
             If Settings.Get(Of Integer)("VersionServerLogin", Instance:=value) = 4 Then
-                Settings.Set("CacheAuthServerServer", Settings.Get(Of String)("VersionServerAuthServer", Instance:=value))
-                Settings.Set("CacheAuthServerName", Settings.Get(Of String)("VersionServerAuthName", Instance:=value))
-                Settings.Set("CacheAuthServerRegister", Settings.Get(Of String)("VersionServerAuthRegister", Instance:=value))
+                If IsAuthServerChanged AndAlso AniControlEnabled = 0 Then
+                    '换服：旧会话先存回它自己的服务器，再载入新服务器自己的账号（没有则清空，退回账号密码登录）
+                    AuthServerStashCurrent()
+                    AuthServerSetCurrent(VersionAuthServer, Nothing)
+                    Logger.Info($"认证服务器已切换：{VersionAuthServer}")
+                Else
+                    '服务器没变时只同步显示信息，避免出现「服务器是旧的、名字是新的」这种不一致
+                    If Not IsAuthServerChanged Then
+                        Settings.Set("CacheAuthServerName", Settings.Get(Of String)("VersionServerAuthName", Instance:=value))
+                        Settings.Set("CacheAuthServerRegister", Settings.Get(Of String)("VersionServerAuthRegister", Instance:=value))
+                    End If
+                End If
             End If
         End Set
     End Property
@@ -1801,7 +1807,13 @@ OnLoaded:
         End If
 
         'Authlib-Injector 文件
-        If Settings.Get(Of Integer)("VersionServerLogin", Instance:=Instance) = 4 Then
+        '除了版本设置为第三方的情况，主页直接选了第三方时也要下载：启动注入看的是登录类型，
+        '这里只看版本设置的话会出现「要注入却找不到 jar」的启动失败
+        Dim NeedAuthlib As Boolean = Settings.Get(Of Integer)("VersionServerLogin", Instance:=Instance) = 4
+        If Not NeedAuthlib AndAlso McInstanceSelected IsNot Nothing AndAlso Instance.PathVersion = McInstanceSelected.PathVersion Then
+            NeedAuthlib = Settings.Get(Of McLoginType)("LoginType") = McLoginType.Auth
+        End If
+        If NeedAuthlib Then
             Dim TargetFile = PathPure.Value & "authlib-injector.jar"
             Try
                 Logger.Info("开始获取 Authlib-Injector 下载信息")

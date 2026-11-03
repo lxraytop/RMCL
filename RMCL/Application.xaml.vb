@@ -236,6 +236,12 @@ RetryCacheCheck:
 
     '控件模板事件
     Private Sub MyIconButton_Click(sender As Object, e As EventArgs)
+        '删除已保存的账号前必须确认，避免误点把密码一起清掉
+        Dim DeleteTarget As String = If(sender.Tag, "").ToString()
+        If DeleteTarget = "" Then Return
+        If MyMsgBox($"确定要删除保存的账号 {DeleteTarget} 吗？" & vbCrLf &
+                    "该账号的密码与登录状态会一并删除，下次需要重新输入，且无法恢复。",
+                    "删除账号", "删除", "取消") = 2 Then Return
         Select Case Settings.Get(Of McLoginType)("LoginType")
             Case McLoginType.Ms
                 '微软
@@ -255,6 +261,21 @@ RetryCacheCheck:
             Case Else
                 '第三方
                 Dim Token As String = Settings.Get(Of McLoginType)("LoginType").ToString()
+                If Token = "Auth" Then
+                    'Authlib-Injector：账号保存在 AuthServerList 里，必须从那里删，否则下次刷新又会出现
+                    Dim Server As String = AuthServerCurrent()
+                    If Not AuthServerRemoveAccount(Server, If(sender.Tag, "").ToString()) Then Return
+                    Dim Accounts As List(Of JObject) = AuthServerGetAccounts(Server).Where(Function(a) AuthServerValue(a, "user") <> "").ToList()
+                    Dim Users As String() = Accounts.Select(Function(a) AuthServerValue(a, "user")).ToArray()
+                    If FrmLoginAuth IsNot Nothing Then
+                        FrmLoginAuth.ComboName.ItemsSource = If(Users.Length = 0, Nothing, Users)
+                        FrmLoginAuth.ComboName.Text = If(Users.Length = 0, "", Users(0))
+                        FrmLoginAuth.TextPass.Password = If(Users.Length = 0, "", AuthServerValue(Accounts(0), "pass"))
+                    End If
+                    '删的可能是当前账号，会话已被清空，需要刷新登录方式与头像
+                    If FrmLaunchLeft IsNot Nothing Then FrmLaunchLeft.RefreshPage(True, False)
+                    Return
+                End If
                 Dim Dict As New Dictionary(Of String, String)
                 Dim Names As New List(Of String)
                 Dim Passs As New List(Of String)

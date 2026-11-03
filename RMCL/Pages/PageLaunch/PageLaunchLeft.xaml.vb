@@ -107,7 +107,14 @@ Public Class PageLaunchLeft
 
         '改变页面
         Dim LoginType = Settings.Get(Of McLoginType)("LoginType")
-        If LoginType = McLoginType.Legacy OrElse LoginType = McLoginType.Ms Then CType(FindName("RadioLoginType" & LoginType), MyRadioButton).Checked = True
+        Dim VersionLoginType As Integer = Settings.Get(Of Integer)("LoginPageType")
+        If McInstanceSelected IsNot Nothing Then VersionLoginType = Settings.Get(Of Integer)("VersionServerLogin", Instance:=McInstanceSelected)
+        Dim LoginTypeRadio As Integer = CInt(LoginType)
+        '第三方只在版本本身设置为第三方时才默认选中，避免把上次在别的版本用过的登录方式强加到当前版本
+        If LoginType = McLoginType.Auth AndAlso VersionLoginType <> 4 Then LoginTypeRadio = CInt(McLoginType.Ms)
+        If LoginType = McLoginType.Nide Then LoginTypeRadio = CInt(McLoginType.Ms)
+        Dim LoginTypeControl = TryCast(FindName("RadioLoginType" & LoginTypeRadio), MyRadioButton)
+        If LoginTypeControl IsNot Nothing Then LoginTypeControl.Checked = True
         RefreshPage(False, False)
 
         AniControlEnabled -= 1
@@ -128,7 +135,10 @@ Public Class PageLaunchLeft
             Case McLoginType.Nide
                 LabLaunchingMethod.Text = "统一通行证"
             Case McLoginType.Auth
-                LabLaunchingMethod.Text = "Authlib-Injector"
+                '第三方登录显示出具体是哪个认证服务器，便于确认当前用的是哪个账号体系
+                Dim AuthServerName As String = Settings.Get(Of String)("CacheAuthServerName")
+                If AuthServerName = "" Then AuthServerName = AuthServerHost(Settings.Get(Of String)("CacheAuthServerServer"))
+                LabLaunchingMethod.Text = If(AuthServerName = "", "第三方登录", AuthServerName & " 登录")
         End Select
         '初始化页面
         LabLaunchingName.Text = McInstanceSelected.Name
@@ -298,7 +308,7 @@ Public Class PageLaunchLeft
             LoginPageType = Settings.Get(Of Integer)("LoginPageType")
         End If
         Select Case LoginPageType
-            Case 0 '正版或离线
+            Case 0 '正版、离线或第三方
 UnknownType:
                 If RadioLoginType5.Checked Then
                     If Settings.Get(Of String)("CacheMsV2Access") = "" Then
@@ -307,14 +317,27 @@ UnknownType:
                         Type = PageType.MsSkin
                     End If
                     Settings.Set("LoginType", McLoginType.Ms)
+                ElseIf RadioLoginType3.Checked AndAlso EnsureAuthServerForLogin() Then
+                    '直接使用已有的第三方会话：已登录时进入皮肤页，启动时无需再输一遍账号密码
+                    If Settings.Get(Of String)("CacheAuthAccess") = "" OrElse Not AuthServerSessionMatch(AuthServerCurrent()) Then
+                        Type = PageType.Auth
+                    Else
+                        Type = PageType.AuthSkin
+                    End If
+                    Settings.Set("LoginType", McLoginType.Auth)
+                    '同步回版本设置：游戏启动要靠它判断是否注入 authlib、是否预下载 authlib-injector.jar
+                    If McInstanceSelected IsNot Nothing Then Settings.Set("VersionServerLogin", 4, Instance:=McInstanceSelected)
                 Else
                     Type = PageType.Legacy
                     Settings.Set("LoginType", McLoginType.Legacy)
+                    If RadioLoginType3.Checked Then RadioLoginType0.Checked = True '没有可用的认证服务器，退回离线
                 End If
                 PanType.Visibility = Visibility.Visible
                 PanTypeOne.Visibility = Visibility.Collapsed
                 RadioLoginType5.Visibility = Visibility.Visible
                 RadioLoginType0.Visibility = Visibility.Visible
+                RadioLoginType3.Visibility = Visibility.Visible
+                RadioLoginType3.ToolTip = "第三方登录：使用 Authlib-Injector 认证服务器（可拖入授权链接添加）"
             Case 1 '仅正版
                 If Settings.Get(Of String)("CacheMsV2Access") = "" Then
                     Type = PageType.Ms
@@ -328,6 +351,7 @@ UnknownType:
                 LabTypeOne.Text = "正版登录"
                 RadioLoginType5.Visibility = Visibility.Visible
                 RadioLoginType0.Visibility = Visibility.Collapsed
+                RadioLoginType3.Visibility = Visibility.Collapsed
             Case 2 '仅离线
                 Type = PageType.Legacy
                 Settings.Set("LoginType", McLoginType.Legacy)
@@ -335,6 +359,7 @@ UnknownType:
                 PanTypeOne.Visibility = Visibility.Visible
                 PathTypeOne.Data = (New GeometryConverter).ConvertFromString(Logo.IconButtonOffline)
                 LabTypeOne.Text = "离线登录"
+                RadioLoginType3.Visibility = Visibility.Collapsed
             Case 3 '统一通行证
                 If Settings.Get(Of String)("CacheNideAccess") = "" Then
                     Type = PageType.Nide
@@ -346,30 +371,123 @@ UnknownType:
                 PanTypeOne.Visibility = Visibility.Visible
                 PathTypeOne.Data = (New GeometryConverter).ConvertFromString(Logo.IconButtonCard)
                 LabTypeOne.Text = "统一通行证登录"
-            Case 4 'Authlib-Injector
-                If Settings.Get(Of String)("CacheAuthAccess") = "" Then
+                RadioLoginType3.Visibility = Visibility.Collapsed
+            Case 4 '第三方登录：仍然显示登录方式切换栏，否则用户会被锁死在第三方
+                If Not EnsureAuthServerForLogin() Then
+                    '连兜底的认证服务器都建不起来，退回离线，避免进入一个空的登录页
+                    Type = PageType.Legacy
+                    Settings.Set("LoginType", McLoginType.Legacy)
+                ElseIf Settings.Get(Of String)("CacheAuthAccess") = "" OrElse Not AuthServerSessionMatch(AuthServerCurrent()) Then
                     Type = PageType.Auth
+                    Settings.Set("LoginType", McLoginType.Auth)
                 Else
                     Type = PageType.AuthSkin
+                    Settings.Set("LoginType", McLoginType.Auth)
                 End If
-                Settings.Set("LoginType", McLoginType.Auth)
-                PanType.Visibility = Visibility.Collapsed
-                PanTypeOne.Visibility = Visibility.Visible
-                PathTypeOne.Data = (New GeometryConverter).ConvertFromString(Logo.IconButtonCard)
-                LabTypeOne.Text = If(McInstanceSelected Is Nothing, Settings.Get(Of String)("CacheAuthServerName"), Settings.Get(Of String)("VersionServerAuthName", Instance:=McInstanceSelected))
-                If LabTypeOne.Text = "" Then LabTypeOne.Text = "第三方登录"
+                PanType.Visibility = Visibility.Visible
+                PanTypeOne.Visibility = Visibility.Collapsed
+                RadioLoginType5.Visibility = Visibility.Visible
+                RadioLoginType0.Visibility = Visibility.Visible
+                RadioLoginType3.Visibility = Visibility.Visible
+                RadioLoginType3.ToolTip = "当前认证服务器：" & AuthServerGuessName(AuthServerCurrent()) & "（可在登录页或切换账号后更换）"
             Case Else
                 Logger.Error($"未知的登录页面：{LoginPageType}", LogBehavior.Toast)
                 GoTo UnknownType
         End Select
+        '刷新第三方认证服务器信息
+        RefreshAuthServerLabel()
         '刷新页面
-        If PageCurrent = Type Then Return
+        If PageCurrent = Type Then
+            '页面没变时也要刷新一次内容：切换认证服务器或登录完成后，头像与账号信息必须立即更新，
+            '否则要等到启动游戏、页面被重建时才刷新
+            Try
+                PageGet(PageCurrent).Reload(KeepInput)
+                If PageCurrent = PageType.AuthSkin Then SkinAuth.Start()
+            Catch ex As Exception
+                Logger.Warn(ex, "刷新登录页内容失败")
+            End Try
+            Return
+        End If
         PageChange(Type, Anim).Reload(KeepInput)
-        Dim Control As MyRadioButton = FindName("RadioLoginType" & Settings.Get(Of McLoginType)("LoginType"))
+        Dim Control As MyRadioButton = FindName("RadioLoginType" & CInt(Settings.Get(Of McLoginType)("LoginType")))
         If Control IsNot Nothing Then Control.Checked = True
     End Sub
-    Private Sub RadioLoginType_Change(sender As Object, raiseByMouse As Boolean) Handles RadioLoginType0.Check, RadioLoginType5.Check
-        If raiseByMouse Then RefreshPage(True, True)
+    ''' <summary>
+    ''' 在登录方式栏下方展示当前使用的第三方认证服务器与账号。
+    ''' </summary>
+    Private Sub RefreshAuthServerLabel()
+        Try
+            If Settings.Get(Of McLoginType)("LoginType") <> McLoginType.Auth Then
+                LabAuthServer.Visibility = Visibility.Collapsed
+                Return
+            End If
+            Dim Server As String = AuthServerCurrent()
+            If Server = "" Then
+                LabAuthServer.Visibility = Visibility.Collapsed
+                Return
+            End If
+            Dim ServerName As String = AuthServerGuessName(Server)
+            Dim Host As String = AuthServerHost(Server)
+            Dim Text As String = If(ServerName = Host, ServerName, $"{ServerName}（{Host}）")
+            Dim AccountName As String = Settings.Get(Of String)("CacheAuthName")
+            If AccountName <> "" Then Text &= " · " & AccountName
+            LabAuthServer.Text = Text
+            LabAuthServer.ToolTip = $"当前认证服务器：{Server}" & vbCrLf & "点击可切换认证服务器"
+            LabAuthServer.Visibility = Visibility.Visible
+        Catch ex As Exception
+            Logger.Warn(ex, "刷新认证服务器信息失败")
+        End Try
+    End Sub
+    ''' <summary>
+    ''' 点击认证服务器信息时，在多个第三方认证服务器之间切换。
+    ''' </summary>
+    Private Sub LabAuthServer_MouseLeftButtonUp(sender As Object, e As MouseButtonEventArgs)
+        If Settings.Get(Of McLoginType)("LoginType") <> McLoginType.Auth Then Return
+        Dim Servers As List(Of JObject) = AuthServerGetAll()
+        If Servers.Count = 0 Then
+            Hint("还没有第三方认证服务器，请把授权链接拖入窗口添加！", HintType.Red)
+            Return
+        End If
+        If Servers.Count = 1 Then
+            Hint($"当前只有 {AuthServerValue(Servers(0), "name")} 一个认证服务器，拖入其他授权链接即可添加", HintType.Blue)
+            Return
+        End If
+        Dim SelectionControl As New List(Of IMyRadio)
+        For Each Entry As JObject In Servers
+            Dim Text As String = AuthServerValue(Entry, "name")
+            If AuthServerNormalize(AuthServerValue(Entry, "server")) = AuthServerCurrent() Then Text &= "（当前）"
+            SelectionControl.Add(New MyRadioBox With {.Text = Text})
+        Next
+        Dim SelectedIndex As Integer? = MyMsgBoxSelect(SelectionControl, "选择第三方认证服务器")
+        If SelectedIndex Is Nothing Then Return
+        Dim Target As String = AuthServerValue(Servers(SelectedIndex.Value), "server")
+        If Not AuthServerSetCurrent(Target, McInstanceSelected) Then Return
+        RefreshPage(False, True)
+    End Sub
+    ''' <summary>
+    ''' 确保有可用的第三方认证服务器：没有当前服务器时，优先选默认的 RaySkin，其次选列表里的第一台。
+    ''' </summary>
+    Private Function EnsureAuthServerForLogin() As Boolean
+        If AuthServerCurrent() <> "" Then Return True
+        Dim Servers As List(Of JObject) = AuthServerGetAll()
+        If Servers.Count = 0 Then Return False
+        Dim Target As JObject = Servers(0)
+        For Each Entry As JObject In Servers
+            If AuthServerNormalize(AuthServerValue(Entry, "server")) = AuthServerNormalize(DefaultAuthServer) Then
+                Target = Entry
+                Exit For
+            End If
+        Next
+        Return AuthServerSetCurrent(AuthServerValue(Target, "server"), McInstanceSelected)
+    End Function
+    Private Sub RadioLoginType_Change(sender As Object, raiseByMouse As Boolean) Handles RadioLoginType0.Check, RadioLoginType3.Check, RadioLoginType5.Check
+        If Not raiseByMouse Then Return
+        '从第三方切回正版或离线时，把版本设置一起改回来，否则下次刷新又会跳回第三方
+        If Not RadioLoginType3.Checked AndAlso McInstanceSelected IsNot Nothing AndAlso
+           Settings.Get(Of Integer)("VersionServerLogin", Instance:=McInstanceSelected) = 4 Then
+            Settings.Set("VersionServerLogin", 0, Instance:=McInstanceSelected)
+        End If
+        RefreshPage(True, True)
     End Sub
 
 #End Region

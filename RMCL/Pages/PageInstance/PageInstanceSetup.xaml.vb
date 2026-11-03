@@ -347,6 +347,12 @@ PreFin:
     Private Sub ComboServerLogin_Changed() Handles ComboServerLogin.SelectionChanged, TextServerNide.ValidatedTextChanged, TextServerAuthServer.ValidatedTextChanged, TextServerAuthRegister.ValidatedTextChanged
         If AniControlEnabled <> 0 Then Return
         UpdateServerLoginUI()
+        '首次切到第三方登录时，默认填上 RaySkin
+        If ComboServerLogin.SelectedIndex = 4 AndAlso ComboServerLoginLast <> 4 AndAlso TextServerAuthServer.Text = "" Then
+            TextServerAuthServer.Text = DefaultAuthServer
+            TextServerAuthRegister.Text = AuthServerGuessRegister(DefaultAuthServer)
+            TextServerAuthName.Text = DefaultAuthServerName & " 登录"
+        End If
         '检查是否输入正确，正确才触发设置改变
         If ComboServerLogin.SelectedIndex = 3 AndAlso Not TextServerNide.IsValidated Then Return
         If ComboServerLogin.SelectedIndex = 4 AndAlso Not TextServerAuthServer.IsValidated Then Return
@@ -368,16 +374,29 @@ PreFin:
         TextServerAuthRegister.Visibility = If(Type = 4, Visibility.Visible, Visibility.Collapsed)
         LabServerAuthServer.Visibility = If(Type = 4, Visibility.Visible, Visibility.Collapsed)
         TextServerAuthServer.Visibility = If(Type = 4, Visibility.Visible, Visibility.Collapsed)
+        BtnServerAuthRay.Visibility = If(Type = 4, Visibility.Visible, Visibility.Collapsed)
         BtnServerAuthLittle.Visibility = If(Type = 4, Visibility.Visible, Visibility.Collapsed)
         CardServer.TriggerForceResize()
     End Sub
 
-    'LittleSkin
+    ''' <summary>
+    ''' 把第三方登录设置为默认的 RaySkin。
+    ''' </summary>
+    Private Sub BtnServerAuthRay_Click(sender As Object, e As EventArgs) Handles BtnServerAuthRay.Click
+        If TextServerAuthServer.Text <> "" AndAlso AuthServerNormalize(TextServerAuthServer.Text) <> AuthServerNormalize(DefaultAuthServer) AndAlso
+            MyMsgBox("即将把第三方登录设置覆盖为 RaySkin 登录。" & vbCrLf & "除非你是服主，或者服主要求你这样做，否则请不要继续。" & vbCrLf & vbCrLf & "是否确实需要覆盖当前设置？",
+                     "设置覆盖确认", "继续", "取消") = 2 Then Return
+        TextServerAuthServer.Text = DefaultAuthServer
+        TextServerAuthRegister.Text = AuthServerGuessRegister(DefaultAuthServer)
+        TextServerAuthName.Text = DefaultAuthServerName & " 登录"
+    End Sub
+
+    'LittleSkin（备选）
     Private Sub BtnServerAuthLittle_Click(sender As Object, e As EventArgs) Handles BtnServerAuthLittle.Click
-        If TextServerAuthServer.Text <> "" AndAlso TextServerAuthServer.Text <> "https://littleskin.cn/api/yggdrasil" AndAlso
+        If TextServerAuthServer.Text <> "" AndAlso AuthServerNormalize(TextServerAuthServer.Text) <> AuthServerNormalize(LegacyAuthServer) AndAlso
             MyMsgBox("即将把第三方登录设置覆盖为 LittleSkin 登录。" & vbCrLf & "除非你是服主，或者服主要求你这样做，否则请不要继续。" & vbCrLf & vbCrLf & "是否确实需要覆盖当前设置？",
                      "设置覆盖确认", "继续", "取消") = 2 Then Return
-        TextServerAuthServer.Text = "https://littleskin.cn/api/yggdrasil"
+        TextServerAuthServer.Text = LegacyAuthServer
         TextServerAuthRegister.Text = "https://littleskin.cn/auth/register"
         TextServerAuthName.Text = "LittleSkin 登录"
     End Sub

@@ -1010,50 +1010,13 @@ Public Class FormMain
                 Try
                     Dim Str As String = e.Data.GetData(DataFormats.Text)
                     Logger.Info($"接受文本拖拽：{Str}")
-                    If Str.StartsWithF("authlib-injector:yggdrasil-server:") Then
-                        'Authlib 拖拽
+                    If Str.StartsWithF(AuthlibLinkPrefix) Then
+                        'Authlib 拖拽：把服务器加入列表并立刻切换过去
                         e.Handled = True
                         e.Effects = DragDropEffects.Copy
-                        Dim AuthlibServer As String = StringUtils.FormUrlUnescape(Str.Substring("authlib-injector:yggdrasil-server:".Length))
-                        Logger.Info($"Authlib 拖拽：{AuthlibServer}")
-                        If Not String.IsNullOrEmpty(New ValidateHttp().Validate(AuthlibServer)) Then
-                            Hint($"输入的 Authlib 验证服务器不符合网址格式（{AuthlibServer}）！", HintType.Red)
-                            Return
-                        End If
+                        Logger.Info($"Authlib 拖拽：{Str}")
                         Dim Target = If(PageCurrent = PageType.InstanceSetup, PageInstanceLeft.Instance, McInstanceSelected)
-                        If Target Is Nothing Then
-                            Hint("请先下载游戏，再设置第三方登录！", HintType.Red)
-                            Return
-                        End If
-                        If AuthlibServer = "https://littleskin.cn/api/yggdrasil" Then
-                            'LittleSkin
-                            If MyMsgBox($"是否要在版本 {Target.Name} 中开启 LittleSkin 登录？" & vbCrLf &
-                                        "你可以在 版本设置 → 设置 → 服务器选项 中修改登录方式。", "第三方登录开启确认", "确定", "取消") = 2 Then
-                                Return
-                            End If
-                            Settings.Set("VersionServerLogin", 4, Instance:=Target)
-                            Settings.Set("VersionServerAuthServer", "https://littleskin.cn/api/yggdrasil", Instance:=Target)
-                            Settings.Set("VersionServerAuthRegister", "https://littleskin.cn/auth/register", Instance:=Target)
-                            Settings.Set("VersionServerAuthName", "LittleSkin 登录", Instance:=Target)
-                        Else
-                            '第三方 Authlib 服务器
-                            If MyMsgBox($"是否要在版本 {Target.Name} 中开启第三方登录？" & vbCrLf &
-                                        $"登录服务器：{AuthlibServer}" & vbCrLf & vbCrLf &
-                                        "你可以在 版本设置 → 设置 → 服务器选项 中修改登录方式。", "第三方登录开启确认", "确定", "取消") = 2 Then
-                                Return
-                            End If
-                            Settings.Set("VersionServerLogin", 4, Instance:=Target)
-                            Settings.Set("VersionServerAuthServer", AuthlibServer, Instance:=Target)
-                            Settings.Set("VersionServerAuthRegister", AuthlibServer.Replace("api/yggdrasil", "auth/register"), Instance:=Target)
-                            Settings.Set("VersionServerAuthName", "", Instance:=Target)
-                        End If
-                        If PageCurrent = PageType.InstanceSetup AndAlso PageCurrentSub = PageSubType.InstanceSetup Then
-                            '正在服务器选项页，需要刷新设置项显示
-                            FrmInstanceSetup.Reload()
-                        ElseIf PageCurrent = PageType.Launch Then
-                            '正在主页，需要刷新左边栏
-                            FrmLaunchLeft.RefreshPage(True, False)
-                        End If
+                        AuthlibDrop(Str, Target)
                     ElseIf Str.StartsWithF("file:///") Then
                         '文件拖拽（例如从浏览器下载窗口拖入）
                         Dim FilePath = Net.WebUtility.UrlDecode(Str).Substring("file:///".Length).Replace("/", "\")
@@ -1106,6 +1069,19 @@ Public Class FormMain
             End If
             '主页
             Dim Extension As String = PathUtils.GetExtension(FilePath)
+            '第三方登录授权文件：纯文本链接（.txt 或无后缀）与 authlib 元数据（.json）
+            If Extension = "txt" OrElse Extension = "json" OrElse Extension = "" Then
+                Try
+                    Dim Text As String = System.IO.File.ReadAllText(FilePath).Trim()
+                    If Text.StartsWithF(AuthlibLinkPrefix) Then
+                        Dim Target = If(PageCurrent = PageType.InstanceSetup, PageInstanceLeft.Instance, McInstanceSelected)
+                        RunInUi(Sub() AuthlibDrop(Text, Target))
+                        Return
+                    End If
+                Catch ex As Exception
+                    Logger.Warn(ex, $"读取拖入文件失败，将继续按其他类型处理：{FilePath}")
+                End Try
+            End If
             If Extension = "xaml" Then
                 Logger.Info("文件后缀为 XAML，作为主页加载")
                 If FileUtils.Exists(Paths.Base & "RMCL\Custom.xaml") Then

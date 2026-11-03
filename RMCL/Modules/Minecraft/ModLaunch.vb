@@ -426,8 +426,9 @@ NextInner:
                     Return ""
                 End If
             Case McLoginType.Auth
-                If Settings.Get(Of String)("CacheAuthAccess") = "" Then
-                    Return FrmLoginAuth.IsVaild()
+                '缓存里的会话必须属于当前要用的服务器，否则得重新登录
+                If Settings.Get(Of String)("CacheAuthAccess") = "" OrElse Not AuthServerSessionMatch(AuthServerCurrent()) Then
+                    Return If(FrmLoginAuth Is Nothing, "第三方登录信息尚未就绪，请重新选择登录方式！", FrmLoginAuth.IsVaild())
                 Else
                     Return ""
                 End If
@@ -476,7 +477,7 @@ NextInner:
                         LoginData = PageLoginNideSkin.GetLoginData()
                     End If
                 Case McLoginType.Auth
-                    If Settings.Get(Of String)("CacheAuthAccess") = "" Then
+                    If Settings.Get(Of String)("CacheAuthAccess") = "" OrElse Not AuthServerSessionMatch(AuthServerCurrent()) Then
                         LoginData = PageLoginAuth.GetLoginData()
                     Else
                         LoginData = PageLoginAuthSkin.GetLoginData()
@@ -594,8 +595,11 @@ SkipLogin:
         Dim NeedRefresh As Boolean = False, WasRefreshed As Boolean = False
         McLaunchLog("登录方式：" & Input.Description)
         Data.Progress = 0.05
+        '缓存里的会话必须属于本次要登录的服务器，否则不能拿来验证或刷新，只能重新走账号密码登录
+        Dim IsSameAuthServer As Boolean = Input.Token <> "Auth" OrElse AuthServerNormalize(Input.BaseUrl) = AuthServerNormalize(Settings.Get(Of String)("CacheAuthServerServer"))
+        If Input.Token = "Auth" AndAlso Not IsSameAuthServer Then AuthServerStashCurrent() '换服前先把旧会话存回它自己的服务器，切回来时还能免密
         '尝试登录
-        If (Not Data.Input.ForceReselectProfile) AndAlso
+        If IsSameAuthServer AndAlso (Not Data.Input.ForceReselectProfile) AndAlso
             Settings.Get(Of String)("Cache" & Input.Token & "Username") = Data.Input.UserName AndAlso
             Settings.Get(Of String)("Cache" & Input.Token & "Pass") = Data.Input.Password AndAlso
             Settings.Get(Of String)("Cache" & Input.Token & "Access") <> "" AndAlso
@@ -640,7 +644,16 @@ Refresh:
         End If
 LoginFinish:
         Data.Progress = 0.95
-        '保存启动记录
+        '保存登录记录
+        If Input.Token = "Auth" Then
+            '第三方登录：账号、密码与会话都写进该服务器自己的条目，不同服务器之间不会串号
+            Dim AuthServer As String = AuthServerNormalize(Input.BaseUrl)
+            Settings.Set("CacheAuthServerServer", AuthServer)
+            AuthServerSaveAccount(AuthServer, Input.UserName, Input.Password,
+                Uuid:=If(Data.Output.Uuid, ""), Name:=If(Data.Output.Name, ""),
+                Access:=If(Data.Output.AccessToken, ""), Client:=If(Data.Output.ClientToken, ""))
+            Return
+        End If
         Dim Dict As New Dictionary(Of String, String)
         Dim Emails As New List(Of String)
         Dim Passwords As New List(Of String)
@@ -1256,7 +1269,8 @@ NextInstance:
         'Authlib-Injector
         If McLoginLoader.Output.Type = "Auth" Then
             If McLaunchJavaSelected.Version.Major >= 6 Then Args.Add("-Djavax.net.ssl.trustStoreType=WINDOWS-ROOT") '信任系统根证书（5252#）
-            Dim Server As String = Settings.Get(Of String)("VersionServerAuthServer", Instance:=McInstanceSelected)
+            '以版本设置为准，没有时回退到当前会话所属的服务器，避免从主页直接选第三方时拿到空地址
+            Dim Server As String = AuthServerCurrent()
             Try
                 McLaunchLog($"开始 Authlib Injector Prefetch")
                 Dim Response As String = NetRequestByClientRetry(Server, Encoding:=Encoding.UTF8)

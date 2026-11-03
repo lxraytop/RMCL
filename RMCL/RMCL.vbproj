@@ -219,6 +219,7 @@
     <Compile Include="Modules\Resource\LocalResourceLoaders.vb" />
     <Compile Include="Modules\Minecraft\ModModpack.vb" />
     <Compile Include="Modules\ThirdParty\DragHelper.vb" />
+    <Compile Include="Modules\ThirdParty\ModAuthServer.vb" />
     <Compile Include="My Project\Resources.Designer.vb">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
