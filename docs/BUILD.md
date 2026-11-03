@@ -83,10 +83,10 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 | --- | --- | --- |
 | `dist/RMCL 2.19.2.1/RMCL.exe` | 5.68 MB | 主程序，版本信息 `2.19.2.1 / Ray Minecraft Launcher` |
 | `dist/RMCL 2.19.2.1/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
-| `dist/RMCL-2.19.2.1-win.zip` | 2.55 MB | 上述两个文件的压缩包（sha256 `5f29015f2303…`） |
+| `dist/RMCL-2.19.2.1-win.zip` | 2.55 MB | 上述两个文件的压缩包（sha256 `5e627b0580da…`） |
 
 对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.19.2.1>，
-资产 `RMCL.exe`（5,961,216 B，sha256 `00abd72be43d…`）与 `RMCL-2.19.2.1-win.zip`（2,673,184 B）。
+资产 `RMCL.exe`（5,957,632 B，sha256 `7583b178b9e4…`）与 `RMCL-2.19.2.1-win.zip`（2,672,173 B）。
 
 ### 2.19.2.1 主要变更
 
@@ -95,6 +95,8 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 - 「发布页 / 查看公告」一律指向 GitHub 的发布页，不再指向自建服务器的首页。
 - 修复：服务端没写公告时会先弹一个只有「该版本没有提供更新公告」的空窗；
   现在没有公告就只给一个气泡提示，不打断。
+- 移除 PCL 遗留的「内置更新日志」弹窗（`FormMain.ShowUpdateLog`）：
+  它每次版本号变化都会弹一个「没有更新日志……」，和真正的 GitHub 公告前后脚出现。
 
 ### 2.19.2.0 主要变更
 
