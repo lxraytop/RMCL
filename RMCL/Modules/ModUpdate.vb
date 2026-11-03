@@ -324,11 +324,12 @@ Friend Module ModUpdate
 
     ''' <summary>把官方源返回的发布信息转成统一的 UpdateInfo。</summary>
     Private Function BuildServerInfo(Rel As ModUpdateServer.ServerRelease) As UpdateInfo
+        '发布页统一指向 GitHub：服务端只负责发文件，公告和版本页以 GitHub 为准
         Dim Info As New UpdateInfo With {
             .Version = Rel.Version,
             .Title = If(String.IsNullOrEmpty(Rel.Title), "RMCL " & Rel.Version, Rel.Title),
             .Notes = CleanNotes(Rel.Notes),
-            .PageUrl = ModUpdateServer.ConfiguredServerUrl,
+            .PageUrl = UpdatePage,
             .AssetName = Rel.FileName,
             .AssetSize = Rel.Size,
             .Sha256 = Rel.Sha256,
@@ -402,9 +403,28 @@ Friend Module ModUpdate
     ''' </summary>
     Public Function FetchByTag(Version As String) As UpdateInfo
         If String.IsNullOrEmpty(Version) Then Return Nothing
-        '官方源没有 tag 概念，按版本号查自己的服务端
-        If CurrentUpdateSource = UpdateSource.Official Then Return FetchByVersionFromServer(Version)
-        'tag 通常带 v 前缀，也兼容不带前缀的情况
+
+        '公告统一以 GitHub Release 为准：服务端的公告可能没填，也可能和 Release 不同步。
+        '这样无论当前用的是哪个更新源，用户看到的「这一版更新了什么」都是同一份内容。
+        Dim FromGitHub As UpdateInfo = FetchByTagFromGitHub(Version)
+        If FromGitHub IsNot Nothing AndAlso Not String.IsNullOrEmpty(FromGitHub.Notes) Then
+            Logger.Info($"已从 GitHub 取到 {Version} 的更新公告")
+            Return FromGitHub
+        End If
+
+        'GitHub 取不到（网络不通、或这个版本没建 Release）时退回当前更新源，至少能显示版本号
+        If CurrentUpdateSource = UpdateSource.Official Then
+            Dim FromServer As UpdateInfo = FetchByVersionFromServer(Version)
+            If FromServer IsNot Nothing Then
+                Logger.Info($"GitHub 上没有 {Version} 的公告，改用官方源的数据")
+                Return FromServer
+            End If
+        End If
+        Return FromGitHub
+    End Function
+
+    ''' <summary>从 GitHub 按 tag 查某个 Release。tag 通常带 v 前缀，也兼容不带前缀的情况。</summary>
+    Private Function FetchByTagFromGitHub(Version As String) As UpdateInfo
         For Each Url As String In {
                 $"https://api.github.com/repos/{UpdateRepo}/releases/tags/v{Version}",
                 $"https://api.github.com/repos/{UpdateRepo}/releases/tags/{Version}"}
