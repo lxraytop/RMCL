@@ -102,11 +102,11 @@ location ~ ^/rmcl-update/download/([A-Fa-f0-9]+)$ {
 | 配置 | 说明 |
 | --- | --- |
 | `github_repo` | 默认仓库，`owner/name` |
-| `github_mirror` | 直连失败时的加速前缀，默认 `https://gh-proxy.com/`；留空表示只用直连 |
+| `github_mirror` | 留空（默认）表示只走 GitHub 官方直连，海外服务器保持空即可；国内服务器连不上时再填 `https://gh-proxy.com/` |
 | `github_token` | 可选。未认证时 GitHub API 限额 60 次/小时，同步私有仓库也必须填 |
 
 > 同步是同步阻塞的：十几 MB 的文件在慢速服务器上可能要几十秒，页面会一直转圈直到下载完成，别中途关掉。
-> 服务器完全连不上 GitHub（且镜像也失败）时，仍然可以走上面的「上传 / FTP + 下拉选择」。
+> 服务器完全连不上 GitHub（且没配镜像）时，仍然可以走上面的「上传 / FTP + 下拉选择」。
 
 ---
 
@@ -146,7 +146,8 @@ location ~ ^/rmcl-update/download/([A-Fa-f0-9]+)$ {
 - 第一次检查更新时会弹出输入框，填验证码 → 激活成功后会显示「已授权，剩余 N 天」
 - 令牌会保存在本地，之后自动续用；到期后界面会提示「授权已到期」，此时检查更新与下载都会被拒绝
 
-另外两个更新源不需要授权：GitHub 原生源、GitHub 镜像源（镜像地址可自己填，默认 `https://gh-proxy.com/`）。
+另外两个更新源不需要授权：GitHub 原生源、GitHub 镜像源（地址可自己填，默认 `https://gh-proxy.com/`）。
+注意这是**客户端**（用户机器，通常在国内）下载 GitHub 资产用的，和服务器能不能直连 GitHub 是两件事。
 
 ---
 

@@ -218,7 +218,7 @@ function gh_download_asset(string $downloadUrl, string $target): array
         if (@http_get_file($candidate, $target, 300)) {
             return ['ok' => true, 'url' => $candidate, 'via' => $via];
         }
-        $lastError = $via . '下载失败';
+        $lastError = $via . ' 下载失败';
         @unlink($target);
     }
 

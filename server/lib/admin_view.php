@@ -302,7 +302,7 @@ $postMax = ini_get('post_max_size');
         <p class="desc">
             拉取本仓库（或任意公开仓库）的 Release，自动带出 tag、更新公告与 exe 资产；确认后点「下载并发布」，
             服务器会把文件抓到 <span class="mono">data/releases/</span> 并算好 sha256。
-            服务器直连 GitHub 失败时会用 <span class="mono">config.php</span> 里配置的镜像重试。
+            服务器能直连 GitHub 时无需额外配置；连不上再在 <span class="mono">config.php</span> 里填 <span class="mono">github_mirror</span>。
         </p>
         <form method="post" action="admin.php">
             <input type="hidden" name="do" value="github_preview">

@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/lib/core.php';
 require __DIR__ . '/lib/license.php';
+require __DIR__ . '/lib/github.php';
 
 session_name('rmcl_admin');
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax']);
@@ -110,6 +111,21 @@ if ($authorized) {
                 // 清理失败不影响结论
             }
         }
+    }
+
+    // 4. GitHub 直连（「从 GitHub 同步版本」要用）。只查 rate_limit，不消耗配额
+    try {
+        $raw = http_get_text('https://api.github.com/rate_limit', 10, gh_headers());
+        if ($raw === null) {
+            add_check('GitHub 直连', false, '访问 api.github.com 失败：同步版本需要服务器能直连 GitHub，或在 config.php 填 github_mirror');
+        } else {
+            $rate = json_decode($raw, true);
+            $remaining = $rate['rate']['remaining'] ?? '?';
+            $mirror = trim((string) cfg('github_mirror', ''));
+            add_check('GitHub 直连', true, 'API 剩余配额 ' . $remaining . ' 次/小时' . ($mirror === '' ? '（未配镜像，纯直连）' : '（已配镜像兜底）'));
+        }
+    } catch (Throwable $e) {
+        add_check('GitHub 直连', false, $e->getMessage());
     }
 }
 

@@ -46,9 +46,10 @@ return [
     // 默认仓库，形如 owner/name。后台里可以临时改成别的仓库。
     'github_repo' => 'lxraytop/RMCL',
 
-    // 加速镜像前缀。服务器直连 api.github.com / 资产下载失败时，会用这个前缀重试一次。
-    // 留空表示只用直连。格式与 gh-proxy 一致：https://gh-proxy.com/https://github.com/...
-    'github_mirror' => 'https://gh-proxy.com/',
+    // 加速镜像前缀。仅当服务器直连 GitHub 失败时才需要：留空表示只用官方直连。
+    // 服务器在海外（能直连 api.github.com 与资产下载）就保持空，不要多绕一层。
+    // 国内服务器连不上时再填，格式与 gh-proxy 一致：https://gh-proxy.com/
+    'github_mirror' => '',
 
     // 可选：GitHub Token。填了能提高 API 限额（未认证 60 次/小时），同步私有仓库时必须填。
     'github_token' => '',
