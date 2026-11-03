@@ -146,12 +146,16 @@ $postMax = ini_get('post_max_size');
         </script>
     </div>
 
-    <?php if (!empty($_GET['show'])): ?>
+    <?php
+    $newCodes = $_SESSION['last_created'] ?? [];
+    unset($_SESSION['last_created']);
+    ?>
+    <?php if ($newCodes): ?>
         <div class="card">
             <h2>刚生成的验证码</h2>
             <p class="desc">复制后发给用户；同一个码只能绑一台设备（除非上调了设备数）。</p>
             <textarea class="codes-out" readonly onclick="this.select()"><?php
-                foreach (array_filter(explode(',', (string) $_GET['show'])) as $c) {
+                foreach ($newCodes as $c) {
                     echo h($c) . "\n";
                 }
             ?></textarea>

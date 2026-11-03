@@ -188,8 +188,10 @@ try {
             }
             $pdo->commit();
             log_event('admin.create', ['detail' => "生成 {$count} 个验证码"]);
+            // 走 session 而不是 URL：一次生成 200 个码时查询串会超长
+            $_SESSION['last_created'] = $created;
             flash('已生成 ' . count($created) . ' 个验证码');
-            redirect('codes', ['show' => implode(',', $created)]);
+            redirect('codes');
             break;
 
         case 'toggle_code':
