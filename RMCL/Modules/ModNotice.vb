@@ -3,7 +3,7 @@
 '''
 ''' 发送流程：
 '''   1. 管理后台「联网通知」新建一条（标题、正文、级别、生效窗口、版本区间、是否只弹一次）；
-'''   2. 客户端启动完成 → 延迟 8 秒 → 若 24 小时内没拉过，请求 ?action=notices&amp;app_version=x.y.z；
+'''   2. 客户端启动完成 → 延迟 4 秒 → 若 24 小时内没拉过，请求 ?action=notices&amp;app_version=x.y.z；
 '''   3. 服务端按 enabled + 时间窗口 + 版本区间过滤后返回；
 '''   4. 客户端本地再过滤掉已读的（once=1 且 ID 在已读列表里）；
 '''   5. 多条同时生效时只弹级别最高、ID 最大的一条，其余留到下次启动；
@@ -16,8 +16,11 @@ Friend Module ModNotice
 
 #Region "参数"
 
-    ''' <summary>启动后延迟多久再拉取，避开启动动画与「发现新版本」弹窗。</summary>
-    Private Const StartupDelayMs As Integer = 8000
+    ''' <summary>
+    ''' 启动后延迟多久再拉取。
+    ''' 弹窗统一走 MyMsgBox 队列，就算和「发现新版本」撞上也会排队，不会叠在一起。
+    ''' </summary>
+    Private Const StartupDelayMs As Integer = 4000
     ''' <summary>两次拉取的最小间隔。启动很频繁的用户也只会在一天内请求一次。</summary>
     Private Const FetchIntervalSec As Long = 24 * 3600
     ''' <summary>本地留存的已读通知 ID 上限，超出后按先进先出丢弃。</summary>
