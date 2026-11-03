@@ -298,20 +298,7 @@ Friend Module ModUpdateServer
         If Rel Is Nothing Then
             Throw New UpdateLicenseException("E_NO_RELEASE", "更新服务器上还没有发布任何版本")
         End If
-        Dim Asset As JObject = TryCast(Rel("asset"), JObject)
-        Dim Info As New ServerRelease With {
-            .ReleaseId = CInt(JsonLong(Rel, "id")),
-            .Version = If(Rel("version")?.ToString, "").Trim(),
-            .Title = If(Rel("title")?.ToString, "").Trim(),
-            .Notes = If(Rel("notes")?.ToString, ""),
-            .PublishedAt = JsonLong(Rel, "published_at"),
-            .FileName = If(Asset?("name")?.ToString, "RMCL.exe"),
-            .Size = JsonLong(Asset, "size"),
-            .Sha256 = If(Asset?.Item("sha256")?.ToString, "")
-        }
-        If String.IsNullOrEmpty(Info.Version) Then
-            Throw New UpdateLicenseException(ErrFormat, "更新服务器没有返回版本号")
-        End If
+        Dim Info As ServerRelease = ParseReleaseObject(Rel)
 
         '顺手刷新本地到期时间，界面上的「剩余 N 天」就不会一直停在旧值
         Dim Lic As JObject = TryCast(Data("license"), JObject)
@@ -328,6 +315,46 @@ Friend Module ModUpdateServer
             End If
         End If
         Logger.Info($"官方源：最新版本 {Info.Version}，文件 {Info.FileName}（{FormatSize(Info.Size)}）")
+        Return Info
+    End Function
+
+    ''' <summary>
+    ''' 按版本号取发布信息。更新完成、重启后用它展示「这一版更新了什么」。
+    ''' 服务端还是旧版（没有 release 接口）时会抛 404，调用方自行兜底。
+    ''' </summary>
+    Public Function FetchReleaseByVersion(Version As String) As ServerRelease
+        Dim TokenValue As String = CurrentToken()
+        If String.IsNullOrEmpty(TokenValue) Then
+            Throw New UpdateLicenseException(ErrNoToken, "尚未授权，请先输入验证码")
+        End If
+        Dim Url As String = ApiUrl("release") &
+                            "&token=" & Uri.EscapeDataString(TokenValue) &
+                            "&device_id=" & Uri.EscapeDataString(DeviceId) &
+                            "&version=" & Uri.EscapeDataString(Version)
+        Dim Data As JObject = RequestJson(Url)
+        Dim Rel As JObject = TryCast(Data("release"), JObject)
+        If Rel Is Nothing Then
+            Throw New UpdateLicenseException("E_NO_RELEASE", "更新服务器上没有 " & Version & " 的发布信息")
+        End If
+        Return ParseReleaseObject(Rel)
+    End Function
+
+    ''' <summary>把 release JSON 解析成 ServerRelease。</summary>
+    Private Function ParseReleaseObject(Rel As JObject) As ServerRelease
+        Dim Asset As JObject = TryCast(Rel("asset"), JObject)
+        Dim Info As New ServerRelease With {
+            .ReleaseId = CInt(JsonLong(Rel, "id")),
+            .Version = If(Rel("version")?.ToString, "").Trim(),
+            .Title = If(Rel("title")?.ToString, "").Trim(),
+            .Notes = If(Rel("notes")?.ToString, ""),
+            .PublishedAt = JsonLong(Rel, "published_at"),
+            .FileName = If(Asset?("name")?.ToString, "RMCL.exe"),
+            .Size = JsonLong(Asset, "size"),
+            .Sha256 = If(Asset?.Item("sha256")?.ToString, "")
+        }
+        If String.IsNullOrEmpty(Info.Version) Then
+            Throw New UpdateLicenseException(ErrFormat, "更新服务器没有返回版本号")
+        End If
         Return Info
     End Function
 

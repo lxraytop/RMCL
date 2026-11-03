@@ -316,11 +316,19 @@ Friend Module ModUpdate
     ''' <summary>官方源：先校验授权，再取最新版本。</summary>
     Private Function FetchLatestFromServer() As UpdateInfo
         Dim Rel As ModUpdateServer.ServerRelease = ModUpdateServer.FetchRelease()
+        Dim Info As UpdateInfo = BuildServerInfo(Rel)
+        Logger.Info($"检查更新（官方源）：最新版本 {Info.Version}，文件 {Info.AssetName}，" &
+                    $"剩余授权 {Rel.RemainingDays} 天")
+        Return Info
+    End Function
+
+    ''' <summary>把官方源返回的发布信息转成统一的 UpdateInfo。</summary>
+    Private Function BuildServerInfo(Rel As ModUpdateServer.ServerRelease) As UpdateInfo
         Dim Info As New UpdateInfo With {
             .Version = Rel.Version,
             .Title = If(String.IsNullOrEmpty(Rel.Title), "RMCL " & Rel.Version, Rel.Title),
             .Notes = CleanNotes(Rel.Notes),
-            .PageUrl = If(ModUpdateServer.ConfiguredServerUrl = "", UpdatePage, ModUpdateServer.ConfiguredServerUrl),
+            .PageUrl = ModUpdateServer.ConfiguredServerUrl,
             .AssetName = Rel.FileName,
             .AssetSize = Rel.Size,
             .Sha256 = Rel.Sha256,
@@ -331,9 +339,31 @@ Friend Module ModUpdate
             Info.PublishedAt = Rel.PublishedAt.ToString()
             Info.PublishedLocal = DateTimeOffset.FromUnixTimeSeconds(Rel.PublishedAt).ToLocalTime().DateTime
         End If
-        Logger.Info($"检查更新（官方源）：最新版本 {Info.Version}，文件 {Info.AssetName}，" &
-                    $"剩余授权 {Rel.RemainingDays} 天")
         Return Info
+    End Function
+
+    ''' <summary>
+    ''' 官方源下按版本号取公告。更新完成、重启后由 ShowNotesAfterRestart 调用。
+    ''' 优先走 release 接口精确匹配；服务端还是旧版时退回 latest，只有 latest 正好是这一版才用。
+    ''' </summary>
+    Private Function FetchByVersionFromServer(Version As String) As UpdateInfo
+        Try
+            Return BuildServerInfo(ModUpdateServer.FetchReleaseByVersion(Version))
+        Catch ex As Exception
+            Logger.Warn(ex, $"按版本获取 {Version} 的更新公告失败，改用最新版本兜底")
+        End Try
+
+        Try
+            Dim Rel As ModUpdateServer.ServerRelease = ModUpdateServer.FetchRelease()
+            If String.Equals(Rel.Version, Version, StringComparison.OrdinalIgnoreCase) Then
+                Logger.Info($"官方源最新版本正好是刚装上的 {Version}，用它的公告")
+                Return BuildServerInfo(Rel)
+            End If
+            Logger.Info($"官方源最新版本是 {Rel.Version}，与刚装上的 {Version} 不同，不展示公告")
+        Catch ex As Exception
+            Logger.Warn(ex, "兜底获取最新版本信息也失败")
+        End Try
+        Return Nothing
     End Function
 
     ''' <summary>GitHub：原生源直连，镜像源先经镜像再回退官方。</summary>
@@ -372,8 +402,8 @@ Friend Module ModUpdate
     ''' </summary>
     Public Function FetchByTag(Version As String) As UpdateInfo
         If String.IsNullOrEmpty(Version) Then Return Nothing
-        '官方源没有按版本查询的接口，公告在下载过程中已经展示过，这里直接跳过
-        If CurrentUpdateSource = UpdateSource.Official Then Return Nothing
+        '官方源没有 tag 概念，按版本号查自己的服务端
+        If CurrentUpdateSource = UpdateSource.Official Then Return FetchByVersionFromServer(Version)
         'tag 通常带 v 前缀，也兼容不带前缀的情况
         For Each Url As String In {
                 $"https://api.github.com/repos/{UpdateRepo}/releases/tags/v{Version}",

@@ -166,6 +166,7 @@ location ~ ^/rmcl-update/download/([A-Fa-f0-9]+)$ {
 | POST | `?action=activate` | `code` `device_id` `device_name` `app_version` | 激活验证码，返回 `token` 与到期信息 |
 | POST | `?action=verify` | `token` `device_id` | 校验授权，返回剩余天数 |
 | GET | `?action=latest` | `token` `device_id` `channel?` | 取最新版本信息（需要有效授权），返回里带 `downloads`（本站累计下载次数） |
+| GET | `?action=release` | `token` `device_id` `version` | 按版本号取发布信息（更新完成后展示该版本公告用） |
 | POST | `?action=ticket` | `token` `device_id` `release_id` | 换下载票据，返回 `url` |
 | GET | `?action=download` | `ticket` | 输出文件，支持 `Range` |
 

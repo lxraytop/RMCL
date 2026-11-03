@@ -70,6 +70,24 @@ function resolve_action(): string
     return $path === '/' ? 'home' : 'unknown';
 }
 
+/** 把 releases 表的一行整理成客户端要的结构 */
+function release_payload(array $rel): array
+{
+    return [
+        'id' => (int) $rel['id'],
+        'version' => $rel['version'],
+        'title' => $rel['title'],
+        'notes' => $rel['notes'],
+        'published_at' => (int) $rel['published_at'],
+        'downloads' => (int) $rel['downloads'],
+        'asset' => [
+            'name' => $rel['file_name'],
+            'size' => (int) $rel['size'],
+            'sha256' => $rel['sha256'],
+        ],
+    ];
+}
+
 /** 输出发布包，支持 Range 请求（客户端是多线程分段下载） */
 function serve_file(string $path, string $downloadName, int $declaredSize): void
 {
@@ -232,22 +250,34 @@ try {
                 throw new ApiError('E_NO_RELEASE', '服务器上还没有发布任何版本', 404);
             }
             json_ok([
-                'release' => [
-                    'id' => (int) $rel['id'],
-                    'version' => $rel['version'],
-                    'title' => $rel['title'],
-                    'notes' => $rel['notes'],
-                    'published_at' => (int) $rel['published_at'],
-                    'downloads' => (int) $rel['downloads'],
-                    'asset' => [
-                        'name' => $rel['file_name'],
-                        'size' => (int) $rel['size'],
-                        'sha256' => $rel['sha256'],
-                    ],
-                ],
+                'release' => release_payload($rel),
                 'license' => [
                     'code_mask' => mask_code((string) $license['code']['code']),
                     'device_id' => $license['device_id'],
+                    'expire_at' => $license['expire_at'],
+                    'remaining_days' => remaining_days($license['expire_at']),
+                ],
+            ]);
+            break;
+
+        case 'release':
+            // 按版本号取发布信息：客户端更新完成、重启后要用它展示「这一版更新了什么」
+            $license = require_license();
+            $version = ltrim(trim((string) input('version')), 'vV');
+            if ($version === '') {
+                throw new ApiError('E_PARAM', '缺少 version 参数', 400);
+            }
+            $rel = db_one(
+                "SELECT * FROM releases WHERE version = ? AND status = 'published' ORDER BY id DESC LIMIT 1",
+                [$version]
+            );
+            if ($rel === null) {
+                throw new ApiError('E_NO_RELEASE', '服务器上没有 ' . $version . ' 这个版本', 404);
+            }
+            json_ok([
+                'release' => release_payload($rel),
+                'license' => [
+                    'code_mask' => mask_code((string) $license['code']['code']),
                     'expire_at' => $license['expire_at'],
                     'remaining_days' => remaining_days($license['expire_at']),
                 ],
