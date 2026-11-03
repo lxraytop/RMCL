@@ -231,8 +231,6 @@
             Dim Mode As ModUpdate.UpdateSource = SelectedSource()
             PanMirrorSettings.Visibility = If(Mode = ModUpdate.UpdateSource.GitHubMirror, Visibility.Visible, Visibility.Collapsed)
             PanOfficialSettings.Visibility = If(Mode = ModUpdate.UpdateSource.Official, Visibility.Visible, Visibility.Collapsed)
-            '地址写死在客户端里，这里只做展示
-            TextServerUrl.Text = ModUpdateServer.ConfiguredServerUrl
             RefreshLicenseView()
             RefreshUpdateView()
         Catch ex As Exception

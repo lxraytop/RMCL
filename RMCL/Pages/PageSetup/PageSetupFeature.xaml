@@ -82,16 +82,6 @@
                         <TextBlock Text="镜像只负责搬运文件，检查更新仍会直连 GitHub 接口；接口连不上时也会自动改用镜像地址重试。" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" />
                     </StackPanel>
                     <StackPanel x:Name="PanOfficialSettings" Visibility="Collapsed">
-                        <Grid Height="28" Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="服务器地址" Margin="1,0,16,0" />
-                            <TextBlock Grid.Column="1" x:Name="TextServerUrl" VerticalAlignment="Center" Opacity="0.72"
-                                       Text="http://update.mc.lxray.top"
-                                       ToolTip="地址内置在客户端里，不可更改。换域名需要发布新版本。" />
-                        </Grid>
                         <Border Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,10" Margin="0,0,0,10">
                             <StackPanel>
                                 <TextBlock x:Name="LabLicenseInfo" TextWrapping="Wrap" LineHeight="19" Text="授权状态：未授权" />
