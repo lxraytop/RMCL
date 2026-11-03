@@ -507,7 +507,13 @@ Friend Module ModSecret
     ''' </summary>
     Public ServerConfig As JObject
 
-    Public ServerLoader As New LoaderTask(Of Integer, Integer)("RMCL 配置更新", Sub() Logger.Info("该版本中不包含更新通知功能……"), Priority:=ThreadPriority.BelowNormal) With
+    ''' <summary>
+    ''' 预留的远程配置加载任务。当前构建不拉取远程配置 ——
+    ''' 联网通知由 ModNotice 走 server 的 notices 接口，和这个任务没有关系。
+    ''' </summary>
+    Public ServerLoader As New LoaderTask(Of Integer, Integer)("RMCL 配置更新",
+        Sub() Logger.Info("远程配置：当前构建未启用拉取（联网通知走 server 的 notices 接口）"),
+        Priority:=ThreadPriority.BelowNormal) With
         {.ReloadTimeout = 1000 * 60 * 60} '超时 1 小时
 
 #End Region
