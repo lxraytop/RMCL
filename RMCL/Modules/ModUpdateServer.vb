@@ -10,7 +10,6 @@ Friend Module ModUpdateServer
 
 #Region "错误码"
 
-    Public Const ErrNoServer As String = "E_NO_SERVER"
     Public Const ErrNetwork As String = "E_NETWORK"
     Public Const ErrFormat As String = "E_FORMAT"
     Public Const ErrNoToken As String = "E_NO_TOKEN"
@@ -106,37 +105,18 @@ Friend Module ModUpdateServer
     Private DeviceIdCache As String = Nothing
 
     ''' <summary>
-    ''' 官方源地址，已去掉结尾斜杠。没填时返回空串。
+    ''' 官方源地址，直接内置在客户端里。
+    ''' 不提供修改入口：地址填错只会让检查更新彻底失效，而用户无从判断该填什么。
+    ''' 换域名或加 HTTPS 时改这里，重新编译即可，服务端不用动。
     ''' </summary>
+    Public Const ServerBaseUrl As String = "http://update.mc.lxray.top"
+
+    ''' <summary>当前使用的官方源地址（无结尾斜杠）。</summary>
     Public ReadOnly Property ConfiguredServerUrl As String
         Get
-            Dim Raw As String = ""
-            Try
-                Raw = Settings.Get(Of String)("UpdateServerUrl")
-            Catch ex As Exception
-                Logger.Warn(ex, "读取更新服务器地址失败")
-            End Try
-            Return NormalizeUrl(Raw)
+            Return ServerBaseUrl.TrimEnd("/"c)
         End Get
     End Property
-
-    Private Function NormalizeUrl(Raw As String) As String
-        If String.IsNullOrWhiteSpace(Raw) Then Return ""
-        Dim Url As String = Raw.Trim().Replace("\", "/")
-        If Not Url.StartsWithF("http://", True) AndAlso Not Url.StartsWithF("https://", True) Then
-            '只写了域名的情况按 https 处理，省得用户被 http 明文传输坑到
-            Url = "https://" & Url
-        End If
-        Return Url.TrimEnd("/"c)
-    End Function
-
-    Private Function RequireServerUrl() As String
-        Dim Url As String = ConfiguredServerUrl
-        If Url = "" Then
-            Throw New UpdateLicenseException(ErrNoServer, "还没有填写官方源地址，请到「设置 → 功能 → 软件更新」里填写")
-        End If
-        Return Url
-    End Function
 
     ''' <summary>
     ''' 设备标识：优先由 Windows 的 MachineGuid 派生，取不到时退回随机值并存进设置。
@@ -265,7 +245,7 @@ Friend Module ModUpdateServer
 #Region "接口调用"
 
     Private Function ApiUrl(Action As String) As String
-        Return RequireServerUrl() & "/index.php?action=" & Action
+        Return ConfiguredServerUrl & "/index.php?action=" & Action
     End Function
 
     ''' <summary>

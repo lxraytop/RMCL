@@ -231,6 +231,8 @@
             Dim Mode As ModUpdate.UpdateSource = SelectedSource()
             PanMirrorSettings.Visibility = If(Mode = ModUpdate.UpdateSource.GitHubMirror, Visibility.Visible, Visibility.Collapsed)
             PanOfficialSettings.Visibility = If(Mode = ModUpdate.UpdateSource.Official, Visibility.Visible, Visibility.Collapsed)
+            '地址写死在客户端里，这里只做展示
+            TextServerUrl.Text = ModUpdateServer.ConfiguredServerUrl
             RefreshLicenseView()
             RefreshUpdateView()
         Catch ex As Exception
@@ -273,11 +275,6 @@
     ''' 必须在 UI 线程调用（内部要弹模态框）。
     ''' </summary>
     Private Function ActivateLicenseInteractive() As Boolean
-        If ModUpdateServer.ConfiguredServerUrl = "" Then
-            Hint("请先填写官方源地址", HintType.Red)
-            Return False
-        End If
-
         Dim Input As String = MyMsgBoxInput("更新授权",
             "请输入管理员提供的验证码。一张码默认绑定一台设备；" & vbCrLf &
             "授权到期后会自动失效，需要续期才能继续更新。", "",

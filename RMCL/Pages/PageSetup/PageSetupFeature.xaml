@@ -88,9 +88,9 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="服务器地址" Margin="1,0,16,0" />
-                            <local:MyTextBox Grid.Column="1" local:SettingService.Key="UpdateServerUrl" x:Name="TextServerUrl"
-                                             Width="300" HorizontalAlignment="Left" HintText="https://update.example.com/rmcl/"
-                                             ToolTip="自建更新服务的根地址，例如 https://update.example.com/rmcl/" />
+                            <TextBlock Grid.Column="1" x:Name="TextServerUrl" VerticalAlignment="Center" Opacity="0.72"
+                                       Text="http://update.mc.lxray.top"
+                                       ToolTip="地址内置在客户端里，不可更改。换域名需要发布新版本。" />
                         </Grid>
                         <Border Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,10" Margin="0,0,0,10">
                             <StackPanel>
