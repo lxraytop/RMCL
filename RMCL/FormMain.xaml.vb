@@ -1284,10 +1284,8 @@ Public Class FormMain
             AaCode(
             Sub()
                 AniControlEnabled += 1
-                CType(PanMainRight.Child, MyPageRight).PageOnForceExit()
-                '把新页面添加进容器
-                PanMainRight.Child = PageRight
-                PageRight.Opacity = 0
+                '把新页面添加进容器（内部会先给旧页收尾）
+                PageRightAttach(PageRight)
                 PanMainRight.Background = Nothing
                 AniControlEnabled -= 1
                 RunInUi(Sub() BtnExtraBack.ShowRefresh(), True)
@@ -1295,10 +1293,69 @@ Public Class FormMain
             AaCode(
             Sub()
                 '延迟触发页面通用动画，以使得在 Loaded 事件中加载的控件得以处理
-                PageRight.Opacity = 1
-                PageRight.PageOnEnter()
+                PageRightEnter(PageRight)
             End Sub, 30, True)
         }, "FrmMain PageChangeRight")
+        PageChangeFallback(PageRight)
+    End Sub
+    ''' <summary>
+    ''' 把页面挂到右侧容器上，并保证它是可见的。可重复调用。
+    '''
+    ''' 原先「挂上容器」这一步只写在切换动画的回调里。AniStart 遇到同名动画组会直接
+    ''' AniStop 丢弃旧组（见 ModAnimation.AniStart），快速连续切换页面时这条回调就永远不会执行：
+    ''' 旧页已经退场、新页从未挂上，右侧于是变成一片空白。这里把挂载抽成幂等操作，
+    ''' 任何一处都可以安全地补做。
+    ''' </summary>
+    Public Sub PageRightAttach(Page As MyPageRight)
+        If Page Is Nothing Then Return
+        Dim Old As MyPageRight = TryCast(PanMainRight.Child, MyPageRight)
+        If Old IsNot Nothing AndAlso Not Old Is Page Then Old.PageOnForceExit()
+        If PanMainRight.Child IsNot Page Then PanMainRight.Child = Page
+        '不能把页面留在 Opacity = 0 上等下一个回调来恢复：原流程是回调里置 0、
+        '下一条回调再置 1，中间那段一旦被丢弃，页面就永久透明。
+        Page.Opacity = 1
+    End Sub
+    ''' <summary>
+    ''' 右侧页面进场收尾：确保页面确实挂在容器里，再触发 PageOnEnter。
+    ''' </summary>
+    Public Sub PageRightEnter(Optional Page As MyPageRight = Nothing)
+        If Page Is Nothing Then Page = TryCast(PanMainRight.Child, MyPageRight)
+        If Page Is Nothing Then Page = PageRight
+        If Page Is Nothing Then Return
+        If PanMainRight.Child IsNot Page Then PageRightAttach(Page)
+        Page.Opacity = 1
+        Page.PageOnEnter()
+    End Sub
+    ''' <summary>
+    ''' 兜底：当前右侧页面若因切换动画被打断而停在空白状态，就地恢复显示。
+    ''' 供「重复点击当前分页」这类入口调用，给用户一条不必重启程序的恢复路径。
+    ''' </summary>
+    Public Sub PageRightEnsureVisible()
+        Dim Page As MyPageRight = TryCast(PanMainRight.Child, MyPageRight)
+        If Page Is Nothing Then Page = PageRight
+        If Page Is Nothing Then Return
+        PageRightEnter(Page)
+    End Sub
+    ''' <summary>
+    ''' 页面切换的兜底。切换动画组被同名 AniStop 丢弃时，两条收尾回调都不会执行，
+    ''' 右侧会停在「旧页已退场、新页没进场」的空白状态。用一个独立名字的动画组延时补一次；
+    ''' 正常流程下这里什么也不做。
+    ''' </summary>
+    Public Sub PageChangeFallback(Page As MyPageRight)
+        If Page Is Nothing Then Return
+        AniStart(AaCode(
+                 Sub()
+                     '已被后续的页面切换取代，交给新的切换处理
+                     If Page IsNot PageRight AndAlso Page IsNot PanMainRight.Child Then Return
+                     '切换动画组还在跑，说明正常流程会自己收尾
+                     If AniIsRun("PageLeft PageChange") OrElse AniIsRun("FrmMain PageChangeRight") Then Return
+                     If PanMainRight.Child IsNot Page Then
+                         Logger.Warn("页面切换动画被中断，已补挂目标页面")
+                         PageRightAttach(Page)
+                     End If
+                     'PageOnEnter 内部会按当前状态自愈：已经正常显示的页面什么也不会变
+                     PageRightEnter(Page)
+                 End Sub, 600), "FrmMain PageChangeFallback")
     End Sub
     ''' <summary>
     ''' 退出子界面。

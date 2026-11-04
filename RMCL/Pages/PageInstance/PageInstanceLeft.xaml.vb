@@ -85,7 +85,12 @@ Public Class PageInstanceLeft
     ''' 切换现有页面。
     ''' </summary>
     Public Sub PageChange(ID As FormMain.PageSubType)
-        If PageID = ID Then Return
+        If PageID = ID Then
+            '同一项再次点击：正常情况下不需要切换，但若上一次切换的动画被中断、
+            '右侧停在空白状态，这里顺手把它救回来（否则用户只能重启程序）
+            FrmMain.PageRightEnsureVisible()
+            Return
+        End If
         If Instance IsNot Nothing AndAlso McInstanceLock.IsLocked(Instance) Then
             Hint("该版本正在被修改，请稍后再切换页面！", HintType.Red)
             Return
@@ -104,19 +109,23 @@ Public Class PageInstanceLeft
         AniStop("FrmMain PageChangeRight") '停止主页面的右页面切换动画，防止它与本动画一起触发多次 PageOnEnter
         If Target.Parent IsNot Nothing Then Target.SetValue(ContentPresenter.ContentProperty, Nothing)
         FrmMain.PageRight = Target
-        CType(FrmMain.PanMainRight.Child, MyPageRight).PageOnExit()
+        '此时容器里还是旧页面，先让它退场；CType 换成 TryCast，容器意外为空时不再抛异常
+        '把整个切换中断在半路（异常会让下面的 AniStart 根本不执行）
+        Dim Old As MyPageRight = TryCast(FrmMain.PanMainRight.Child, MyPageRight)
+        If Old IsNot Nothing Then Old.PageOnExit()
         AniStart({
-            AaCode(Sub()
-                       CType(FrmMain.PanMainRight.Child, MyPageRight).PageOnForceExit()
-                       FrmMain.PanMainRight.Child = FrmMain.PageRight
-                       FrmMain.PageRight.Opacity = 0
-                   End Sub, 130),
-            AaCode(Sub()
-                       '延迟触发页面通用动画，以使得在 Loaded 事件中加载的控件得以处理
-                       FrmMain.PageRight.Opacity = 1
-                       FrmMain.PageRight.PageOnEnter()
-                   End Sub, 30, True)
+            AaCode(
+            Sub()
+                '挂上新页面（会先强制收掉旧页面）
+                FrmMain.PageRightAttach(FrmMain.PageRight)
+            End Sub, 130),
+            AaCode(
+            Sub()
+                '延迟触发页面通用动画，以使得在 Loaded 事件中加载的控件得以处理
+                FrmMain.PageRightEnter(FrmMain.PageRight)
+            End Sub, 30, True)
         }, "PageLeft PageChange")
+        FrmMain.PageChangeFallback(FrmMain.PageRight)
     End Sub
 
 #End Region

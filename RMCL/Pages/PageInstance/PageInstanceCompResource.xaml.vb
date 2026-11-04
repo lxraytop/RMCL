@@ -38,6 +38,8 @@ Public Class PageInstanceCompResource
     ''' <summary>XAML 解析完成前不刷界面：那时控件字段还是 Nothing。</summary>
     Private Ready As Boolean = False
     Private Scanning As Boolean = False
+    ''' <summary>是否已经有过一次「读到结果并刷新了界面」的读取，用来区分 XAML 默认态与真实数据态。</summary>
+    Private Scanned As Boolean = False
     Private InstancePath As String = ""
 
     Friend Sub New(Type As ModLocalComp.CompType)
@@ -58,6 +60,28 @@ Public Class PageInstanceCompResource
         Reload()
     End Sub
 
+    ''' <summary>
+    ''' 进场时兜底检查界面骨架。上次读取若被意外打断，可能留下「列表区、空状态、加载卡片全折叠」
+    ''' 的夹生状态，看着就是一片空白，这里补一次收尾。
+    '''
+    ''' 必须在 Scanned 之后才动手：首次进场时 Loaded（进而 Reload）很可能还没执行，
+    ''' 此时各卡片仍是 XAML 默认的显隐值，据此「收尾」会把正在用的加载卡片提前藏掉，
+    ''' 反而让页面空掉。
+    ''' </summary>
+    Private Sub Page_Enter() Handles Me.PageEnter
+        If Not Ready OrElse Scanning OrElse Not Scanned Then Return
+        ShowCard(PanLoad, False)
+        ShowCard(CardSelect, False)
+        If Files.Count = 0 Then
+            '空目录就该看到空状态卡片，而不是一片空白
+            PanAllBack.Visibility = Visibility.Collapsed
+            ShowCard(PanEmpty, True)
+        Else
+            ShowCard(PanEmpty, False)
+            PanAllBack.Visibility = Visibility.Visible
+        End If
+    End Sub
+
     Public Sub Refresh() Implements IRefreshable.Refresh
         Reload()
     End Sub
@@ -75,19 +99,46 @@ Public Class PageInstanceCompResource
 
         RunInNewThread(
         Sub()
-            Dim Result As List(Of ModLocalComp.LocalCompFile) = ModLocalComp.LoadFiles(Instance, CompType)
-            '图标要在后台取，读 zip 不能放 UI 线程
-            For Each Entry As ModLocalComp.LocalCompFile In Result
-                ModLocalComp.GetIcon(Entry, CompType)
-            Next
+            Dim Result As List(Of ModLocalComp.LocalCompFile) = Nothing
+            Try
+                Result = ModLocalComp.LoadFiles(Instance, CompType)
+                '图标要在后台取，读 zip 不能放 UI 线程
+                For Each Entry As ModLocalComp.LocalCompFile In Result
+                    ModLocalComp.GetIcon(Entry, CompType)
+                Next
+            Catch ex As Exception
+                '读目录失败也必须把 Scanning 复位：否则之后每次 Reload 都会在入口被拦掉，
+                '页面永远停在「只剩一张加载卡片」的状态，连刷新都救不回来
+                Logger.Error(ex, $"读取{TypeName}失败")
+            End Try
             RunInUi(Sub()
                         Scanning = False
-                        If PageInstanceLeft.Instance Is Nothing OrElse PageInstanceLeft.Instance.PathIndie <> InstancePath Then Return
+                        If Result Is Nothing Then
+                            '读取失败：显示可读的空状态，而不是把界面留在折叠 + 加载中的夹生态
+                            ShowCard(PanLoad, False)
+                            Files.Clear()
+                            SelectedKeys.Clear()
+                            Scanned = True
+                            RefreshUI()
+                            TxtEmptyTitle.Text = $"读取{TypeName}失败"
+                            TxtEmptyDescription.Text = "请点右上角的刷新按钮重试。"
+                            PanAllBack.Visibility = Visibility.Collapsed
+                            ShowCard(PanEmpty, True)
+                            Return
+                        End If
+                        '换版本 / 已切走：本次读取作废，但界面要收尾到「非加载中」，
+                        '否则 PanAllBack 会一直折叠，下次进来就是一片空白
+                        If PageInstanceLeft.Instance Is Nothing OrElse PageInstanceLeft.Instance.PathIndie <> InstancePath Then
+                            ShowCard(PanLoad, False)
+                            PanAllBack.Visibility = Visibility.Visible
+                            Return
+                        End If
                         ShowCard(PanLoad, False)
                         PanAllBack.Visibility = Visibility.Visible
 
                         Files = Result
                         SelectedKeys.Clear()
+                        Scanned = True
                         '先换数据再复位筛选：复位本身会触发一次刷新，此时用的已是新列表
                         Filter = FilterType.All
                         BtnFilterAll.Checked = True
@@ -180,7 +231,7 @@ Public Class PageInstanceCompResource
             PanAllBack.Visibility = Visibility.Collapsed
             ShowCard(PanEmpty, True)
             TxtEmptyTitle.Text = $"这里还没有{TypeName}"
-            TxtEmptyDescription.Text = $"点「从文件安装」选一个 {TypeName}，或者去下载页找找。"
+            TxtEmptyDescription.Text = $"点「从文件安装」选一个{TypeName}，或者去下载页找找。"
             ShowCard(CardSelect, False)
             Return
         End If

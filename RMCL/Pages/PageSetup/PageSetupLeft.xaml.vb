@@ -100,7 +100,11 @@ Public Class PageSetupLeft
     ''' 切换现有页面。
     ''' </summary>
     Public Sub PageChange(ID As FormMain.PageSubType)
-        If PageID = ID Then Return
+        If PageID = ID Then
+            '同一项再次点击：顺手修复可能因切换动画被中断而停在空白状态的右侧页面
+            FrmMain.PageRightEnsureVisible()
+            Return
+        End If
         AniControlEnabled += 1
         IsPageSwitched = True
         Try
@@ -142,21 +146,20 @@ Public Class PageSetupLeft
         AniStop("FrmMain PageChangeRight") '停止主页面的右页面切换动画，防止它与本动画一起触发多次 PageOnEnter
         If Target.Parent IsNot Nothing Then Target.SetValue(ContentPresenter.ContentProperty, Nothing)
         FrmMain.PageRight = Target
-        CType(FrmMain.PanMainRight.Child, MyPageRight).PageOnExit()
+        Dim Old As MyPageRight = TryCast(FrmMain.PanMainRight.Child, MyPageRight)
+        If Old IsNot Nothing Then Old.PageOnExit()
         AniStart({
             AaCode(
             Sub()
-                CType(FrmMain.PanMainRight.Child, MyPageRight).PageOnForceExit()
-                FrmMain.PanMainRight.Child = FrmMain.PageRight
-                FrmMain.PageRight.Opacity = 0
+                FrmMain.PageRightAttach(FrmMain.PageRight)
             End Sub, 130),
             AaCode(
             Sub()
                 '延迟触发页面通用动画，以使得在 Loaded 事件中加载的控件得以处理
-                FrmMain.PageRight.Opacity = 1
-                FrmMain.PageRight.PageOnEnter()
+                FrmMain.PageRightEnter(FrmMain.PageRight)
             End Sub, 30, True)
         }, "PageLeft PageChange")
+        FrmMain.PageChangeFallback(FrmMain.PageRight)
     End Sub
 
 #End Region

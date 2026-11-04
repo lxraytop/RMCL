@@ -172,6 +172,12 @@ Public Class MyPageRight
     ''' </summary>
     Public Sub PageOnEnter()
         Logger.Trace("已触发 PageOnEnter")
+        '页面切换的收尾（挂上容器 → 置 Opacity = 1 → 进场）是放在动画组的回调里的，
+        '而 AniStart 遇到同名动画组会直接 AniStop 丢弃旧组（见 ModAnimation.AniStart），
+        '回调于是永远不会执行，页面就被挂在整页透明的状态上。凡要求「显示本页」的时刻，
+        '都先把自身拉回可见，再交给下面的状态机处理。
+        Opacity = 1
+        IsHitTestVisible = True
         RaiseEvent PageEnter()
         Select Case PageState
             Case PageStates.Empty
@@ -200,8 +206,28 @@ Public Class MyPageRight
                 End If
             Case PageStates.ContentEnter
                 '重复调用 PageOnEnter，直接忽略
+                '但若进场动画组已被丢弃（例如快速连续切换页面时被同名 AniStart 顶掉），
+                '控件会被永久留在 Opacity = 0（进场动画是「先全置 0 再逐个渐入」），
+                '此时再「直接忽略」就等于把页面永久白屏，必须就地复位可视状态。
+                If AniIsRun("PageRight PageChange " & PageUuid) Then Return
+                Logger.Warn("进场动画已被中断但状态仍为 ContentEnter，已复位可视状态")
+                ResetVisualState()
+                PageState = PageStates.ContentStay
+            Case PageStates.ContentStay
+                '已经完整显示，重复进入无需处理
+                Return
+            Case PageStates.LoaderWait, PageStates.LoaderEnter, PageStates.LoaderStayForce, PageStates.LoaderStay
+                '加载器正在接管显示，页面不是空白，重复进入忽略即可
+                Return
             Case Else
-                Throw New Exception("在状态为 " & PageState.ToString() & " 时触发了 PageOnEnter 事件。")
+                'PageExit / LoaderExit：退出动画组被丢弃时，收尾回调（PageOnExitAnimationFinished）
+                '不会执行，状态会永久卡在这里。原先这里直接抛异常，异常又被动画引擎吞掉
+                '（ModAnimation.AniRun 的 Catch），结果就是页面永久空白且再也进不来。
+                '改为记录日志后强制收敛到 Empty，从头走一次完整的进入流程。
+                Logger.Warn($"页面状态为 {PageState} 时触发了 PageOnEnter（切换动画可能被打断），已强制恢复显示")
+                PageOnForceExit()
+                PageState = PageStates.Empty
+                TriggerEnterAnimation(PanAlways, If(PanContent, Child))
         End Select
     End Sub
     Public Event PageEnter()
@@ -240,7 +266,7 @@ Public Class MyPageRight
         AniStop("PageRight PageChange " & PageUuid)
         '由于动画会被强制中止，所以需要手动进行隐藏
         If PageLoader Is Nothing Then
-            Child.Visibility = Visibility.Collapsed
+            If Child IsNot Nothing Then Child.Visibility = Visibility.Collapsed
         Else
             PanContent.Visibility = Visibility.Collapsed
             PanLoader.Visibility = Visibility.Collapsed
@@ -289,7 +315,10 @@ Public Class MyPageRight
                 PageState = PageStates.LoaderStayForce
                 AniStart(AaCode(AddressOf PageOnLoaderStayFinished, 400), "PageRight PageChange " & PageUuid)
             Case Else
-                Throw New Exception("在状态为 " & PageState.ToString() & " 时触发了 PageOnEnterAnimationFinished 事件。")
+                '动画组可能已被同名 AniStart 顶掉，导致回调与状态错位。
+                '这里抛异常只会被动画引擎吞掉（ModAnimation.AniRun 的 Catch），
+                '状态反而永久错乱，所以只记日志，交给 PageOnEnter 自愈。
+                Logger.Warn($"在状态为 {PageState} 时触发了 PageOnEnterAnimationFinished 事件")
         End Select
     End Sub
     ''' <summary>
@@ -307,7 +336,7 @@ Public Class MyPageRight
                 PageState = PageStates.ContentEnter
                 TriggerEnterAnimation(PanContent)
             Case Else
-                Throw New Exception("在状态为 " & PageState.ToString() & " 时触发了 PageOnExitAnimationFinished 事件。")
+                Logger.Warn($"在状态为 {PageState} 时触发了 PageOnExitAnimationFinished 事件")
         End Select
     End Sub
     ''' <summary>
@@ -325,7 +354,7 @@ Public Class MyPageRight
                     TriggerEnterAnimation(PanLoader)
                 End If
             Case Else
-                Throw New Exception("在状态为 " & PageState.ToString() & " 时触发了 PageOnLoaderWaitFinished 事件。")
+                Logger.Warn($"在状态为 {PageState} 时触发了 PageOnLoaderWaitFinished 事件")
         End Select
     End Sub
     ''' <summary>
@@ -343,7 +372,7 @@ Public Class MyPageRight
                     PageState = PageStates.LoaderStay
                 End If
             Case Else
-                Throw New Exception("在状态为 " & PageState.ToString() & " 时触发了 PageOnLoaderWaitFinished 事件。")
+                Logger.Warn($"在状态为 {PageState} 时触发了 PageOnLoaderWaitFinished 事件")
         End Select
     End Sub
 
@@ -388,6 +417,46 @@ Public Class MyPageRight
 
 #Region "动画"
 
+    ''' <summary>
+    ''' 把本页所有动画控件复位成「可见」。
+    '''
+    ''' 进场动画的做法是「先把可见控件 Opacity 全部置 0，再逐个延时渐入」，退场动画则是
+    ''' 「把可见控件渐隐到 0」。这两组动画一旦被中途丢弃（AniStart 同名会直接 AniStop），
+    ''' 就会留下永久停在 Opacity = 0 的控件 —— 页面看着就是一片空白。
+    ''' 这里做统一复位，并且特意包含 Visibility 为 Collapsed 的控件：进场动画默认跳过折叠
+    ''' 控件（GetAllAnimControls 的过滤条件），它们残留的 0 会一直留到下次显示。
+    ''' </summary>
+    Public Sub ResetVisualState()
+        Opacity = 1
+        IsHitTestVisible = True
+        '页面根容器可能在上次退场时被折叠（PageOnForceExit 会折叠 Child）。
+        '只复位 Opacity 而不管 Visibility 的话，页面照样是空的。
+        If Child IsNot Nothing Then Child.Visibility = Visibility.Visible
+        Try
+            For Each Root In GetContentRoots()
+                For Each Control As FrameworkElement In GetAllAnimControls(Root, True)
+                    '只救「被动画打成全透明」的控件，避免覆盖页面自己设定的半透明效果
+                    If Control.Opacity < 0.01 Then Control.Opacity = 1
+                    Control.IsHitTestVisible = True
+                    If TypeOf Control.RenderTransform Is TranslateTransform Then Control.RenderTransform = Nothing
+                Next
+            Next
+        Catch ex As Exception
+            Logger.Warn(ex, "复位页面可视状态失败")
+        End Try
+    End Sub
+    ''' <summary>
+    ''' 本页的动画根容器。使用加载器时是 PanAlways / PanLoader / PanContent，否则是页面的 Child。
+    ''' </summary>
+    Private Function GetContentRoots() As List(Of FrameworkElement)
+        Dim Roots As New List(Of FrameworkElement)
+        If PanAlways IsNot Nothing Then Roots.Add(PanAlways)
+        If PanLoader IsNot Nothing Then Roots.Add(PanLoader)
+        If PanContent IsNot Nothing Then Roots.Add(PanContent)
+        If Roots.Count = 0 AndAlso Child IsNot Nothing Then Roots.Add(Child)
+        Return Roots
+    End Function
+
     '逐个进入动画
     Public Sub TriggerEnterAnimation(ParamArray Elements As FrameworkElement())
         Dim RealElements = Elements.Where(Function(e) e IsNot Nothing)
@@ -402,6 +471,10 @@ Public Class MyPageRight
                 '还原被隐藏的卡片的消失动画
                 Control.IsHitTestVisible = True
                 If Control.RenderTransform IsNot Nothing AndAlso TypeOf Control.RenderTransform Is TranslateTransform Then Control.RenderTransform = Nothing
+                '顺手把上次退场动画留下的 Opacity = 0 抹掉。这里必须包含折叠中的控件：
+                '下面的渐入循环会跳过折叠控件，它们的 0 会一直留到下次显示，
+                '于是「显示一张上次被渐隐过的卡片」就变成了显示一块全透明区域。
+                Control.Opacity = 1
             Next
             For Each Control As FrameworkElement In GetAllAnimControls(Element)
                 If TypeOf Control Is MyExtraTextButton Then

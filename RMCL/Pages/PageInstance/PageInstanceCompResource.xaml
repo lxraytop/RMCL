@@ -43,32 +43,34 @@
                     </local:MyCard>
                 </StackPanel>
             </local:MyScrollViewer>
-
-            <local:MyCard x:Name="PanEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="40" Visibility="Collapsed">
-                <Grid Margin="20,17">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <TextBlock x:Name="TxtEmptyTitle" Grid.Row="0" Margin="0,0,0,9" HorizontalAlignment="Center"
-                               FontSize="19" UseLayoutRounding="True" SnapsToDevicePixels="True"
-                               Foreground="{DynamicResource ColorBrush3}" Text="这里还没有资源" />
-                    <Rectangle Grid.Row="1" HorizontalAlignment="Stretch" Height="2" Fill="{DynamicResource ColorBrush3}" />
-                    <TextBlock x:Name="TxtEmptyDescription" Grid.Row="2" Margin="10,15,10,5" TextWrapping="Wrap"
-                               HorizontalAlignment="Center" Text="从文件安装，或者去下载页找找。" />
-                    <WrapPanel Grid.Row="3" Margin="10,20,10,5" HorizontalAlignment="Center" Orientation="Horizontal">
-                        <local:MyButton Height="35" MinWidth="140" Text="从文件安装" Margin="5,0" Padding="13,0"
-                                        ColorType="Highlight" Click="BtnManageInstall_Click" />
-                        <local:MyButton Height="35" MinWidth="140" Text="下载新资源" Margin="5,0" Padding="13,0"
-                                        Click="BtnManageDownload_Click" />
-                        <local:MyButton Height="35" MinWidth="140" Text="打开文件夹" Margin="5,0" Padding="13,0"
-                                        Click="BtnManageOpen_Click" />
-                    </WrapPanel>
-                </Grid>
-            </local:MyCard>
         </Grid>
+
+        <!-- 空状态卡片必须与 PanAllBack 平级：没有资源时 PanAllBack 会被折叠，
+             若把它放在 PanAllBack 内部，折叠祖先会连它一起藏掉，页面就变成一片空白 -->
+        <local:MyCard x:Name="PanEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="40" Visibility="Collapsed">
+            <Grid Margin="20,17">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock x:Name="TxtEmptyTitle" Grid.Row="0" Margin="0,0,0,9" HorizontalAlignment="Center"
+                           FontSize="19" UseLayoutRounding="True" SnapsToDevicePixels="True"
+                           Foreground="{DynamicResource ColorBrush3}" Text="这里还没有资源" />
+                <Rectangle Grid.Row="1" HorizontalAlignment="Stretch" Height="2" Fill="{DynamicResource ColorBrush3}" />
+                <TextBlock x:Name="TxtEmptyDescription" Grid.Row="2" Margin="10,15,10,5" TextWrapping="Wrap"
+                           HorizontalAlignment="Center" Text="从文件安装，或者去下载页找找。" />
+                <WrapPanel Grid.Row="3" Margin="10,20,10,5" HorizontalAlignment="Center" Orientation="Horizontal">
+                    <local:MyButton Height="35" MinWidth="140" Text="从文件安装" Margin="5,0" Padding="13,0"
+                                    ColorType="Highlight" Click="BtnManageInstall_Click" />
+                    <local:MyButton Height="35" MinWidth="140" Text="下载新资源" Margin="5,0" Padding="13,0"
+                                    Click="BtnManageDownload_Click" />
+                    <local:MyButton Height="35" MinWidth="140" Text="打开文件夹" Margin="5,0" Padding="13,0"
+                                    Click="BtnManageOpen_Click" />
+                </WrapPanel>
+            </Grid>
+        </local:MyCard>
 
         <local:MyCard x:Name="PanLoad" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="40,0" UseAnimation="False">
             <local:MyLoading Text="正在读取资源……" Margin="20,20,20,17" HorizontalAlignment="Center" x:Name="Load" />
