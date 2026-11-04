@@ -138,6 +138,34 @@ Friend Module ModSaveUtil
 
 #Region "删除与复制"
 
+    ''' <summary>
+    ''' 判断存档是不是真的被占用（通常是游戏正在运行）。
+    '''
+    ''' 不能只看 session.lock 存不存在：游戏正常退出会删掉它，但崩溃、强杀进程、
+    ''' 或者异常断电之后它会残留，导致明明没开游戏也弹「可能正在运行」。
+    ''' 这里直接尝试以独占方式打开这个文件：能打开就说明没人占着。
+    ''' </summary>
+    Friend Function IsSaveInUse(Entry As SaveEntry) As Boolean
+        If Entry Is Nothing OrElse String.IsNullOrEmpty(Entry.Folder) Then Return False
+        Dim LockPath As String = Path.Combine(Entry.Folder, "session.lock")
+        If Not IO.File.Exists(LockPath) Then Return False
+
+        Try
+            Using Stream As New FileStream(LockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None)
+                '能独占打开，说明只是残留文件
+            End Using
+            Return False
+        Catch ex As IOException
+            '被别的进程持有句柄
+            Return True
+        Catch ex As UnauthorizedAccessException
+            '读不到也不冒进，按占用处理
+            Return True
+        Catch ex As Exception
+            Return False
+        End Try
+    End Function
+
     ''' <summary>删除存档目录，走回收站。</summary>
     Friend Function DeleteSave(Entry As SaveEntry) As Boolean
         If Entry Is Nothing Then Return False

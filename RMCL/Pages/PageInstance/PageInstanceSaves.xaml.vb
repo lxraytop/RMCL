@@ -224,9 +224,9 @@ Public Class PageInstanceSaves
         Dim Instance As McInstance = PageInstanceLeft.Instance
         If Instance Is Nothing Then Return
 
-        '游戏运行时备份可能得到不一致的存档，先提醒一次
-        If IO.File.Exists(Path.Combine(Entry.Folder, "session.lock")) Then
-            If MyMsgBox("检测到 session.lock，游戏可能正在运行。" & vbCrLf & vbCrLf &
+        '游戏运行时备份可能得到不一致的存档，先确认一次；残留的锁文件不算
+        If ModSaveUtil.IsSaveInUse(Entry) Then
+            If MyMsgBox("这个存档正被其他程序占用，通常是游戏还在运行。" & vbCrLf & vbCrLf &
                         "运行中备份可能得到不一致的存档，建议先退出游戏。",
                         "备份存档", "仍然备份", "取消", IsWarn:=True) <> 1 Then Return
         End If
