@@ -223,6 +223,28 @@ SQL
         $version = 3;
     }
 
+    if ($version < 4) {
+        // v4：通知支持「操作按钮」；已读状态从「客户端本地列表」升级为「服务端按设备记录」。
+        // 本地列表最多存 100 条，通知多了会把老的挤掉导致重复弹；服务端记录才有唯一口径。
+        try {
+            $pdo->exec("ALTER TABLE notices ADD COLUMN actions TEXT NOT NULL DEFAULT ''");
+        } catch (Throwable $e) {
+            // 列已存在，忽略
+        }
+        $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS notice_seen (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    notice_id INTEGER NOT NULL,
+    device_id TEXT    NOT NULL,
+    ts        INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (notice_id, device_id)
+);
+SQL
+        );
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_notice_seen_device ON notice_seen(device_id)');
+        $version = 4;
+    }
+
     $pdo->exec('PRAGMA user_version = ' . $version);
 }
 
@@ -340,6 +362,36 @@ function log_event(string $event, array $context = []): void
     } catch (Throwable $e) {
         // 日志失败不能影响主流程
     }
+}
+
+/** 解析通知的操作按钮（最多两个，只接受 http/https 链接） */
+function notice_actions(array $notice): array
+{
+    $raw = trim((string) ($notice['actions'] ?? ''));
+    if ($raw === '') {
+        return [];
+    }
+    $data = json_decode($raw, true);
+    if (!is_array($data)) {
+        return [];
+    }
+    $result = [];
+    foreach ($data as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $label = trim(preg_replace('/\s+/u', ' ', (string) ($item['label'] ?? '')));
+        $url = trim((string) ($item['url'] ?? ''));
+        if ($label === '' || $url === '' || !preg_match('#^https?://#i', $url)) {
+            continue;
+        }
+        $label = function_exists('mb_substr') ? mb_substr($label, 0, 12) : substr($label, 0, 24);
+        $result[] = ['label' => $label, 'url' => $url];
+        if (count($result) >= 2) {
+            break;
+        }
+    }
+    return $result;
 }
 
 /** 把 "2.19.0.0" 变成可排序的 "0002.0019.0000.0000" */

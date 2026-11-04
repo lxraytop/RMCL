@@ -368,10 +368,28 @@ try {
             $onceOnly = empty($_POST['once_only']) ? 0 : 1;
             $enabled = empty($_POST['enabled']) ? 0 : 1;
 
+            // 最多两个操作按钮，客户端会渲染成弹窗上的按钮，点一下打开链接
+            $actions = [];
+            for ($i = 1; $i <= 2; $i++) {
+                $label = trim((string) ($_POST["action{$i}_label"] ?? ''));
+                $url = trim((string) ($_POST["action{$i}_url"] ?? ''));
+                if ($label === '' && $url === '') {
+                    continue;
+                }
+                if ($label === '' || $url === '') {
+                    throw new RuntimeException("按钮 {$i} 的文字和链接要一起填");
+                }
+                if (!preg_match('#^https?://#i', $url)) {
+                    throw new RuntimeException("按钮 {$i} 的链接要以 http:// 或 https:// 开头");
+                }
+                $actions[] = ['label' => $label, 'url' => $url];
+            }
+            $actionsJson = $actions ? json_encode($actions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '';
+
             db_exec(
-                'INSERT INTO notices (title, body, level, min_version, max_version, start_at, end_at, once_only, enabled, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [$title, $body, $level, $minVersion, $maxVersion, $startAt, $endAt, $onceOnly, $enabled, time()]
+                'INSERT INTO notices (title, body, level, min_version, max_version, start_at, end_at, once_only, enabled, created_at, actions)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [$title, $body, $level, $minVersion, $maxVersion, $startAt, $endAt, $onceOnly, $enabled, time(), $actionsJson]
             );
             log_event('admin.notice', ['detail' => '新建通知：' . $title]);
             flash('通知已创建' . ($enabled ? '' : '（当前为停用状态，客户端不会收到）'));

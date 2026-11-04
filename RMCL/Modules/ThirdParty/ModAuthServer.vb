@@ -18,7 +18,7 @@ Public Module ModAuthServer
     ''' <summary>
     ''' 默认的第三方认证服务器（RaySkin）。
     ''' </summary>
-    Public Const DefaultAuthServer As String = "http://mc.lxray.top/api/yggdrasil"
+    Public Const DefaultAuthServer As String = "https://mc.lxray.top/api/yggdrasil"
     ''' <summary>
     ''' 默认认证服务器的显示名。
     ''' </summary>
@@ -421,6 +421,44 @@ Public Module ModAuthServer
     End Sub
 
     ''' <summary>
+    ''' 把内置的 RaySkin 认证服务器地址从 http 升级到 https（该域名已启用证书）。
+    ''' 只处理 mc.lxray.top，用户自己添加的其他服务器不动。
+    ''' </summary>
+    Public Sub AuthServerUpgradeBuiltinHttps()
+        Try
+            If Settings.Get(Of Boolean)("AuthServerHttpsUpgraded") Then Return
+            Settings.Set("AuthServerHttpsUpgraded", True)
+
+            Dim List As JArray = AuthServerReadRaw()
+            Dim Changed As Integer = 0
+            For Each Item In List
+                Dim Entry As JObject = TryCast(Item, JObject)
+                If Entry Is Nothing Then Continue For
+                Dim Server As String = AuthServerValue(Entry, "server")
+                If String.IsNullOrEmpty(Server) OrElse Not Server.StartsWithF("http://mc.lxray.top", True) Then Continue For
+                Entry("server") = "https://" & Server.Substring("http://".Length)
+                Dim Register As String = AuthServerValue(Entry, "register")
+                If Not String.IsNullOrEmpty(Register) AndAlso Register.StartsWithF("http://mc.lxray.top", True) Then
+                    Entry("register") = "https://" & Register.Substring("http://".Length)
+                End If
+                Changed += 1
+            Next
+            If Changed = 0 Then Return
+
+            AuthServerWriteList(List)
+            Logger.Info($"已把 {Changed} 个 RaySkin 服务器地址升级为 HTTPS")
+
+            '会话镜像里的地址也要一起换，否则注入到游戏的仍是旧的 http 地址
+            Dim Current As String = Settings.Get(Of String)("CacheAuthServerServer")
+            If Not String.IsNullOrEmpty(Current) AndAlso Current.StartsWithF("http://mc.lxray.top", True) Then
+                Settings.Set("CacheAuthServerServer", "https://" & Current.Substring("http://".Length))
+            End If
+        Catch ex As Exception
+            Logger.Warn(ex, "升级 RaySkin 服务器地址到 HTTPS 失败")
+        End Try
+    End Sub
+
+    ''' <summary>
     ''' 从列表中删除整台认证服务器（连同它下面保存的账号）。
     ''' 若删的是当前使用的服务器，会自动切到剩下的第一台；一台不剩时清空会话。
     ''' </summary>
@@ -495,6 +533,8 @@ Public Module ModAuthServer
         Try
             '先保证默认的 RaySkin 存在，这样全新配置也有可用的第三方服务器
             AuthServerEnsureDefault()
+            '再把老用户列表里的 http://mc.lxray.top 升级成 https
+            AuthServerUpgradeBuiltinHttps()
             If Settings.Get(Of Boolean)("AuthServerListMigrated") Then Return
             Dim Server As String = AuthServerNormalize(Settings.Get(Of String)("CacheAuthServerServer"))
             Dim Emails As String() = If(Settings.Get(Of String)("LoginAuthEmail") = "", New String() {}, Settings.Get(Of String)("LoginAuthEmail").Split("¨"))

@@ -60,8 +60,20 @@ Friend Module ModNotice
                     Return
                 End If
 
-                Dim Target As ModUpdateServer.ServerNotice =
-                    Pending.OrderByDescending(Function(n) n.Level).ThenByDescending(Function(n) n.Id).First()
+                '排序：先把一次性的通知消化完，再按级别；
+                '常驻通知（once=0）按「上次弹过的排后面」轮转，否则一条高级别常驻通知会永远压着其他通知
+                Dim LastShown As Integer = 0
+                Try
+                    LastShown = Settings.Get(Of Integer)("NoticeLastShown")
+                Catch ex As Exception
+                    Logger.Warn(ex, "读取上次展示的通知失败")
+                End Try
+                Dim Ordered As IOrderedEnumerable(Of ModUpdateServer.ServerNotice) =
+                    Pending.OrderByDescending(Function(n) n.OnceOnly)
+                Ordered = Ordered.ThenByDescending(Function(n) n.Level)
+                Ordered = Ordered.ThenBy(Function(n) If(n.Id = LastShown, 1, 0))
+                Ordered = Ordered.ThenByDescending(Function(n) n.Id)
+                Dim Target As ModUpdateServer.ServerNotice = Ordered.First()
                 Logger.Info($"联网通知：展示 #{Target.Id}「{Target.Title}」（级别 {Target.Level}，" &
                             $"另有 {Pending.Count - 1} 条待下次启动）")
                 ShowNotice(Target)
@@ -92,19 +104,38 @@ Friend Module ModNotice
         End Try
     End Sub
 
-    ''' <summary>展示一条通知。本方法在后台线程执行，只有弹窗切到 UI 线程。</summary>
+    ''' <summary>
+    ''' 展示一条通知。本方法在后台线程执行，只有弹窗切到 UI 线程。
+    ''' 按钮分配：Button1 固定「知道了」，Button2/3 给通知自带的动作；
+    ''' once=0 的通知要留一个位置给「不再提示」，所以动作最多一个。
+    ''' </summary>
     Private Sub ShowNotice(Notice As ModUpdateServer.ServerNotice)
         Dim Text As String = Notice.Body
         If Not String.IsNullOrEmpty(Notice.Title) Then
             Text = Notice.Title & vbCrLf & vbCrLf & Notice.Body
         End If
 
+        Dim Actions As New List(Of ModUpdateServer.NoticeAction)
+        If Notice.Actions IsNot Nothing Then Actions = Notice.Actions
+        Dim MaxActions As Integer = If(Notice.OnceOnly, 2, 1)
+        If Actions.Count > MaxActions Then Actions = Actions.Take(MaxActions).ToList()
+
+        Dim Button2 As String = "", Button3 As String = ""
+        If Actions.Count >= 1 Then Button2 = Actions(0).Label
+        If Actions.Count >= 2 Then Button3 = Actions(1).Label
+        If Not Notice.OnceOnly Then
+            If Button2 = "" Then
+                Button2 = "不再提示"
+            Else
+                Button3 = "不再提示"
+            End If
+        End If
+
         Dim Result As Integer
         Try
             'MyMsgBox 会排队，不会和启动时的更新弹窗叠在一起
             Result = RunInUiWait(Function()
-                                     Return MyMsgBox(Text, "通知", "知道了",
-                                                     If(Notice.OnceOnly, "", "不再提示"),
+                                     Return MyMsgBox(Text, "通知", "知道了", Button2, Button3,
                                                      IsWarn:=(Notice.Level >= 2))
                                  End Function)
         Catch ex As Exception
@@ -112,11 +143,45 @@ Friend Module ModNotice
             Return
         End Try
 
-        'once=1 的通知看过就记为已读；once=0 的只有用户点「不再提示」才屏蔽
-        If Notice.OnceOnly OrElse Result = 2 Then MarkRead(Notice.Id)
+        '按用户点的按钮决定后续动作
+        Dim Dismissed As Boolean = False
+        If Result = 2 Then
+            If Button2 = "不再提示" Then
+                Dismissed = True
+            ElseIf Actions.Count >= 1 Then
+                OpenNoticeLink(Actions(0).Url)
+            End If
+        ElseIf Result = 3 Then
+            If Button3 = "不再提示" Then
+                Dismissed = True
+            ElseIf Actions.Count >= 2 Then
+                OpenNoticeLink(Actions(1).Url)
+            End If
+        End If
+
+        'once=1 的通知看过就记为已读；once=0 的只有点了「不再提示」才屏蔽
+        If Notice.OnceOnly OrElse Dismissed Then MarkRead(Notice.Id)
+
+        Try
+            Settings.Set("NoticeLastShown", Notice.Id)
+        Catch ex As Exception
+            Logger.Warn(ex, "记录通知展示顺序失败")
+        End Try
 
         '触达回报，失败不影响任何东西
         ModUpdateServer.AcknowledgeNotice(Notice.Id)
+    End Sub
+
+    ''' <summary>打开通知里的链接。切到 UI 线程，走启动器统一的浏览器打开逻辑。</summary>
+    Private Sub OpenNoticeLink(Url As String)
+        If String.IsNullOrEmpty(Url) Then Return
+        RunInUi(Sub()
+                    Try
+                        OpenWebsite(Url)
+                    Catch ex As Exception
+                        Logger.Warn(ex, $"打开通知链接失败：{Url}")
+                    End Try
+                End Sub)
     End Sub
 
 #End Region

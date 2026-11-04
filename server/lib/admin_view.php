@@ -458,8 +458,9 @@ $postMax = ini_get('post_max_size');
         <h2>新建通知</h2>
         <p class="desc">
             客户端启动后拉取这里的通知并弹窗展示，文案全部由服务端下发，客户端不硬编码任何公告。
-            触发时机：启动完成 → 延迟 4 秒 → 距上次拉取超过 4 小时才请求；
-            多条同时生效时只弹级别最高的那条，其余等下次启动。
+            触发时机：启动完成 → 延迟 4 秒 → 距上次拉取超过 4 小时才请求。
+            「每台设备只弹一次」的通知由服务端按 device_id 记录已读，不会重复下发；
+            可以给通知加最多两个按钮，客户端会渲染成弹窗上的可点按钮。
         </p>
         <form method="post" action="admin.php">
             <input type="hidden" name="do" value="create_notice">
@@ -487,6 +488,18 @@ $postMax = ini_get('post_max_size');
                     <input type="text" name="max_version" placeholder="留空=不限" style="width:120px"></div>
             </div>
             <div class="row" style="margin-bottom:12px">
+                <div class="field" style="min-width:180px"><label>按钮 1 文字（选填）</label>
+                    <input type="text" name="action1_label" placeholder="查看详情" style="width:100%"></div>
+                <div class="field" style="flex:1;min-width:240px"><label>按钮 1 链接</label>
+                    <input type="text" name="action1_url" placeholder="https://..." style="width:100%"></div>
+            </div>
+            <div class="row" style="margin-bottom:12px">
+                <div class="field" style="min-width:180px"><label>按钮 2 文字（选填）</label>
+                    <input type="text" name="action2_label" placeholder="前往发布页" style="width:100%"></div>
+                <div class="field" style="flex:1;min-width:240px"><label>按钮 2 链接</label>
+                    <input type="text" name="action2_url" placeholder="https://..." style="width:100%"></div>
+            </div>
+            <div class="row" style="margin-bottom:12px">
                 <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:#5c6572;height:32px">
                     <input type="checkbox" name="once_only" value="1" checked style="height:auto"> 每台设备只弹一次
                 </label>
@@ -500,7 +513,13 @@ $postMax = ini_get('post_max_size');
 
     <div class="card">
         <h2>全部通知</h2>
-        <?php $notices = db_all('SELECT * FROM notices ORDER BY id DESC LIMIT 100'); ?>
+        <?php
+        $notices = db_all('SELECT * FROM notices ORDER BY id DESC LIMIT 100');
+        $seenStats = [];
+        foreach (db_all('SELECT notice_id, COUNT(*) AS devices FROM notice_seen GROUP BY notice_id') as $statRow) {
+            $seenStats[(int) $statRow['notice_id']] = (int) $statRow['devices'];
+        }
+        ?>
         <table>
             <thead><tr><th>ID</th><th>标题 / 摘要</th><th>级别</th><th>状态</th><th>生效窗口</th><th>版本区间</th><th>触达</th><th>操作</th></tr></thead>
             <tbody>
@@ -524,6 +543,10 @@ $postMax = ini_get('post_max_size');
                         <div class="muted" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
                             <?= h(str_limit((string) $n['body'], 40)) ?>
                         </div>
+                        <?php $actionCount = count(notice_actions($n)); ?>
+                        <?php if ($actionCount > 0): ?>
+                            <span class="tag blue"><?= $actionCount ?> 个按钮</span>
+                        <?php endif; ?>
                     </td>
                     <td><span class="tag <?= $levelColor ?>"><?= $levelName ?></span></td>
                     <td>
@@ -537,7 +560,10 @@ $postMax = ini_get('post_max_size');
                         → <?= $endTs > 0 ? h(date('Y-m-d H:i', $endTs)) : '永久' ?>
                     </td>
                     <td class="muted"><?= h($n['min_version'] !== '' ? $n['min_version'] : '不限') ?> ~ <?= h($n['max_version'] !== '' ? $n['max_version'] : '不限') ?></td>
-                    <td class="muted"><?= (int) $n['seen_count'] ?> 次</td>
+                    <td class="muted">
+                        <?= (int) ($seenStats[(int) $n['id']] ?? 0) ?> 台设备<br>
+                        <span style="font-size:11.5px"><?= (int) $n['seen_count'] ?> 次展示</span>
+                    </td>
                     <td style="white-space:nowrap">
                         <form class="inline" method="post" action="admin.php">
                             <input type="hidden" name="csrf" value="<?= h($csrf) ?>">

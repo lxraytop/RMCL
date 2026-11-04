@@ -98,6 +98,12 @@ Friend Module ModUpdateServer
         Public CodeMask As String = ""
     End Class
 
+    ''' <summary>通知上的一个操作按钮。</summary>
+    Friend Class NoticeAction
+        Public Label As String = ""
+        Public Url As String = ""
+    End Class
+
     ''' <summary>服务端下发的一条联网通知。</summary>
     Friend Class ServerNotice
         Public Id As Integer = 0
@@ -107,6 +113,8 @@ Friend Module ModUpdateServer
         Public Level As Integer = 0
         ''' <summary>true 表示每台设备只弹一次。</summary>
         Public OnceOnly As Boolean = True
+        ''' <summary>弹窗上的操作按钮，最多两个。</summary>
+        Public Actions As New List(Of NoticeAction)
     End Class
 
 #End Region
@@ -120,7 +128,7 @@ Friend Module ModUpdateServer
     ''' 不提供修改入口：地址填错只会让检查更新彻底失效，而用户无从判断该填什么。
     ''' 换域名或加 HTTPS 时改这里，重新编译即可，服务端不用动。
     ''' </summary>
-    Public Const ServerBaseUrl As String = "http://update.mc.lxray.top"
+    Public Const ServerBaseUrl As String = "https://update.mc.lxray.top"
 
     ''' <summary>当前使用的官方源地址（无结尾斜杠）。</summary>
     Public ReadOnly Property ConfiguredServerUrl As String
@@ -374,7 +382,9 @@ Friend Module ModUpdateServer
     ''' </summary>
     Public Function FetchNotices(AppVersion As String) As List(Of ServerNotice)
         Dim Result As New List(Of ServerNotice)
-        Dim Url As String = ApiUrl("notices") & "&app_version=" & Uri.EscapeDataString(AppVersion)
+        Dim Url As String = ApiUrl("notices") &
+                            "&app_version=" & Uri.EscapeDataString(AppVersion) &
+                            "&device_id=" & Uri.EscapeDataString(DeviceId)
         Dim Data As JObject = RequestJson(Url)
         Dim Items = TryCast(Data("notices"), JArray)
         If Items Is Nothing Then Return Result
@@ -383,23 +393,40 @@ Friend Module ModUpdateServer
             Dim Obj As JObject = TryCast(Item, JObject)
             If Obj Is Nothing Then Continue For
             Dim OnceToken = Obj("once")
-            Result.Add(New ServerNotice With {
+            Dim Notice As New ServerNotice With {
                 .Id = CInt(JsonLong(Obj, "id")),
                 .Title = If(Obj("title")?.ToString, ""),
                 .Body = If(Obj("body")?.ToString, ""),
                 .Level = CInt(JsonLong(Obj, "level")),
                 .OnceOnly = If(OnceToken IsNot Nothing AndAlso OnceToken.Type = JTokenType.Boolean,
                                 OnceToken.Value(Of Boolean)(), True)
-            })
+            }
+
+            '操作按钮：服务端最多给两个，这里再兜一层，防止脏数据把弹窗按钮撑坏
+            Dim ActionsToken = Obj("actions")
+            If ActionsToken IsNot Nothing AndAlso ActionsToken.Type = JTokenType.Array Then
+                For Each ActionItem As JToken In ActionsToken
+                    Dim ActionObj As JObject = TryCast(ActionItem, JObject)
+                    If ActionObj Is Nothing Then Continue For
+                    Dim Label As String = If(ActionObj("label")?.ToString, "").Trim()
+                    Dim Target As String = If(ActionObj("url")?.ToString, "").Trim()
+                    If Label = "" OrElse Target = "" Then Continue For
+                    Notice.Actions.Add(New NoticeAction With {.Label = Label, .Url = Target})
+                    If Notice.Actions.Count >= 2 Then Exit For
+                Next
+            End If
+
+            Result.Add(Notice)
         Next
         Return Result
     End Function
 
-    ''' <summary>上报一次通知触达，失败不影响展示。</summary>
+    ''' <summary>上报一次通知触达（带设备标识，服务端据此去重）。</summary>
     Public Sub AcknowledgeNotice(Id As Integer)
         Try
             Dim Body As New JObject()
             Body("id") = Id
+            Body("device_id") = DeviceId
             RequestJson(ApiUrl("notice_ack"), HttpMethod.Post, Body.ToString())
         Catch ex As Exception
             Logger.Warn(ex, $"上报通知触达失败（#{Id}）")

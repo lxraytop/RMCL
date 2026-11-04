@@ -287,10 +287,21 @@ try {
         case 'notices':
             // 联网通知：不需要授权，未授权/已到期的用户也应该能看到公告
             $appVersion = (string) input('app_version');
+            $deviceId = trim((string) input('device_id'));
             $now = time();
+
+            // 这台设备已经看过的通知。once=1 的直接不下发 —— 客户端本地只留 100 条，
+            // 通知一多就会把老记录挤掉，导致老公告反复弹；服务端这份记录才是唯一口径。
+            $seen = [];
+            if ($deviceId !== '') {
+                foreach (db_all('SELECT notice_id FROM notice_seen WHERE device_id = ?', [$deviceId]) as $seenRow) {
+                    $seen[(int) $seenRow['notice_id']] = true;
+                }
+            }
+
             $rows = db_all(
                 'SELECT * FROM notices WHERE enabled = 1 AND (start_at = 0 OR start_at <= ?)
-                   AND (end_at = 0 OR end_at >= ?) ORDER BY level DESC, id DESC LIMIT 20',
+                   AND (end_at = 0 OR end_at >= ?) ORDER BY level DESC, id DESC LIMIT 30',
                 [$now, $now]
             );
             $list = [];
@@ -298,25 +309,39 @@ try {
                 if (!notice_matches_version($row, $appVersion)) {
                     continue;
                 }
+                $noticeId = (int) $row['id'];
+                $onceOnly = (int) $row['once_only'] === 1;
+                if ($onceOnly && $deviceId !== '' && isset($seen[$noticeId])) {
+                    continue;
+                }
                 $list[] = [
-                    'id' => (int) $row['id'],
+                    'id' => $noticeId,
                     'title' => $row['title'],
                     'body' => $row['body'],
                     'level' => (int) $row['level'],
-                    'once' => (int) $row['once_only'] === 1,
+                    'once' => $onceOnly,
+                    'actions' => notice_actions($row),
                 ];
             }
             json_ok(['notices' => $list, 'server_time' => $now]);
             break;
 
         case 'notice_ack':
-            // 客户端展示过某条通知后回报一次，后台可以看到触达次数
+            // 客户端展示过某条通知后回报一次
             if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
                 throw new ApiError('E_METHOD', '请使用 POST', 405);
             }
             $noticeId = (int) input('id', 0);
             if ($noticeId <= 0) {
                 throw new ApiError('E_PARAM', '缺少 id', 400);
+            }
+            $deviceId = trim((string) input('device_id'));
+            if ($deviceId !== '') {
+                // 同一设备同一通知只记一次，否则一人多次启动就能把触达数刷上去
+                db_exec(
+                    'INSERT OR IGNORE INTO notice_seen (notice_id, device_id, ts) VALUES (?, ?, ?)',
+                    [$noticeId, $deviceId, time()]
+                );
             }
             db_exec('UPDATE notices SET seen_count = seen_count + 1 WHERE id = ?', [$noticeId]);
             json_ok([]);
