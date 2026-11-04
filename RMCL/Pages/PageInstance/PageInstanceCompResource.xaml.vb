@@ -28,6 +28,12 @@ Public Class PageInstanceCompResource
 
     Private ReadOnly CompType As ModLocalComp.CompType
     Private ReadOnly TypeName As String
+    ''' <summary>
+    ''' 是否支持在文件层面启用 / 禁用。
+    ''' 资源包改后缀游戏就认；光影包在游戏里是选哪个生效，改文件名只是让它从列表里消失，
+    ''' 没有「启用中」这个概念，所以光影包页不提供这类操作。
+    ''' </summary>
+    Private ReadOnly SupportsToggle As Boolean
 
     Private Files As New List(Of ModLocalComp.LocalCompFile)
     Private SelectedKeys As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
@@ -44,10 +50,17 @@ Public Class PageInstanceCompResource
         InitializeComponent()
         CompType = Type
         TypeName = ModLocalComp.GetTypeName(Type)
+        SupportsToggle = (Type = ModLocalComp.CompType.ResourcePack)
 
         '初始化筛选与排序的显示，此时 Ready 仍为 False，事件只会记录状态不会刷界面
         BtnFilterAll.Checked = True
         BtnSort.Text = "排序：" & GetSortName(CurrentSort)
+        If Not SupportsToggle Then
+            BtnFilterEnabled.Visibility = Visibility.Collapsed
+            BtnFilterDisabled.Visibility = Visibility.Collapsed
+            BtnSelectEnable.Visibility = Visibility.Collapsed
+            BtnSelectDisable.Visibility = Visibility.Collapsed
+        End If
         Ready = True
     End Sub
 
@@ -185,11 +198,16 @@ Public Class PageInstanceCompResource
         BtnFilterAll.Text = If(String.IsNullOrEmpty(SearchText), $"全部 ({AnyCount})", "搜索结果")
         BtnFilterEnabled.Text = $"已启用 ({EnabledCount})"
         BtnFilterDisabled.Text = $"已禁用 ({DisabledCount})"
-        BtnFilterEnabled.Visibility = If(Filter = FilterType.Enabled OrElse
-                                        (EnabledCount > 0 AndAlso EnabledCount < AnyCount),
-                                        Visibility.Visible, Visibility.Collapsed)
-        BtnFilterDisabled.Visibility = If(Filter = FilterType.Disabled OrElse DisabledCount > 0,
-                                          Visibility.Visible, Visibility.Collapsed)
+        If SupportsToggle Then
+            BtnFilterEnabled.Visibility = If(Filter = FilterType.Enabled OrElse
+                                            (EnabledCount > 0 AndAlso EnabledCount < AnyCount),
+                                            Visibility.Visible, Visibility.Collapsed)
+            BtnFilterDisabled.Visibility = If(Filter = FilterType.Disabled OrElse DisabledCount > 0,
+                                              Visibility.Visible, Visibility.Collapsed)
+        Else
+            BtnFilterEnabled.Visibility = Visibility.Collapsed
+            BtnFilterDisabled.Visibility = Visibility.Collapsed
+        End If
 
         '选中条
         If SelectedKeys.Count = 0 Then
@@ -244,14 +262,19 @@ Public Class PageInstanceCompResource
                                         DeleteEntries({Entry})
                                     End Sub
 
-        Item.Buttons = New MyIconButton() {BtnOpen, BtnToggle, BtnDelete}
+        Item.Buttons = If(SupportsToggle,
+                          New MyIconButton() {BtnOpen, BtnToggle, BtnDelete},
+                          New MyIconButton() {BtnOpen, BtnDelete})
         AddHandler Item.Changed, Sub(s As Object, ev As RouteEventArgs) OnItemChanged(Item, Entry)
         Return Item
     End Function
 
     Private Function BuildInfoText(Entry As ModLocalComp.LocalCompFile) As String
-        Dim State As String = If(Entry.State = ModLocalComp.FileState.Fine, "已启用", "已禁用")
-        Dim Parts As New List(Of String) From {State, FormatSize(Entry.SizeBytes)}
+        Dim Parts As New List(Of String)
+        If SupportsToggle Then
+            Parts.Add(If(Entry.State = ModLocalComp.FileState.Fine, "已启用", "已禁用"))
+        End If
+        Parts.Add(FormatSize(Entry.SizeBytes))
         If Entry.IsFolder Then Parts.Add("文件夹")
         If Not String.IsNullOrEmpty(Entry.Description) Then Parts.Add(Entry.Description)
         Return String.Join(" · ", Parts)
@@ -395,9 +418,10 @@ Public Class PageInstanceCompResource
     Private Sub OpenLocation(Entry As ModLocalComp.LocalCompFile)
         Try
             If Entry.IsFolder Then
-                OpenExplorer(Entry.Path)
+                OpenExplorerFolder(Entry.Path)
             Else
-                OpenExplorer(Path.GetDirectoryName(Entry.Path))
+                '文件用 /select，正好在资源目录里高亮它
+                OpenExplorer(Entry.Path)
             End If
         Catch ex As Exception
             Logger.Warn(ex, $"打开{TypeName}所在文件夹失败")
@@ -411,7 +435,7 @@ Public Class PageInstanceCompResource
         Try
             Dim Folder As String = ModLocalComp.GetRoot(Instance, CompType)
             Directory.CreateDirectory(Folder)
-            OpenExplorer(Folder)
+            OpenExplorerFolder(Folder)
         Catch ex As Exception
             Logger.Warn(ex, $"打开{TypeName}文件夹失败")
         End Try

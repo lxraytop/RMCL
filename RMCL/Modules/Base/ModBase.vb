@@ -1089,6 +1089,18 @@ Public Module ModBase
     End Sub
 
     ''' <summary>
+    ''' 打开目录本身，而不是在上级目录里选中它。
+    '''
+    ''' OpenExplorer 对不带结尾反斜杠的路径走的是 explorer /select，
+    ''' 效果是在上级目录里高亮这一项；想直接进到目录里就必须带尾斜杠。
+    ''' </summary>
+    Public Sub OpenExplorerFolder(Location As String)
+        If String.IsNullOrEmpty(Location) Then Return
+        If Not Location.EndsWithF("\") Then Location &= "\"
+        OpenExplorer(Location)
+    End Sub
+
+    ''' <summary>
     ''' 设置剪贴板。将在另一线程运行，且不会抛出异常。
     ''' </summary>
     Public Sub ClipboardSet(Text As String, Optional ShowSuccessHint As Boolean = True)

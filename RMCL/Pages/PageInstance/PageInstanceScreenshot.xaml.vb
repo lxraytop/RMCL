@@ -222,7 +222,8 @@ Public Class PageInstanceScreenshot
         Try
             Dim Root As String = Path.Combine(Instance.PathIndie, "screenshots")
             Directory.CreateDirectory(Root)
-            OpenExplorer(Root)
+            '带尾斜杠才会直接进入目录，否则只是在上级目录里选中它
+            OpenExplorerFolder(Root)
         Catch ex As Exception
             Logger.Warn(ex, "打开截图文件夹失败")
         End Try

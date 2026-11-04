@@ -158,7 +158,7 @@ Public Class PageInstanceSaves
         Dim BtnOpen As New MyIconButton With {.Logo = IconFolder, .Width = 22, .Height = 22, .ToolTip = "打开文件夹"}
         AddHandler BtnOpen.Click, Sub(s As Object, ev As EventArgs)
                                       Try
-                                          OpenExplorer(Entry.Folder)
+                                          OpenExplorerFolder(Entry.Folder)
                                       Catch ex As Exception
                                           Logger.Warn(ex, "打开存档文件夹失败")
                                       End Try
@@ -282,7 +282,7 @@ Public Class PageInstanceSaves
         Try
             Dim Root As String = ModSaveUtil.GetRoot(Instance)
             Directory.CreateDirectory(Root)
-            OpenExplorer(Root)
+            OpenExplorerFolder(Root)
         Catch ex As Exception
             Logger.Warn(ex, "打开存档文件夹失败")
         End Try
