@@ -1,4 +1,4 @@
-# 构建说明（RMCL 2.19.2.1）
+# 构建说明（RMCL 2.20.0.0）
 
 RMCL 基于上游 2.14.0.0 开源基线重构，技术栈与上游一致：**.NET Framework 4.8 + WPF + VB.NET**（主工程为传统 vbproj，`RMCLCS` 与 `MeloongCore` 为 SDK 风格 csproj）。
 
@@ -81,12 +81,21 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 
 | 文件 | 大小 | 说明 |
 | --- | --- | --- |
-| `dist/RMCL 2.19.2.1/RMCL.exe` | 5.68 MB | 主程序，版本信息 `2.19.2.1 / Ray Minecraft Launcher` |
-| `dist/RMCL 2.19.2.1/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
-| `dist/RMCL-2.19.2.1-win.zip` | 2.55 MB | 上述两个文件的压缩包（sha256 `5e627b0580da…`） |
+| `dist/RMCL 2.20.0.0/RMCL.exe` | 5.74 MB | 主程序，版本信息 `2.20.0.0 / Ray Minecraft Launcher` |
+| `dist/RMCL 2.20.0.0/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
+| `dist/RMCL-2.20.0.0-win.zip` | 2.58 MB | 上述两个文件的压缩包（sha256 `33eb99aaca551cb4…`） |
 
-对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.19.2.1>，
-资产 `RMCL.exe`（5,957,632 B，sha256 `7583b178b9e4…`）与 `RMCL-2.19.2.1-win.zip`（2,672,173 B）。
+对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.20.0.0>，
+资产 `RMCL.exe`（6,023,168 B，sha256 `5ac7205be0bcaefb…`）与 `RMCL-2.20.0.0-win.zip`（2,701,002 B）。
+
+### 2.20.0.0 主要变更
+
+- 新增版本资源管理页：存档、截图、资源包、光影包四个页面，
+  分别支持备份/删除/定位、网格预览、启用禁用与批量操作。
+- 修复「打开文件夹」实际打开上级目录的问题，改为直接进入目标目录。
+- 修复资源包/光影包页底部操作栏偶发不显示（退场动画把卡片透明度留在 0）。
+- 修复备份存档误报「游戏正在运行」（`session.lock` 残留导致），改为实际探测文件占用。
+- 默认服务地址切到 HTTPS；联网通知支持按钮与服务端已读。
 
 ### 2.19.2.1 主要变更
 
