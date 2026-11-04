@@ -213,7 +213,9 @@ Public Class PageInstanceCompResource
 
         Dim BtnOpen As New MyIconButton With {
             .Logo = IconFolder,
-            .LogoScale = 1,
+            .Width = 22,
+            .Height = 22,
+            .Margin = New Thickness(3, 0, 3, 0),
             .ToolTip = "打开所在文件夹"
         }
         AddHandler BtnOpen.Click, Sub(s As Object, ev As EventArgs)
@@ -222,7 +224,9 @@ Public Class PageInstanceCompResource
 
         Dim BtnToggle As New MyIconButton With {
             .Logo = If(Entry.State = ModLocalComp.FileState.Fine, IconDisable, IconEnable),
-            .LogoScale = 1,
+            .Width = 22,
+            .Height = 22,
+            .Margin = New Thickness(3, 0, 3, 0),
             .ToolTip = If(Entry.State = ModLocalComp.FileState.Fine, "禁用", "启用")
         }
         AddHandler BtnToggle.Click, Sub(s As Object, ev As EventArgs)
@@ -231,7 +235,9 @@ Public Class PageInstanceCompResource
 
         Dim BtnDelete As New MyIconButton With {
             .Logo = IconTrash,
-            .LogoScale = 1,
+            .Width = 22,
+            .Height = 22,
+            .Margin = New Thickness(3, 0, 3, 0),
             .ToolTip = "删除"
         }
         AddHandler BtnDelete.Click, Sub(s As Object, ev As EventArgs)
@@ -326,7 +332,7 @@ Public Class PageInstanceCompResource
         RefreshBars(Items.Count)
     End Sub
 
-    Private Sub BtnSelectCancel_Click(sender As Object, e As MouseButtonEventArgs)
+    Private Sub BtnSelectCancel_Click(sender As Object, e As RouteEventArgs)
         For Each Item As MyListItem In PanList.Children.OfType(Of MyListItem)()
             Item.Checked = False
         Next
@@ -334,11 +340,11 @@ Public Class PageInstanceCompResource
         RefreshUI()
     End Sub
 
-    Private Sub BtnSelectEnable_Click(sender As Object, e As MouseButtonEventArgs)
+    Private Sub BtnSelectEnable_Click(sender As Object, e As RouteEventArgs)
         BatchSetEnabled(True)
     End Sub
 
-    Private Sub BtnSelectDisable_Click(sender As Object, e As MouseButtonEventArgs)
+    Private Sub BtnSelectDisable_Click(sender As Object, e As RouteEventArgs)
         BatchSetEnabled(False)
     End Sub
 
@@ -356,7 +362,7 @@ Public Class PageInstanceCompResource
         Reload()
     End Sub
 
-    Private Sub BtnSelectDelete_Click(sender As Object, e As MouseButtonEventArgs)
+    Private Sub BtnSelectDelete_Click(sender As Object, e As RouteEventArgs)
         DeleteEntries(Files.Where(Function(F) SelectedKeys.Contains(F.RawPath)).ToList())
     End Sub
 
