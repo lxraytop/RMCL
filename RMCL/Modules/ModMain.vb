@@ -408,6 +408,10 @@ Public FrmSetupJava As PageSetupJava
     Public FrmInstanceOverall As PageInstanceOverall
     Public FrmInstanceMod As PageInstanceMod
     Public FrmInstanceModDisabled As PageInstanceModDisabled
+    Public FrmInstanceSaves As PageInstanceSaves
+    Public FrmInstanceScreenshot As PageInstanceScreenshot
+    Public FrmInstanceResourcePacks As PageInstanceCompResource
+    Public FrmInstanceShaderPacks As PageInstanceCompResource
     Public FrmInstanceSetup As PageInstanceSetup
     Public FrmInstanceExport As PageInstanceExport
     Public FrmDownloadModify As PageDownloadModify

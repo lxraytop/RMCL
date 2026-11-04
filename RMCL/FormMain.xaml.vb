@@ -997,8 +997,11 @@ Public Class FormMain
         InstanceSetup = 1
         InstanceModify = 2
         InstanceMod = 3
-        InstanceModDisabled = 4
-        InstanceExport = 5
+        InstanceSaves = 4
+        InstanceScreenshot = 5
+        InstanceResourcePacks = 6
+        InstanceShaderPacks = 7
+        InstanceExport = 8
     End Enum
     ''' <summary>
     ''' 获取次级页面的名称。若并非次级页面则返回空字符串，故可以以此判断是否为次级页面。

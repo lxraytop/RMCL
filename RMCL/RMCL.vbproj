@@ -263,6 +263,9 @@
     <Compile Include="Modules\ModUpdate.vb" />
     <Compile Include="Modules\ModUpdateServer.vb" />
     <Compile Include="Modules\ModNotice.vb" />
+    <Compile Include="Modules\GameResource\ModLocalComp.vb" />
+    <Compile Include="Modules\GameResource\ModNbtReader.vb" />
+    <Compile Include="Modules\GameResource\ModSaveUtil.vb" />
     <Compile Include="Modules\ModFrp.vb" />
     <Compile Include="Controls\MyUpdateProgress.vb" />
     <Compile Include="Pages\PageDownload\Resource\PageResource.xaml.vb">
@@ -329,6 +332,15 @@
     </Compile>
     <Compile Include="Pages\PageInstance\PageInstanceOverall.xaml.vb">
       <DependentUpon>PageInstanceOverall.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Pages\PageInstance\PageInstanceSaves.xaml.vb">
+      <DependentUpon>PageInstanceSaves.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Pages\PageInstance\PageInstanceScreenshot.xaml.vb">
+      <DependentUpon>PageInstanceScreenshot.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Pages\PageInstance\PageInstanceCompResource.xaml.vb">
+      <DependentUpon>PageInstanceCompResource.xaml</DependentUpon>
     </Compile>
     <Compile Include="Pages\PageInstance\PageInstanceSetup.xaml.vb">
       <DependentUpon>PageInstanceSetup.xaml</DependentUpon>
@@ -652,6 +664,18 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Pages\PageInstance\PageInstanceOverall.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Pages\PageInstance\PageInstanceSaves.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Pages\PageInstance\PageInstanceScreenshot.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Pages\PageInstance\PageInstanceCompResource.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

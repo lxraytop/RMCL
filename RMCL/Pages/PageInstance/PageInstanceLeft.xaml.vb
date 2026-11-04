@@ -30,7 +30,7 @@ Public Class PageInstanceLeft
     ''' <summary>
     ''' 勾选事件改变页面。
     ''' </summary>
-    Private Sub PageCheck(sender As FrameworkElement, e As RouteEventArgs) Handles ItemOverall.Check, ItemMod.Check, ItemModDisabled.Check, ItemSetup.Check, ItemModify.Check, ItemExport.Check
+    Private Sub PageCheck(sender As FrameworkElement, e As RouteEventArgs) Handles ItemOverall.Check, ItemMod.Check, ItemModDisabled.Check, ItemSetup.Check, ItemModify.Check, ItemSaves.Check, ItemScreenshot.Check, ItemResourcePacks.Check, ItemShaderPacks.Check, ItemExport.Check
         '尚未初始化控件属性时，sender.Tag 为 Nothing，会导致切换到页面 0
         '若使用 IsLoaded，则会导致模拟点击不被执行（模拟点击切换页面时，控件的 IsLoaded 为 False）
         If sender.Tag IsNot Nothing Then PageChange(Val(sender.Tag))
@@ -43,11 +43,30 @@ Public Class PageInstanceLeft
                 If FrmInstanceOverall Is Nothing Then FrmInstanceOverall = New PageInstanceOverall
                 Return FrmInstanceOverall
             Case FormMain.PageSubType.InstanceMod
-                If FrmInstanceMod Is Nothing Then FrmInstanceMod = New PageInstanceMod
-                Return FrmInstanceMod
-            Case FormMain.PageSubType.InstanceModDisabled
-                If FrmInstanceModDisabled Is Nothing Then FrmInstanceModDisabled = New PageInstanceModDisabled
-                Return FrmInstanceModDisabled
+                '不支持 Mod 的版本显示提示页，两者共用同一个导航位
+                If Instance IsNot Nothing AndAlso Instance.Modable Then
+                    If FrmInstanceMod Is Nothing Then FrmInstanceMod = New PageInstanceMod
+                    Return FrmInstanceMod
+                Else
+                    If FrmInstanceModDisabled Is Nothing Then FrmInstanceModDisabled = New PageInstanceModDisabled
+                    Return FrmInstanceModDisabled
+                End If
+            Case FormMain.PageSubType.InstanceSaves
+                If FrmInstanceSaves Is Nothing Then FrmInstanceSaves = New PageInstanceSaves
+                Return FrmInstanceSaves
+            Case FormMain.PageSubType.InstanceScreenshot
+                If FrmInstanceScreenshot Is Nothing Then FrmInstanceScreenshot = New PageInstanceScreenshot
+                Return FrmInstanceScreenshot
+            Case FormMain.PageSubType.InstanceResourcePacks
+                If FrmInstanceResourcePacks Is Nothing Then
+                    FrmInstanceResourcePacks = New PageInstanceCompResource(ModLocalComp.CompType.ResourcePack)
+                End If
+                Return FrmInstanceResourcePacks
+            Case FormMain.PageSubType.InstanceShaderPacks
+                If FrmInstanceShaderPacks Is Nothing Then
+                    FrmInstanceShaderPacks = New PageInstanceCompResource(ModLocalComp.CompType.Shader)
+                End If
+                Return FrmInstanceShaderPacks
             Case FormMain.PageSubType.InstanceSetup
                 If FrmInstanceSetup Is Nothing Then FrmInstanceSetup = New PageInstanceSetup
                 Return FrmInstanceSetup
