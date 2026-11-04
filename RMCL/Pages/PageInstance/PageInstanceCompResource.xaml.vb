@@ -28,12 +28,6 @@ Public Class PageInstanceCompResource
 
     Private ReadOnly CompType As ModLocalComp.CompType
     Private ReadOnly TypeName As String
-    ''' <summary>
-    ''' 是否支持在文件层面启用 / 禁用。
-    ''' 资源包改后缀游戏就认；光影包在游戏里是选哪个生效，改文件名只是让它从列表里消失，
-    ''' 没有「启用中」这个概念，所以光影包页不提供这类操作。
-    ''' </summary>
-    Private ReadOnly SupportsToggle As Boolean
 
     Private Files As New List(Of ModLocalComp.LocalCompFile)
     Private SelectedKeys As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
@@ -50,17 +44,10 @@ Public Class PageInstanceCompResource
         InitializeComponent()
         CompType = Type
         TypeName = ModLocalComp.GetTypeName(Type)
-        SupportsToggle = (Type = ModLocalComp.CompType.ResourcePack)
 
         '初始化筛选与排序的显示，此时 Ready 仍为 False，事件只会记录状态不会刷界面
         BtnFilterAll.Checked = True
         BtnSort.Text = "排序：" & GetSortName(CurrentSort)
-        If Not SupportsToggle Then
-            BtnFilterEnabled.Visibility = Visibility.Collapsed
-            BtnFilterDisabled.Visibility = Visibility.Collapsed
-            BtnSelectEnable.Visibility = Visibility.Collapsed
-            BtnSelectDisable.Visibility = Visibility.Collapsed
-        End If
         Ready = True
     End Sub
 
@@ -82,9 +69,9 @@ Public Class PageInstanceCompResource
 
         Scanning = True
         InstancePath = Instance.PathIndie
-        PanLoad.Visibility = Visibility.Visible
+        ShowCard(PanLoad, True)
         PanAllBack.Visibility = Visibility.Collapsed
-        PanEmpty.Visibility = Visibility.Collapsed
+        ShowCard(PanEmpty, False)
 
         RunInNewThread(
         Sub()
@@ -96,7 +83,7 @@ Public Class PageInstanceCompResource
             RunInUi(Sub()
                         Scanning = False
                         If PageInstanceLeft.Instance Is Nothing OrElse PageInstanceLeft.Instance.PathIndie <> InstancePath Then Return
-                        PanLoad.Visibility = Visibility.Collapsed
+                        ShowCard(PanLoad, False)
                         PanAllBack.Visibility = Visibility.Visible
 
                         Files = Result
@@ -170,18 +157,35 @@ Public Class PageInstanceCompResource
         RefreshBars(Showing.Count)
     End Sub
 
+    ''' <summary>
+    ''' 显示 / 收起卡片。
+    '''
+    ''' 页面切换的退场动画会把「当时可见」的卡片 Opacity 渐隐到 0，而进场动画只重置
+    ''' 没有折叠的控件。所以卡片以后再显示时，必须自己把 Opacity 复位成 1，
+    ''' 否则 Visibility 变成 Visible 也还是全透明的。
+    ''' </summary>
+    Private Sub ShowCard(Card As MyCard, Show As Boolean)
+        If Card Is Nothing Then Return
+        If Show Then
+            Card.Opacity = 1
+            Card.Visibility = Visibility.Visible
+        Else
+            Card.Visibility = Visibility.Collapsed
+        End If
+    End Sub
+
     Private Sub RefreshBars(ShowingCount As Integer)
         '整个目录空 → 居中空状态；只是筛选没命中 → 收起列表区、保留筛选栏
         If Files.Count = 0 Then
             PanAllBack.Visibility = Visibility.Collapsed
-            PanEmpty.Visibility = Visibility.Visible
+            ShowCard(PanEmpty, True)
             TxtEmptyTitle.Text = $"这里还没有{TypeName}"
             TxtEmptyDescription.Text = $"点「从文件安装」选一个 {TypeName}，或者去下载页找找。"
-            CardSelect.Visibility = Visibility.Collapsed
+            ShowCard(CardSelect, False)
             Return
         End If
         PanAllBack.Visibility = Visibility.Visible
-        PanEmpty.Visibility = Visibility.Collapsed
+        ShowCard(PanEmpty, False)
         PanList.Visibility = If(ShowingCount > 0, Visibility.Visible, Visibility.Collapsed)
 
         '计数
@@ -198,23 +202,21 @@ Public Class PageInstanceCompResource
         BtnFilterAll.Text = If(String.IsNullOrEmpty(SearchText), $"全部 ({AnyCount})", "搜索结果")
         BtnFilterEnabled.Text = $"已启用 ({EnabledCount})"
         BtnFilterDisabled.Text = $"已禁用 ({DisabledCount})"
-        If SupportsToggle Then
-            BtnFilterEnabled.Visibility = If(Filter = FilterType.Enabled OrElse
-                                            (EnabledCount > 0 AndAlso EnabledCount < AnyCount),
-                                            Visibility.Visible, Visibility.Collapsed)
-            BtnFilterDisabled.Visibility = If(Filter = FilterType.Disabled OrElse DisabledCount > 0,
-                                              Visibility.Visible, Visibility.Collapsed)
-        Else
-            BtnFilterEnabled.Visibility = Visibility.Collapsed
-            BtnFilterDisabled.Visibility = Visibility.Collapsed
-        End If
+        BtnFilterEnabled.Visibility = If(Filter = FilterType.Enabled OrElse
+                                        (EnabledCount > 0 AndAlso EnabledCount < AnyCount),
+                                        Visibility.Visible, Visibility.Collapsed)
+        BtnFilterDisabled.Visibility = If(Filter = FilterType.Disabled OrElse DisabledCount > 0,
+                                          Visibility.Visible, Visibility.Collapsed)
 
         '选中条
         If SelectedKeys.Count = 0 Then
-            CardSelect.Visibility = Visibility.Collapsed
+            ShowCard(CardSelect, False)
+            PanListBack.Margin = New Thickness(0, 0, 0, 14)
         Else
-            CardSelect.Visibility = Visibility.Visible
             LabSelect.Text = $"已选择 {SelectedKeys.Count} 项"
+            ShowCard(CardSelect, True)
+            '给浮出的操作栏让出位置，避免盖住最后一行
+            PanListBack.Margin = New Thickness(0, 0, 0, 95)
         End If
     End Sub
 
@@ -262,19 +264,16 @@ Public Class PageInstanceCompResource
                                         DeleteEntries({Entry})
                                     End Sub
 
-        Item.Buttons = If(SupportsToggle,
-                          New MyIconButton() {BtnOpen, BtnToggle, BtnDelete},
-                          New MyIconButton() {BtnOpen, BtnDelete})
+        Item.Buttons = New MyIconButton() {BtnOpen, BtnToggle, BtnDelete}
         AddHandler Item.Changed, Sub(s As Object, ev As RouteEventArgs) OnItemChanged(Item, Entry)
         Return Item
     End Function
 
     Private Function BuildInfoText(Entry As ModLocalComp.LocalCompFile) As String
-        Dim Parts As New List(Of String)
-        If SupportsToggle Then
-            Parts.Add(If(Entry.State = ModLocalComp.FileState.Fine, "已启用", "已禁用"))
-        End If
-        Parts.Add(FormatSize(Entry.SizeBytes))
+        Dim Parts As New List(Of String) From {
+            If(Entry.State = ModLocalComp.FileState.Fine, "已启用", "已禁用"),
+            FormatSize(Entry.SizeBytes)
+        }
         If Entry.IsFolder Then Parts.Add("文件夹")
         If Not String.IsNullOrEmpty(Entry.Description) Then Parts.Add(Entry.Description)
         Return String.Join(" · ", Parts)

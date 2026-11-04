@@ -63,14 +63,30 @@ Public Class PageInstanceScreenshot
                         FileList = Result
                         If FileList.Count = 0 Then
                             PanContent.Visibility = Visibility.Collapsed
-                            PanNoPic.Visibility = Visibility.Visible
+                            ShowCard(PanNoPic, True)
                             Return
                         End If
                         PanContent.Visibility = Visibility.Visible
-                        PanNoPic.Visibility = Visibility.Collapsed
+                        ShowCard(PanNoPic, False)
                         AppendItems()
                     End Sub)
         End Sub, "读取截图列表")
+    End Sub
+
+    ''' <summary>
+    ''' 显示 / 收起卡片。
+    '''
+    ''' 页面切换的退场动画会把「当时可见」的卡片 Opacity 渐隐到 0，而进场动画只重置
+    ''' 没有折叠的控件。所以卡片以后再显示时，要自己把 Opacity 复位成 1。
+    ''' </summary>
+    Private Sub ShowCard(Card As MyCard, Show As Boolean)
+        If Card Is Nothing Then Return
+        If Show Then
+            Card.Opacity = 1
+            Card.Visibility = Visibility.Visible
+        Else
+            Card.Visibility = Visibility.Collapsed
+        End If
     End Sub
 
     ''' <summary>滚动到底部时再追加一页。</summary>

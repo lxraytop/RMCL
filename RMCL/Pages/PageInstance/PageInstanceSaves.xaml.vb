@@ -122,17 +122,35 @@ Public Class PageInstanceSaves
 
         If Saves.Count = 0 Then
             PanContent.Visibility = Visibility.Collapsed
-            PanNoWorld.Visibility = Visibility.Visible
+            ShowCard(PanNoWorld, True)
             Return
         End If
         PanContent.Visibility = Visibility.Visible
-        PanNoWorld.Visibility = Visibility.Collapsed
+        ShowCard(PanNoWorld, False)
+        '列表卡片可能在上次离开页面时被退场动画渐隐过
+        PanListBack.Opacity = 1
 
         PanList.Children.Clear()
         For Each Entry As ModSaveUtil.SaveEntry In Showing
             PanList.Children.Add(BuildItem(Entry))
         Next
         PanListBack.Title = $"存档（{Showing.Count}）"
+    End Sub
+
+    ''' <summary>
+    ''' 显示 / 收起卡片。
+    '''
+    ''' 页面切换的退场动画会把「当时可见」的卡片 Opacity 渐隐到 0，而进场动画只重置
+    ''' 没有折叠的控件。所以卡片以后再显示时，要自己把 Opacity 复位成 1。
+    ''' </summary>
+    Private Sub ShowCard(Card As MyCard, Show As Boolean)
+        If Card Is Nothing Then Return
+        If Show Then
+            Card.Opacity = 1
+            Card.Visibility = Visibility.Visible
+        Else
+            Card.Visibility = Visibility.Collapsed
+        End If
     End Sub
 
     Private Function Compare(a As ModSaveUtil.SaveEntry, b As ModSaveUtil.SaveEntry) As Integer
