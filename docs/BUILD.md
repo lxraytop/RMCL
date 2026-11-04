@@ -1,4 +1,4 @@
-# 构建说明（RMCL 2.20.0.0）
+# 构建说明（RMCL 2.20.0.1）
 
 RMCL 基于上游 2.14.0.0 开源基线重构，技术栈与上游一致：**.NET Framework 4.8 + WPF + VB.NET**（主工程为传统 vbproj，`RMCLCS` 与 `MeloongCore` 为 SDK 风格 csproj）。
 
@@ -81,12 +81,27 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 
 | 文件 | 大小 | 说明 |
 | --- | --- | --- |
-| `dist/RMCL 2.20.0.0/RMCL.exe` | 5.74 MB | 主程序，版本信息 `2.20.0.0 / Ray Minecraft Launcher` |
-| `dist/RMCL 2.20.0.0/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
-| `dist/RMCL-2.20.0.0-win.zip` | 2.58 MB | 上述两个文件的压缩包（sha256 `33eb99aaca551cb4…`） |
+| `dist/RMCL 2.20.0.1/RMCL.exe` | 5.75 MB | 主程序，版本信息 `2.20.0.1 / Ray Minecraft Launcher` |
+| `dist/RMCL 2.20.0.1/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
+| `dist/RMCL-2.20.0.1-win.zip` | 2.58 MB | 上述两个文件的压缩包（sha256 `11ecc78e9b582520…`） |
 
-对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.20.0.0>，
-资产 `RMCL.exe`（6,023,168 B，sha256 `5ac7205be0bcaefb…`）与 `RMCL-2.20.0.0-win.zip`（2,701,002 B）。
+对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.20.0.1>，
+资产 `RMCL.exe`（6,025,216 B，sha256 `69b7ef88224692ce…`）与 `RMCL-2.20.0.1-win.zip`（2,701,353 B）。
+
+### 2.20.0.1 主要变更
+
+- 修复切换资源包 / 光影包时右侧偶发整片白屏且无法恢复：页面切换的收尾回调写在
+  动画组的 AaCode 里，而 `AniStart` 遇到同名组会直接 `AniStop` 丢弃旧组，快速连续
+  切换时旧页已退场、新页从未挂上；同时 `PageOnEnter` 在 `PageExit` 状态直接抛异常
+  （被动画引擎吞掉），在 `ContentEnter` 又直接返回，状态一旦错位就再也进不来。
+  现在页面挂载后立刻置 `Opacity = 1`，`PageOnEnter` 按状态自愈，并加了独立的 600ms
+  兜底回调；同一分页被重复点击时也会就地恢复显示，不必重启程序。
+- 修复版本没有安装任何资源包 / 光影包时页面一片空白：空状态卡片原先被写在
+  `PanAllBack` 内部，而「没有资源」时恰好会把 `PanAllBack` 折叠，等于把空状态自己
+  一起藏掉。现改为与列表容器平级，会正常显示「这里还没有资源包」与安装按钮。
+- 修复资源包 / 光影包读取目录失败后页面永久停在加载卡片、刷新也无效的问题
+  （`Scanning` 标志未复位，后续读取全被入口拦掉）。
+- 顺带把折叠控件残留的透明度一起复位，避免卡片再次显示时仍全透明。
 
 ### 2.20.0.0 主要变更
 
