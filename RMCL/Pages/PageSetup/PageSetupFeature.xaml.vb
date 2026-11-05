@@ -201,9 +201,8 @@ Public Class PageSetupFeature
         Try
             Dim Desktop As String = ShortcutPath(True)
             Dim StartMenu As String = ShortcutPath(False)
-            LabShortcutInfo.Text = $"快捷方式指向：{PathExe}" & vbCrLf &
-                                   $"桌面：{If(IO.File.Exists(Desktop), "已创建", "未创建")}" & vbCrLf &
-                                   $"开始菜单：{If(IO.File.Exists(StartMenu), "已创建", "未创建")}"
+            LabShortcutInfo.Text = $"桌面：{If(IO.File.Exists(Desktop), "已创建", "未创建")}" &
+                                   $"　·　开始菜单：{If(IO.File.Exists(StartMenu), "已创建", "未创建")}"
         Catch ex As Exception
             Logger.Warn(ex, "检查快捷方式失败")
             LabShortcutInfo.Text = "无法检查快捷方式。"
@@ -254,8 +253,8 @@ Public Class PageSetupFeature
 
 #Region "下载自定义文件"
 
-    ''' <summary>当前下载的取消源，供「取消下载」使用。</summary>
-    Private CustomCts As Threading.CancellationTokenSource = Nothing
+    ''' <summary>正在跑的自定义下载任务，供「取消下载」使用。</summary>
+    Private CustomTask As LoaderDownload = Nothing
     Private CustomRunning As Boolean = False
 
     ''' <summary>
@@ -324,7 +323,7 @@ Public Class PageSetupFeature
     Private Sub BtnCustomCancel_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnCustomCancel.Click
         If Not CustomRunning Then Return
         Try
-            CustomCts?.Cancel()
+            CustomTask?.Cancel()
             LabCustomProgress.Text = "正在取消……"
         Catch ex As Exception
             Logger.Warn(ex, "取消自定义下载失败")
@@ -332,84 +331,72 @@ Public Class PageSetupFeature
     End Sub
 
     ''' <summary>
-    ''' 下载一个任意直链到指定路径。
+    ''' 用启动器自带的下载器把直链下到指定路径。
     '''
-    ''' 这里自己走 HttpClient 流式写盘，而不是复用下载管理器：后者是为「一堆游戏文件、多源、断点续传」
-    ''' 设计的，进度按状态粗粒度估算，且对不支持 Range 的简单 HTTP 服务容易停在连接状态。
-    ''' 直链下载只需要「边读边写 + 可取消」，先写 .part 再改名，失败或取消都不会留下半个目标文件。
+    ''' 走 NetFile + LoaderDownload，与下载游戏文件、检查更新是同一套下载栈（多源、分块、断点续传、
+    ''' 失败重试都复用）。先下到 .part，成功后改名，失败或取消不会留下半个目标文件。
     ''' </summary>
     Private Sub StartCustomDownload(Url As String, Target As String)
         CustomRunning = True
         BtnCustomDownload.IsEnabled = False
         BtnCustomDownload.Text = "正在下载……"
         BtnCustomCancel.Visibility = Visibility.Visible
-        SetCustomProgress(0, "正在连接……")
+        SetCustomProgress(0, "正在连接下载源……")
 
         Dim PartPath As String = Target & ".part"
-        Dim Cts As New Threading.CancellationTokenSource()
-        CustomCts = Cts
 
         RunInNewThread(
         Sub()
+            Dim Task As LoaderDownload = Nothing
             Dim Failure As Exception = Nothing
             Dim Canceled As Boolean = False
-            Dim Total As Long = -1
-            Dim Done As Long = 0
-            Dim LastReport As Long = 0
             Try
-                Using Client As New Net.Http.HttpClient()
-                    Client.Timeout = Threading.Timeout.InfiniteTimeSpan
-                    Client.DefaultRequestHeaders.UserAgent.ParseAdd("RMCL/" & VersionBaseName)
-                    Using Resp As Net.Http.HttpResponseMessage =
-                        Client.GetAsync(Url, Net.Http.HttpCompletionOption.ResponseHeadersRead, Cts.Token).GetAwaiter().GetResult()
-                        Resp.EnsureSuccessStatusCode()
-                        If Resp.Content.Headers.ContentLength.HasValue Then Total = Resp.Content.Headers.ContentLength.Value
+                Dim File As New NetFile(New List(Of String) From {Url}, PartPath, SimulateBrowserHeaders:=True)
+                Task = New LoaderDownload("下载自定义文件", New List(Of NetFile) From {File})
+                CustomTask = Task
+                Task.Start()
 
-                        Using Src As IO.Stream = Resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
-                            Using Dst As IO.Stream = IO.File.Create(PartPath)
-                                Dim Buffer(8192) As Byte
-                                Do
-                                    Dim Read As Integer = Src.Read(Buffer, 0, Buffer.Length)
-                                    If Read <= 0 Then Exit Do
-                                    Dst.Write(Buffer, 0, Read)
-                                    Done += Read
-                                    '限制刷新频率，避免每读一次就往 UI 线程丢一个任务
-                                    If GetTimeMs() - LastReport >= 100 Then
-                                        LastReport = GetTimeMs()
-                                        Dim ReportDone As Long = Done, ReportTotal As Long = Total
-                                        RunInUi(Sub() SetCustomProgress(If(ReportTotal > 0, ReportDone / ReportTotal, 0),
-                                                                        If(ReportTotal > 0,
-                                                                           $"正在下载  {ReportDone * 100.0 / ReportTotal:F0}%（{FormatSize(ReportDone)} / {FormatSize(ReportTotal)}）",
-                                                                           $"正在下载  {FormatSize(ReportDone)}")))
-                                    End If
-                                Loop
-                            End Using
-                        End Using
-                    End Using
-                End Using
+                'LoaderDownload 的进度由 NetManager 每 0.1 秒刷新一次，这里主动轮询
+                Dim StartTick As Long = GetTimeMs()
+                Do While Task.State = LoadState.Loading
+                    Dim Value As Double = Task.Progress
+                    If Double.IsNaN(Value) OrElse Value < 0 Then Value = 0
+                    RunInUi(Sub() SetCustomProgress(Value, $"正在下载  {Value * 100:F0}%"))
+                    '长时间停在很低的进度上，多半还在连接或探测文件大小
+                    If Value < 0.05 AndAlso GetTimeMs() - StartTick > 3000 Then
+                        RunInUi(Sub()
+                                    If CustomRunning Then LabCustomProgress.Text = "正在连接下载源……"
+                                End Sub)
+                    End If
+                    System.Threading.Thread.Sleep(100)
+                Loop
 
-                If Done <= 0 Then Throw New Exception("服务器没有返回任何内容")
-                If IO.File.Exists(Target) Then IO.File.Delete(Target)
-                IO.File.Move(PartPath, Target)
-            Catch ex As OperationCanceledException
-                Canceled = True
+                Canceled = Task.State = LoadState.Canceled
+                If Task.Error IsNot Nothing Then Failure = Task.Error
+                If Not Canceled AndAlso Failure Is Nothing Then
+                    If Not IO.File.Exists(PartPath) Then Throw New Exception("下载结束但没有拿到文件")
+                    If IO.File.Exists(Target) Then IO.File.Delete(Target)
+                    IO.File.Move(PartPath, Target)
+                End If
             Catch ex As Exception
                 Failure = ex
             Finally
+                Try
+                    Task?.Cancel()
+                Catch
+                End Try
                 If Canceled OrElse Failure IsNot Nothing Then
                     Try
                         If IO.File.Exists(PartPath) Then IO.File.Delete(PartPath)
                     Catch
                     End Try
                 End If
-                Cts.Dispose()
             End Try
 
-            Dim FinalSize As Long = Done
             RunInUi(
             Sub()
                 CustomRunning = False
-                CustomCts = Nothing
+                CustomTask = Nothing
                 BtnCustomDownload.IsEnabled = True
                 BtnCustomDownload.Text = "开始下载"
                 BtnCustomCancel.Visibility = Visibility.Collapsed
@@ -422,9 +409,19 @@ Public Class PageSetupFeature
                     Logger.Warn(Failure, $"下载自定义文件失败：{Url}")
                     Hint("下载失败：" & Failure.Message, HintType.Red)
                 Else
-                    SetCustomProgress(1, $"下载完成：{IO.Path.GetFileName(Target)}（{FormatSize(FinalSize)}）")
-                    Logger.Info($"自定义下载完成：{Target}（{FormatSize(FinalSize)}）")
-                    Hint("下载完成：" & IO.Path.GetFileName(Target), HintType.Green)
+                    Dim Size As Long = 0
+                    Try
+                        If IO.File.Exists(Target) Then Size = New IO.FileInfo(Target).Length
+                    Catch
+                    End Try
+                    If Size <= 0 Then
+                        PanCustomProgress.Visibility = Visibility.Collapsed
+                        Hint("下载失败：没有拿到文件内容", HintType.Red)
+                    Else
+                        SetCustomProgress(1, $"下载完成：{IO.Path.GetFileName(Target)}（{FormatSize(Size)}）")
+                        Logger.Info($"自定义下载完成：{Target}（{FormatSize(Size)}）")
+                        Hint("下载完成：" & IO.Path.GetFileName(Target), HintType.Green)
+                    End If
                 End If
             End Sub)
         End Sub, "下载自定义文件")

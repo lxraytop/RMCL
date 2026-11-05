@@ -8,11 +8,10 @@
         <StackPanel x:Name="PanMain" Margin="25,10">
             <local:MyCard Margin="0,15" Title="创建快捷方式">
                 <StackPanel Margin="25,40,25,18">
-                    <TextBlock TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,12"
-                               Text="在桌面或开始菜单放一个启动器的快捷方式，之后双击就能打开，不必每次去文件夹里找。&#xa;快捷方式指向当前正在运行的这个 RMCL.exe，换了位置重新创建一次即可。" />
-                    <Border Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,10" Margin="0,0,0,12">
-                        <TextBlock x:Name="LabShortcutInfo" TextWrapping="Wrap" LineHeight="19" Text="正在检查快捷方式……" />
-                    </Border>
+                    <TextBlock TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,10"
+                               Text="在桌面或开始菜单放一个快捷方式，双击即可打开启动器。" />
+                    <TextBlock x:Name="LabShortcutInfo" Margin="1,0,0,12" FontSize="12.5" TextWrapping="Wrap"
+                               Foreground="{DynamicResource ColorBrush3}" Text="正在检查快捷方式……" />
                     <Grid Height="35" Margin="0,0,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
