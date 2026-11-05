@@ -1,4 +1,4 @@
-﻿<local:MyPageRight
+<local:MyPageRight
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="clr-namespace:RMCL" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
@@ -6,6 +6,23 @@
     PanScroll="PanBack">
     <local:MyScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" x:Name="PanBack">
         <StackPanel x:Name="PanMain" Margin="25,10">
+            <local:MyCard Margin="0,15" Title="创建快捷方式">
+                <StackPanel Margin="25,40,25,18">
+                    <TextBlock TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,12"
+                               Text="在桌面或开始菜单放一个启动器的快捷方式，之后双击就能打开，不必每次去文件夹里找。&#xa;快捷方式指向当前正在运行的这个 RMCL.exe，换了位置重新创建一次即可。" />
+                    <Border Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,10" Margin="0,0,0,12">
+                        <TextBlock x:Name="LabShortcutInfo" TextWrapping="Wrap" LineHeight="19" Text="正在检查快捷方式……" />
+                    </Border>
+                    <Grid Height="35" Margin="0,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
+                        </Grid.ColumnDefinitions>
+                        <local:MyButton x:Name="BtnShortcutDesktop" Text="创建桌面快捷方式" MinWidth="140" Height="35" Padding="13,0" ColorType="Highlight" Margin="0,0,20,0" />
+                        <local:MyButton x:Name="BtnShortcutStartMenu" Text="添加到开始菜单" MinWidth="140" Height="35" Padding="13,0" Grid.Column="1" />
+                    </Grid>
+                </StackPanel>
+            </local:MyCard>
             <local:MyCard Margin="0,15" Title="内存优化">
                 <StackPanel Margin="25,40,25,18">
                     <TextBlock TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,12"
@@ -44,90 +61,62 @@
                     </Grid>
                 </StackPanel>
             </local:MyCard>
-            <local:MyCard Margin="0,0,0,15" Title="软件更新">
+            <local:MyCard Margin="0,0,0,15" Title="下载自定义文件">
                 <StackPanel Margin="25,40,25,18">
                     <TextBlock TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,12"
-                               Text="检查启动器的新版本并下载发布包，下载完成后退出启动器即可完成替换。&#xa;GitHub 的两个源不需要授权；官方源是自建更新服务器，下载前需要通过验证码授权，授权到期后会自动失效并拒绝更新。" />
-                    <Border Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,10" Margin="0,0,0,12">
-                        <TextBlock x:Name="LabUpdateInfo" TextWrapping="Wrap" LineHeight="19" Text="正在读取版本信息……" />
-                    </Border>
-                    <local:MyCheckBox local:SettingService.Key="ToolLauncherUpdateAuto" Text="自动更新" Margin="-1,0,0,4" Height="22" />
-                    <TextBlock Text="开启后每次启动都会检查更新；发现新版本时弹窗展示更新公告，确认后才开始下载，并在退出启动器时完成安装（不会自动重启启动器）。官方源尚未授权时会跳过自动检查，不打扰使用。" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,12" />
-                    <Grid Height="28" Margin="0,2,0,8">
+                               Text="填入一个直链地址，把文件下载到指定目录。适合下载没有收录进下载页的资源；需要登录、带防盗链或必须先进网页才能拿到地址的文件不适用。" />
+                    <Grid Height="28" Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="更新源" Margin="1,0,16,0" />
-                        <local:MyComboBox Grid.Column="1" local:SettingService.Key="UpdateSourceMode" x:Name="ComboUpdateSource"
-                                          Width="300" HorizontalAlignment="Left"
-                                          SelectionChanged="ComboUpdateSource_SelectionChanged"
-                                          ToolTip="GitHub 原生源：检查与下载都直连 github.com，下载失败时自动改用镜像。&#xa;GitHub 镜像源：优先经你填写的镜像地址下载，失败回退官方。&#xa;官方源：自建更新服务器，需要验证码授权，到期拒绝更新。">
-                            <local:MyComboBoxItem Content="GitHub 原生源" />
-                            <local:MyComboBoxItem Content="GitHub 镜像源" />
-                            <local:MyComboBoxItem Content="官方源（需要授权码）" />
-                        </local:MyComboBox>
+                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="文件地址" Margin="1,0,16,0" />
+                        <local:MyTextBox Grid.Column="1" x:Name="TextCustomUrl" Width="420" HorizontalAlignment="Left"
+                                         HintText="https://example.com/file.zip" />
                     </Grid>
-                    <StackPanel x:Name="PanMirrorSettings" Visibility="Collapsed" Margin="0,0,0,12">
-                        <Grid Height="28" Margin="0,0,0,6">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="镜像地址" Margin="1,0,16,0" />
-                            <local:MyTextBox Grid.Column="1" local:SettingService.Key="UpdateMirrorUrl" x:Name="TextMirrorUrl"
-                                             Width="300" HorizontalAlignment="Left" HintText="https://gh-proxy.com/"
-                                             ToolTip="镜像地址前缀，会拼在 GitHub 原始地址前面。留空即使用内置默认值。" />
-                        </Grid>
-                        <TextBlock Text="镜像只负责搬运文件，检查更新仍会直连 GitHub 接口；接口连不上时也会自动改用镜像地址重试。" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" />
-                    </StackPanel>
-                    <StackPanel x:Name="PanOfficialSettings" Visibility="Collapsed">
-                        <Border Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,10" Margin="0,0,0,10">
-                            <StackPanel>
-                                <TextBlock x:Name="LabLicenseInfo" TextWrapping="Wrap" LineHeight="19" Text="授权状态：未授权" />
-                                <TextBlock x:Name="LabLicenseDetail" TextWrapping="Wrap" LineHeight="18" Opacity="0.62" FontSize="11.5" Margin="0,4,0,0"
-                                           Text="检查与下载更新前需要通过验证码授权；一张码默认绑定一台设备。" />
-                            </StackPanel>
-                        </Border>
-                        <Grid Height="35" Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
-                            </Grid.ColumnDefinitions>
-                            <local:MyButton x:Name="BtnLicenseActivate" Text="输入验证码" MinWidth="140" Height="35" Padding="13,0" ColorType="Highlight" Margin="0,0,20,0" />
-                            <local:MyButton x:Name="BtnLicenseClear" Text="解除本地授权" MinWidth="140" Height="35" Padding="13,0" Grid.Column="1" />
-                        </Grid>
-                        <TextBlock Text="授权到期后服务器会拒绝检查与下载请求。换机时请让管理员在后台解绑，解绑不会改变到期时间。" Opacity="0.62" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,12" />
-                    </StackPanel>
+                    <Grid Height="28" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="保存到" Margin="1,0,16,0" />
+                        <local:MyTextBox Grid.Column="1" x:Name="TextCustomFolder" Width="350" HorizontalAlignment="Left"
+                                         HintText="选择一个文件夹" />
+                        <local:MyButton Grid.Column="2" x:Name="BtnCustomFolder" Text="选择文件夹" MinWidth="110" Height="28"
+                                        Padding="13,0" HorizontalAlignment="Left" Margin="12,0,0,0" />
+                    </Grid>
+                    <Grid Height="28" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="文件名" Margin="1,0,16,0" />
+                        <local:MyTextBox Grid.Column="1" x:Name="TextCustomName" Width="300" HorizontalAlignment="Left"
+                                         HintText="留空则按地址自动命名" />
+                    </Grid>
                     <Grid Height="35" Margin="0,0,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
                             <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
-                            <ColumnDefinition Width="Auto" SharedSizeGroup="Button" />
                         </Grid.ColumnDefinitions>
-                        <local:MyButton x:Name="BtnUpdateCheck" Text="检查更新" MinWidth="140" Height="35" Padding="13,0" ColorType="Highlight" Margin="0,0,20,0" />
-                        <local:MyButton x:Name="BtnUpdateInstall" Text="下载并安装" MinWidth="140" Height="35" Padding="13,0" Grid.Column="1" Margin="0,0,20,0" Visibility="Collapsed" />
-                        <local:MyButton x:Name="BtnUpdatePage" Text="打开发布页" MinWidth="140" Height="35" Padding="13,0" Grid.Column="2" />
+                        <local:MyButton x:Name="BtnCustomDownload" Text="开始下载" MinWidth="140" Height="35" Padding="13,0" ColorType="Highlight" Margin="0,0,20,0" />
+                        <local:MyButton x:Name="BtnCustomCancel" Text="取消下载" MinWidth="140" Height="35" Padding="13,0" Grid.Column="1" Visibility="Collapsed" />
                     </Grid>
-                    <StackPanel x:Name="PanUpdateProgress" Visibility="Collapsed" Margin="0,12,0,0">
+                    <StackPanel x:Name="PanCustomProgress" Visibility="Collapsed" Margin="0,12,0,0">
                         <Grid Height="6">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition x:Name="ColUpdateFill" Width="0*" />
-                                <ColumnDefinition x:Name="ColUpdateRest" Width="1*" />
+                                <ColumnDefinition x:Name="ColCustomFill" Width="0*" />
+                                <ColumnDefinition x:Name="ColCustomRest" Width="1*" />
                             </Grid.ColumnDefinitions>
                             <Border Grid.Column="0" Background="{DynamicResource ColorBrush2}" CornerRadius="3" />
                             <Border Grid.Column="1" Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="3" />
                         </Grid>
-                        <TextBlock x:Name="LabUpdateProgress" FontSize="12" Opacity="0.75" Margin="1,6,0,0" Text="正在下载……" />
+                        <TextBlock x:Name="LabCustomProgress" FontSize="12" Opacity="0.75" Margin="1,6,0,0" Text="正在下载……" />
                     </StackPanel>
-                    <TextBlock x:Name="LabUpdateNotesTitle" Text="更新公告" Margin="1,14,0,6" FontSize="12.5" Opacity="0.7" Visibility="Collapsed" />
-                    <Border x:Name="PanUpdateNotes" Visibility="Collapsed" Background="{DynamicResource ColorBrushGlassInner}" CornerRadius="12" Padding="14,10">
-                        <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                            <TextBlock x:Name="TextUpdateNotes" TextWrapping="Wrap" LineHeight="19" />
-                        </ScrollViewer>
-                    </Border>
                 </StackPanel>
             </local:MyCard>
+
         </StackPanel>
     </local:MyScrollViewer>
 </local:MyPageRight>

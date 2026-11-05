@@ -391,6 +391,7 @@ Public FrmSetupLaunch As PageSetupLaunch
 Public FrmSetupUI As PageSetupUI
 Public FrmSetupSystem As PageSetupSystem
 Public FrmSetupFeature As PageSetupFeature
+Public FrmSetupUpdate As PageSetupUpdate
 Public FrmSetupFrp As PageSetupFrp
 Public FrmSetupJava As PageSetupJava
 

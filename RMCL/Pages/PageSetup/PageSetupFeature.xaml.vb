@@ -1,10 +1,11 @@
-﻿Public Class PageSetupFeature
+Public Class PageSetupFeature
 
     Private Sub PageSetupFeature_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded
         '重复加载部分
         PanBack.ScrollToHome()
         RefreshMemoryInfo()
-        UpdateUiInit()
+        RefreshShortcutInfo()
+        InitCustomDownloadFolder()
 
         '非重复加载部分
         Static IsLoaded As Boolean = False
@@ -17,15 +18,8 @@
 
         RefreshJunkInfo()
     End Sub
-    ''' <summary>
-    ''' 离开页面时注销更新状态监听，避免页面的旧实例一直挂在回调上。
-    ''' </summary>
-    Private Sub PageSetupFeature_Unloaded(sender As Object, e As RoutedEventArgs) Handles Me.Unloaded
-        UpdateUiRelease()
-    End Sub
     Public Sub Reload()
         SettingService.RefreshSettings(Me)
-        RefreshSourcePanels()
     End Sub
     Public Sub Reset()
         Try
@@ -181,286 +175,269 @@
 
 #End Region
 
-#Region "软件更新"
+
+#Region "创建快捷方式"
 
     ''' <summary>
-    ''' 状态变化的回调，用于把后台的检查/下载进度同步到界面。
+    ''' 快捷方式显示名，同时决定桌面与开始菜单里的 .lnk 文件名。
     ''' </summary>
-    Private UpdateListener As Action
+    Private Const ShortcutName As String = "RMCL"
 
-    Private Sub UpdateUiInit()
-        If UpdateListener Is Nothing Then UpdateListener = Sub() RunInUi(Sub() RefreshUpdateView())
-        ModUpdate.RegisterListener(UpdateListener)
-        RefreshUpdateView()
-    End Sub
-
-    Private Sub UpdateUiRelease()
-        If UpdateListener IsNot Nothing Then ModUpdate.UnregisterListener(UpdateListener)
-    End Sub
-
-    ''' <summary>下拉框当前选择。直接读控件，避免设置还没落盘时读到旧值。</summary>
-    Private Function SelectedSource() As ModUpdate.UpdateSource
-        Select Case ComboUpdateSource.SelectedIndex
-            Case 1
-                Return ModUpdate.UpdateSource.GitHubMirror
-            Case 2
-                Return ModUpdate.UpdateSource.Official
-            Case Else
-                Return ModUpdate.UpdateSource.GitHubNative
-        End Select
+    ''' <summary>
+    ''' 快捷方式的落点：桌面或开始菜单。
+    ''' </summary>
+    Private Shared Function ShortcutPath(OnDesktop As Boolean) As String
+        Dim Folder As String =
+            If(OnDesktop,
+               Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+               Environment.GetFolderPath(Environment.SpecialFolder.Programs))
+        Return IO.Path.Combine(Folder, ShortcutName & ".lnk")
     End Function
 
-    Private Function SourceShortName() As String
-        Select Case SelectedSource()
-            Case ModUpdate.UpdateSource.GitHubMirror
-                Return "GitHub 镜像"
-            Case ModUpdate.UpdateSource.Official
-                Return "官方源"
-            Case Else
-                Return "GitHub"
-        End Select
-    End Function
-
-    ''' <summary>切换更新源时，显示对应的设置区。</summary>
-    Private Sub ComboUpdateSource_SelectionChanged(sender As Object, e As SelectionChangedEventArgs)
-        RefreshSourcePanels()
+    ''' <summary>
+    ''' 刷新「快捷方式是否已存在」的说明文字。
+    ''' </summary>
+    Private Sub RefreshShortcutInfo()
+        Try
+            Dim Desktop As String = ShortcutPath(True)
+            Dim StartMenu As String = ShortcutPath(False)
+            LabShortcutInfo.Text = $"快捷方式指向：{PathExe}" & vbCrLf &
+                                   $"桌面：{If(IO.File.Exists(Desktop), "已创建", "未创建")}" & vbCrLf &
+                                   $"开始菜单：{If(IO.File.Exists(StartMenu), "已创建", "未创建")}"
+        Catch ex As Exception
+            Logger.Warn(ex, "检查快捷方式失败")
+            LabShortcutInfo.Text = "无法检查快捷方式。"
+        End Try
     End Sub
 
-    Private Sub RefreshSourcePanels()
+    Private Sub BtnShortcutDesktop_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnShortcutDesktop.Click
+        CreateShortcut(True)
+    End Sub
+
+    Private Sub BtnShortcutStartMenu_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnShortcutStartMenu.Click
+        CreateShortcut(False)
+    End Sub
+
+    ''' <summary>
+    ''' 创建 .lnk 快捷方式。
+    '''
+    ''' 借 WScript.Shell 生成标准快捷方式：只需要改目标、工作目录与图标，比手写 IShellLink 互操作短得多。
+    ''' 调用走后期绑定（CallByName），这样在 Option Strict 下也不需要引入 COM 接口定义。
+    ''' </summary>
+    Private Sub CreateShortcut(OnDesktop As Boolean)
+        Dim LinkPath As String = ShortcutPath(OnDesktop)
+        Dim Where As String = If(OnDesktop, "桌面", "开始菜单")
         Try
-            Dim Mode As ModUpdate.UpdateSource = SelectedSource()
-            PanMirrorSettings.Visibility = If(Mode = ModUpdate.UpdateSource.GitHubMirror, Visibility.Visible, Visibility.Collapsed)
-            PanOfficialSettings.Visibility = If(Mode = ModUpdate.UpdateSource.Official, Visibility.Visible, Visibility.Collapsed)
-            RefreshLicenseView()
-            RefreshUpdateView()
+            Dim Folder As String = IO.Path.GetDirectoryName(LinkPath)
+            If Not String.IsNullOrEmpty(Folder) Then IO.Directory.CreateDirectory(Folder)
+
+            Dim Shell As Object = Microsoft.VisualBasic.Interaction.CreateObject("WScript.Shell")
+            If Shell Is Nothing Then Throw New Exception("无法创建 WScript.Shell 对象")
+            Dim Link As Object = CallByName(Shell, "CreateShortCut", CallType.Method, LinkPath)
+            CallByName(Link, "TargetPath", CallType.Let, PathExe)
+            Dim WorkFolder As String = IO.Path.GetDirectoryName(PathExe)
+            If Not String.IsNullOrEmpty(WorkFolder) Then CallByName(Link, "WorkingDirectory", CallType.Let, WorkFolder)
+            CallByName(Link, "IconLocation", CallType.Let, PathExe & ",0")
+            CallByName(Link, "Description", CallType.Let, "Ray Minecraft Launcher")
+            CallByName(Link, "Save", CallType.Method)
+
+            Logger.Info($"已创建快捷方式：{LinkPath}")
+            Hint($"已在{Where}创建快捷方式", HintType.Green)
         Catch ex As Exception
-            Logger.Warn(ex, "刷新更新源界面失败")
+            Logger.Error(ex, $"创建快捷方式失败：{LinkPath}", LogBehavior.Alert)
+            Hint($"创建{Where}快捷方式失败：" & ex.Message, HintType.Red)
+        End Try
+        RefreshShortcutInfo()
+    End Sub
+
+#End Region
+
+#Region "下载自定义文件"
+
+    ''' <summary>当前下载的取消源，供「取消下载」使用。</summary>
+    Private CustomCts As Threading.CancellationTokenSource = Nothing
+    Private CustomRunning As Boolean = False
+
+    ''' <summary>
+    ''' 首次进入时给保存目录一个合理的默认值：优先「下载」文件夹，其次桌面。
+    ''' </summary>
+    Private Sub InitCustomDownloadFolder()
+        If Not String.IsNullOrEmpty(TextCustomFolder.Text) Then Return
+        Try
+            Dim Downloads As String = IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")
+            TextCustomFolder.Text = If(IO.Directory.Exists(Downloads),
+                                        Downloads,
+                                        Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory))
+        Catch ex As Exception
+            Logger.Warn(ex, "初始化自定义下载目录失败")
+        End Try
+    End Sub
+
+    Private Sub BtnCustomFolder_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnCustomFolder.Click
+        Try
+            Dim Dialog As New Ookii.Dialogs.Wpf.VistaFolderBrowserDialog With {
+                .Description = "选择下载文件的保存目录",
+                .UseDescriptionForTitle = True
+            }
+            If Dialog.ShowDialog(FrmMain) = True AndAlso Not String.IsNullOrEmpty(Dialog.SelectedPath) Then
+                TextCustomFolder.Text = Dialog.SelectedPath
+            End If
+        Catch ex As Exception
+            Logger.Warn(ex, "选择保存目录失败")
+            Hint("选择文件夹失败：" & ex.Message, HintType.Red)
+        End Try
+    End Sub
+
+    Private Sub BtnCustomDownload_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnCustomDownload.Click
+        If CustomRunning Then Return
+
+        Dim Url As String = TextCustomUrl.Text.Trim()
+        Dim Test As Uri = Nothing
+        If Not Uri.TryCreate(Url, UriKind.Absolute, Test) OrElse
+           (Test.Scheme <> Uri.UriSchemeHttp AndAlso Test.Scheme <> Uri.UriSchemeHttps) Then
+            Hint("请填入 http 或 https 开头的完整文件地址", HintType.Red)
+            TextCustomUrl.Focus()
+            Return
+        End If
+
+        Dim Folder As String = TextCustomFolder.Text.Trim()
+        If String.IsNullOrEmpty(Folder) OrElse Not IO.Directory.Exists(Folder) Then
+            Hint("保存目录不存在，请重新选择", HintType.Red)
+            Return
+        End If
+
+        '没填文件名就按地址最后一段猜一个，猜不出来再用 download.bin 兜底
+        Dim Name As String = TextCustomName.Text.Trim()
+        If String.IsNullOrEmpty(Name) Then Name = Uri.UnescapeDataString(IO.Path.GetFileName(Test.AbsolutePath))
+        If String.IsNullOrEmpty(Name) Then Name = "download.bin"
+        For Each Invalid As Char In IO.Path.GetInvalidFileNameChars()
+            Name = Name.Replace(Invalid, "_")
+        Next
+
+        Dim Target As String = IO.Path.Combine(Folder, Name)
+        If IO.File.Exists(Target) AndAlso
+           MyMsgBox($"「{Name}」已经存在，是否覆盖？", "下载自定义文件", "覆盖", "取消") <> 1 Then Return
+
+        StartCustomDownload(Url, Target)
+    End Sub
+
+    Private Sub BtnCustomCancel_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnCustomCancel.Click
+        If Not CustomRunning Then Return
+        Try
+            CustomCts?.Cancel()
+            LabCustomProgress.Text = "正在取消……"
+        Catch ex As Exception
+            Logger.Warn(ex, "取消自定义下载失败")
         End Try
     End Sub
 
     ''' <summary>
-    ''' 设置里的更新源与下拉框选中项不一致时同步过来。
-    ''' 退出官方源时会由 ModUpdate 自动切到 GitHub，用户不必自己再去改一次。
+    ''' 下载一个任意直链到指定路径。
+    '''
+    ''' 这里自己走 HttpClient 流式写盘，而不是复用下载管理器：后者是为「一堆游戏文件、多源、断点续传」
+    ''' 设计的，进度按状态粗粒度估算，且对不支持 Range 的简单 HTTP 服务容易停在连接状态。
+    ''' 直链下载只需要「边读边写 + 可取消」，先写 .part 再改名，失败或取消都不会留下半个目标文件。
     ''' </summary>
-    Private Sub SyncSourceSelection()
-        Try
-            Dim Saved As Integer = CInt(Settings.Get(Of Integer)("UpdateSourceMode"))
-            If Saved < 0 OrElse Saved >= ComboUpdateSource.Items.Count Then Return
-            If ComboUpdateSource.SelectedIndex = Saved Then Return
-            Logger.Info($"更新源已被自动切换为 {Saved}，同步下拉框")
-            ComboUpdateSource.SelectedIndex = Saved
-        Catch ex As Exception
-            Logger.Warn(ex, "同步更新源下拉框失败")
-        End Try
-    End Sub
+    Private Sub StartCustomDownload(Url As String, Target As String)
+        CustomRunning = True
+        BtnCustomDownload.IsEnabled = False
+        BtnCustomDownload.Text = "正在下载……"
+        BtnCustomCancel.Visibility = Visibility.Visible
+        SetCustomProgress(0, "正在连接……")
 
-    ''' <summary>刷新官方源的授权状态文字。</summary>
-    Private Sub RefreshLicenseView()
-        Try
-            Dim Token As String = ModUpdateServer.CurrentToken()
-            Dim Expire As Long = ModUpdateServer.CurrentExpire()
+        Dim PartPath As String = Target & ".part"
+        Dim Cts As New Threading.CancellationTokenSource()
+        CustomCts = Cts
 
-            If String.IsNullOrEmpty(Token) Then
-                LabLicenseInfo.Text = "授权状态：未授权"
-                LabLicenseDetail.Text = "检查与下载更新前需要通过验证码授权，一张码默认绑定一台设备。"
-                BtnLicenseClear.IsEnabled = False
-                Return
-            End If
+        RunInNewThread(
+        Sub()
+            Dim Failure As Exception = Nothing
+            Dim Canceled As Boolean = False
+            Dim Total As Long = -1
+            Dim Done As Long = 0
+            Dim LastReport As Long = 0
+            Try
+                Using Client As New Net.Http.HttpClient()
+                    Client.Timeout = Threading.Timeout.InfiniteTimeSpan
+                    Client.DefaultRequestHeaders.UserAgent.ParseAdd("RMCL/" & VersionBaseName)
+                    Using Resp As Net.Http.HttpResponseMessage =
+                        Client.GetAsync(Url, Net.Http.HttpCompletionOption.ResponseHeadersRead, Cts.Token).GetAwaiter().GetResult()
+                        Resp.EnsureSuccessStatusCode()
+                        If Resp.Content.Headers.ContentLength.HasValue Then Total = Resp.Content.Headers.ContentLength.Value
 
-            BtnLicenseClear.IsEnabled = True
-            If Expire <= GetUnixTimestampUtc() Then
-                LabLicenseInfo.Text = "授权状态：已到期"
-                LabLicenseDetail.Text = $"{ModUpdateServer.LicenseSummary()}。到期后服务器会拒绝更新，请联系管理员续期。"
-                Return
-            End If
+                        Using Src As IO.Stream = Resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+                            Using Dst As IO.Stream = IO.File.Create(PartPath)
+                                Dim Buffer(8192) As Byte
+                                Do
+                                    Dim Read As Integer = Src.Read(Buffer, 0, Buffer.Length)
+                                    If Read <= 0 Then Exit Do
+                                    Dst.Write(Buffer, 0, Read)
+                                    Done += Read
+                                    '限制刷新频率，避免每读一次就往 UI 线程丢一个任务
+                                    If GetTimeMs() - LastReport >= 100 Then
+                                        LastReport = GetTimeMs()
+                                        Dim ReportDone As Long = Done, ReportTotal As Long = Total
+                                        RunInUi(Sub() SetCustomProgress(If(ReportTotal > 0, ReportDone / ReportTotal, 0),
+                                                                        If(ReportTotal > 0,
+                                                                           $"正在下载  {ReportDone * 100.0 / ReportTotal:F0}%（{FormatSize(ReportDone)} / {FormatSize(ReportTotal)}）",
+                                                                           $"正在下载  {FormatSize(ReportDone)}")))
+                                    End If
+                                Loop
+                            End Using
+                        End Using
+                    End Using
+                End Using
 
-            LabLicenseInfo.Text = "授权状态：" & ModUpdateServer.LicenseSummary()
-            Dim Mask As String = ModUpdateServer.CurrentMask()
-            LabLicenseDetail.Text = If(String.IsNullOrEmpty(Mask),
-                                       "检查与下载更新都会校验这份授权。",
-                                       $"当前验证码：{Mask}")
-        Catch ex As Exception
-            Logger.Warn(ex, "刷新授权状态失败")
-        End Try
-    End Sub
+                If Done <= 0 Then Throw New Exception("服务器没有返回任何内容")
+                If IO.File.Exists(Target) Then IO.File.Delete(Target)
+                IO.File.Move(PartPath, Target)
+            Catch ex As OperationCanceledException
+                Canceled = True
+            Catch ex As Exception
+                Failure = ex
+            Finally
+                If Canceled OrElse Failure IsNot Nothing Then
+                    Try
+                        If IO.File.Exists(PartPath) Then IO.File.Delete(PartPath)
+                    Catch
+                    End Try
+                End If
+                Cts.Dispose()
+            End Try
 
-    ''' <summary>
-    ''' 弹窗输入验证码并激活，返回是否成功。设置页按钮与「下载前授权检查」共用。
-    ''' 必须在 UI 线程调用（内部要弹模态框）。
-    ''' </summary>
-    Private Function ActivateLicenseInteractive() As Boolean
-        Dim Input As String = MyMsgBoxInput("更新授权",
-            "请输入管理员提供的验证码。一张码默认绑定一台设备；" & vbCrLf &
-            "授权到期后会自动失效，需要续期才能继续更新。", "",
-            Nothing, "XXXX-XXXX-XXXX-XXXX", "激活", "取消")
-        If String.IsNullOrEmpty(Input) Then Return False
-
-        '网络请求不能放在 UI 线程（NetRequestByClient 会直接拒绝），这里另起线程跑完再回来
-        Dim State As ModUpdateServer.LicenseInfo = Nothing
-        Dim Failure As String = ""
-        Dim Worker As New Thread(
+            Dim FinalSize As Long = Done
+            RunInUi(
             Sub()
-                Try
-                    State = ModUpdateServer.Activate(Input)
-                Catch ex As ModUpdateServer.UpdateLicenseException
-                    Failure = ex.Message
-                Catch ex As Exception
-                    Failure = ex.Message
-                End Try
+                CustomRunning = False
+                CustomCts = Nothing
+                BtnCustomDownload.IsEnabled = True
+                BtnCustomDownload.Text = "开始下载"
+                BtnCustomCancel.Visibility = Visibility.Collapsed
+
+                If Canceled Then
+                    PanCustomProgress.Visibility = Visibility.Collapsed
+                    Hint("已取消下载", HintType.Blue)
+                ElseIf Failure IsNot Nothing Then
+                    PanCustomProgress.Visibility = Visibility.Collapsed
+                    Logger.Warn(Failure, $"下载自定义文件失败：{Url}")
+                    Hint("下载失败：" & Failure.Message, HintType.Red)
+                Else
+                    SetCustomProgress(1, $"下载完成：{IO.Path.GetFileName(Target)}（{FormatSize(FinalSize)}）")
+                    Logger.Info($"自定义下载完成：{Target}（{FormatSize(FinalSize)}）")
+                    Hint("下载完成：" & IO.Path.GetFileName(Target), HintType.Green)
+                End If
             End Sub)
-        Worker.IsBackground = True
-        Worker.Start()
-        If Not Worker.Join(20000) Then Failure = "激活请求超时，请检查服务器地址与网络连接"
-
-        If State Is Nothing Then
-            Logger.Warn($"激活更新授权失败：{Failure}")
-            MyMsgBox("激活失败：" & Failure, "更新授权", "知道了", IsWarn:=True)
-            Return False
-        End If
-
-        Hint($"授权成功，剩余 {State.RemainingDays} 天（{State.ExpireText} 到期）", HintType.Green)
-        RefreshLicenseView()
-        RefreshUpdateView()
-        Return True
-    End Function
-
-    Private Sub BtnLicenseActivate_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnLicenseActivate.Click
-        If Not BtnLicenseActivate.IsEnabled Then Return
-        ActivateLicenseInteractive()
-    End Sub
-
-    Private Sub BtnLicenseClear_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnLicenseClear.Click
-        If Not BtnLicenseClear.IsEnabled Then Return
-        If MyMsgBox("解除后本机需要重新输入验证码才能使用官方源。" & vbCrLf &
-                    "验证码本身不会被注销；换机时请让管理员在后台解绑那台设备。",
-                    "解除本地授权", "解除", "取消", IsWarn:=True) <> 1 Then Return
-        ModUpdateServer.ClearLicense()
-        Hint("已解除本地授权", HintType.Green)
-        RefreshLicenseView()
-        RefreshUpdateView()
+        End Sub, "下载自定义文件")
     End Sub
 
     ''' <summary>
-    ''' 按共享状态刷新整个卡片。自动更新与手动更新走同一份状态，界面不会各说各话。
+    ''' 刷新下载进度条。Value 为 0-1。
     ''' </summary>
-    Private Sub RefreshUpdateView()
-        Try
-            '更新源可能被自动切换（例如官方源授权到期后回退到 GitHub），下拉框要跟着走
-            SyncSourceSelection()
-            Dim Info As ModUpdate.UpdateInfo = ModUpdate.Latest
-            Dim CurStatus As ModUpdate.UpdateStatus = ModUpdate.Status
-            Dim VersionText As String = $"当前版本：{VersionBaseName}"
-            Dim LatestText As String = ""
-            If Info IsNot Nothing Then
-                LatestText = $"最新版本：{Info.Version}"
-                If Info.PublishedLocal.HasValue Then LatestText &= $"，发布于 {Info.PublishedLocal.Value:yyyy-MM-dd HH:mm}"
-            End If
-
-            BtnUpdateCheck.IsEnabled = CurStatus <> ModUpdate.UpdateStatus.Checking AndAlso CurStatus <> ModUpdate.UpdateStatus.Downloading
-            BtnUpdateCheck.Text = If(CurStatus = ModUpdate.UpdateStatus.Checking, "检查中……", "检查更新")
-            BtnUpdateInstall.IsEnabled = CurStatus <> ModUpdate.UpdateStatus.Checking AndAlso CurStatus <> ModUpdate.UpdateStatus.Downloading
-            If CurStatus = ModUpdate.UpdateStatus.Downloading Then
-                PanUpdateProgress.Visibility = Visibility.Visible
-                ColUpdateFill.Width = New GridLength(Math.Max(0.001, ModUpdate.Progress), GridUnitType.Star)
-                ColUpdateRest.Width = New GridLength(Math.Max(0.001, 1 - ModUpdate.Progress), GridUnitType.Star)
-                Dim Phase As String = ModUpdate.Phase
-                If String.IsNullOrEmpty(Phase) Then Phase = "正在下载"
-                LabUpdateProgress.Text = $"{Phase.TrimEnd("…"c)}  {ModUpdate.Progress * 100:F0}%"
-            Else
-                PanUpdateProgress.Visibility = Visibility.Collapsed
-            End If
-
-            Select Case CurStatus
-                Case ModUpdate.UpdateStatus.Idle
-                    LabUpdateInfo.Text = VersionText & vbCrLf & $"更新源：{ModUpdate.SourceDescription}"
-                    If SelectedSource() = ModUpdate.UpdateSource.Official Then
-                        LabUpdateInfo.Text &= vbCrLf & "授权状态：" & ModUpdateServer.LicenseSummary()
-                    End If
-                    BtnUpdateInstall.Visibility = Visibility.Collapsed
-                    HideUpdateNotes()
-                Case ModUpdate.UpdateStatus.Checking
-                    LabUpdateInfo.Text = VersionText & vbCrLf & $"正在从{SourceShortName()}检查更新……"
-                    BtnUpdateInstall.Visibility = Visibility.Collapsed
-                    HideUpdateNotes()
-                Case ModUpdate.UpdateStatus.UpToDate
-                    LabUpdateInfo.Text = VersionText & "（已是最新版本）" & vbCrLf & LatestText
-                    BtnUpdateInstall.Visibility = Visibility.Collapsed
-                    HideUpdateNotes()
-                Case ModUpdate.UpdateStatus.Available
-                    LabUpdateInfo.Text = VersionText & vbCrLf & LatestText &
-                        If(Info IsNot Nothing AndAlso Info.HasAsset, "", vbCrLf & "该版本没有提供 exe 资源，请到发布页手动下载。")
-                    BtnUpdateInstall.Text = "下载并安装"
-                    BtnUpdateInstall.Visibility = If(Info IsNot Nothing AndAlso Info.HasAsset, Visibility.Visible, Visibility.Collapsed)
-                    ShowUpdateNotes(Info)
-                Case ModUpdate.UpdateStatus.Downloading
-                    LabUpdateInfo.Text = VersionText & vbCrLf & LatestText
-                    BtnUpdateInstall.Text = "下载中……"
-                    BtnUpdateInstall.Visibility = Visibility.Visible
-                    ShowUpdateNotes(Info)
-                Case ModUpdate.UpdateStatus.Downloaded
-                    LabUpdateInfo.Text = VersionText & vbCrLf & $"已下载 {If(Info?.Version, "")}，退出启动器后自动安装。"
-                    BtnUpdateInstall.Text = "立即重启安装"
-                    BtnUpdateInstall.Visibility = Visibility.Visible
-                    ShowUpdateNotes(Info)
-                Case ModUpdate.UpdateStatus.Failed
-                    LabUpdateInfo.Text = $"更新失败：{ModUpdate.Message}{vbCrLf}{VersionText}"
-                    BtnUpdateInstall.Text = "重新下载"
-                    BtnUpdateInstall.Visibility = If(Info IsNot Nothing AndAlso Info.HasAsset, Visibility.Visible, Visibility.Collapsed)
-                    If Info IsNot Nothing Then ShowUpdateNotes(Info) Else HideUpdateNotes()
-            End Select
-        Catch ex As Exception
-            Logger.Warn(ex, "刷新更新界面失败")
-        End Try
-    End Sub
-
-    Private Sub ShowUpdateNotes(Info As ModUpdate.UpdateInfo)
-        '没有公告就整块收起来，别在设置页留一个空面板
-        If Info Is Nothing OrElse String.IsNullOrEmpty(Info.Notes) Then
-            HideUpdateNotes()
-            Return
-        End If
-        TextUpdateNotes.Text = Info.Notes
-        LabUpdateNotesTitle.Visibility = Visibility.Visible
-        PanUpdateNotes.Visibility = Visibility.Visible
-    End Sub
-
-    Private Sub HideUpdateNotes()
-        LabUpdateNotesTitle.Visibility = Visibility.Collapsed
-        PanUpdateNotes.Visibility = Visibility.Collapsed
-    End Sub
-
-    Private Sub BtnUpdateCheck_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnUpdateCheck.Click
-        '手动检查：结果用 Hint 明确告知（有新版本 / 已是最新 / 失败）
-        RunInNewThread(Sub() ModUpdate.Check(Manual:=True), "检查更新")
-    End Sub
-
-    Private Sub BtnUpdateInstall_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnUpdateInstall.Click
-        Dim Info As ModUpdate.UpdateInfo = ModUpdate.Latest
-        If Info Is Nothing OrElse Not Info.HasAsset Then Return
-
-        '已经下载好了：这里只负责再问一次是否立刻重启
-        If ModUpdate.Status = ModUpdate.UpdateStatus.Downloaded Then
-            Dim Staged As String = ModUpdate.StagedPath
-            If String.IsNullOrEmpty(Staged) Then Return
-            ModUpdate.PromptInstallAfterDownload(Info, Staged)
-            Return
-        End If
-        If ModUpdate.Status = ModUpdate.UpdateStatus.Downloading Then Return
-
-        '官方源：下载前再确认一次授权。过期时直接引导重新激活，免得下到一半被服务器拒绝
-        If Info.IsOfficial AndAlso Not ModUpdateServer.HasValidLicense Then
-            If Not ActivateLicenseInteractive() Then Return
-        End If
-
-        Dim SizeText As String = If(Info.AssetSize > 0, FormatSize(Info.AssetSize), "大小未知")
-        If MyMsgBox($"即将下载 RMCL {Info.Version}（{SizeText}）。" & vbCrLf &
-                    "下载完成后可以立即重启安装，也可以选择在退出启动器时自动安装。",
-                    "安装更新", "下载", "取消") <> 1 Then Return
-        ModUpdate.DownloadAndPrompt(Info)
-    End Sub
-
-    Private Sub BtnUpdatePage_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnUpdatePage.Click
-        OpenWebsite(If(ModUpdate.Latest?.PageUrl, ModUpdate.UpdatePage))
+    Private Sub SetCustomProgress(Value As Double, Message As String)
+        PanCustomProgress.Visibility = Visibility.Visible
+        ColCustomFill.Width = New GridLength(Math.Max(0.001, Value), GridUnitType.Star)
+        ColCustomRest.Width = New GridLength(Math.Max(0.001, 1 - Value), GridUnitType.Star)
+        LabCustomProgress.Text = Message
     End Sub
 
 #End Region

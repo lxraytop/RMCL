@@ -1,4 +1,4 @@
-﻿<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -389,6 +389,9 @@
     <Compile Include="Pages\PageSetup\PageSetupFeature.xaml.vb">
       <DependentUpon>PageSetupFeature.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Pages\PageSetup\PageSetupUpdate.xaml.vb">
+      <DependentUpon>PageSetupUpdate.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Pages\PageSetup\PageSetupFrp.xaml.vb">
       <DependentUpon>PageSetupFrp.xaml</DependentUpon>
     </Compile>
@@ -628,6 +631,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Pages\PageSetup\PageSetupFeature.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Pages\PageSetup\PageSetupUpdate.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

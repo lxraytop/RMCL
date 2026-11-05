@@ -992,6 +992,7 @@ Public Class FormMain
         SetupFeature = 4
         SetupFrp = 5
         SetupJava = 6
+        SetupUpdate = 7
         LinkMain = 0
         InstanceOverall = 0
         InstanceSetup = 1
