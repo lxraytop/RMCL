@@ -1,4 +1,4 @@
-﻿Imports System.Security.Cryptography
+Imports System.Security.Cryptography
 
 Public Class Settings
 
@@ -187,6 +187,22 @@ Public Class Settings
         New Setting("UiHiddenSetupUi", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh),
         New Setting("UiHiddenSetupLink", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh),
         New Setting("UiHiddenSetupSystem", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh),
+        New Setting("UiHiddenSetupFeature", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '设置-功能页
+        New Setting("UiHiddenSetupFrp", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '设置-穿透页
+        New Setting("UiHiddenSetupJava", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '设置-Java 页
+        New Setting("UiHiddenSetupUpdate", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '设置-更新页
+        New Setting("UiHiddenDownloadMod", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '下载-Mod 页
+        New Setting("UiHiddenDownloadPack", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '下载-整合包页
+        New Setting("UiHiddenDownloadDataPack", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '下载-数据包页
+        New Setting("UiHiddenDownloadResourcePack", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '下载-资源包页
+        New Setting("UiHiddenDownloadShader", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '下载-光影包页
+        New Setting("UiHiddenInstanceSetup", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '版本设置-设置页
+        New Setting("UiHiddenInstanceMod", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '版本设置-Mod 管理页
+        New Setting("UiHiddenInstanceSaves", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '版本设置-存档页
+        New Setting("UiHiddenInstanceScreenshot", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '版本设置-截图页
+        New Setting("UiHiddenInstanceResourcePacks", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '版本设置-资源包页
+        New Setting("UiHiddenInstanceShaderPacks", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '版本设置-光影包页
+        New Setting("UiHiddenInstanceExport", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '版本设置-导出页
         New Setting("VersionAdvanceJvm", "", Source:=Sources.Instance),
         New Setting("VersionAdvanceGame", "", Source:=Sources.Instance),
         New Setting("VersionAdvanceAssets", 0, Source:=Sources.Instance),

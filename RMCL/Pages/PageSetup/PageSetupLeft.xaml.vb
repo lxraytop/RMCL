@@ -4,33 +4,87 @@ Public Class PageSetupLeft
     Private IsPageSwitched As Boolean = False '如果在 Loaded 前切换到其他页面，会导致触发 Loaded 时再次切换一次
     Private Sub PageSetupLeft_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded
         '是否处于隐藏的子页面
-        Dim IsHiddenPage As Boolean = False
-        If ItemLaunch.Checked AndAlso Settings.Get(Of Boolean)("UiHiddenSetupLaunch") Then IsHiddenPage = True
-        If ItemUI.Checked AndAlso Settings.Get(Of Boolean)("UiHiddenSetupUi") Then IsHiddenPage = True
-        If ItemSystem.Checked AndAlso Settings.Get(Of Boolean)("UiHiddenSetupSystem") Then IsHiddenPage = True
-        If ItemLink.Checked AndAlso Settings.Get(Of Boolean)("UiHiddenSetupLink") Then IsHiddenPage = True
+        Dim IsHiddenPage As Boolean = IsPageHidden(PageID)
         If PageSetupUI.HiddenForceShow Then IsHiddenPage = False
         '若页面错误，或尚未加载，则继续
         If IsLoad AndAlso Not IsHiddenPage Then Return
         IsLoad = True
         '刷新子页面隐藏情况
         PageSetupUI.HiddenRefresh()
-        '选择第一个未被禁用的子页面
+        '选择第一个未被隐藏的子页面
         If IsPageSwitched Then Return
-        If Not Settings.Get(Of Boolean)("UiHiddenSetupLaunch") Then
-            ItemLaunch.SetChecked(True, False, False)
-        ElseIf Not Settings.Get(Of Boolean)("UiHiddenSetupUi") Then
-            ItemUI.SetChecked(True, False, False)
-        ElseIf Not Settings.Get(Of Boolean)("UiHiddenSetupSystem") Then
-            ItemSystem.SetChecked(True, False, False)
-        ElseIf Not Settings.Get(Of Boolean)("UiHiddenSetupLink") Then
-            ItemLink.SetChecked(True, False, False)
-        Else
-            ItemLaunch.SetChecked(True, False, False)
-        End If
+        CheckPage(FirstAvailablePage())
     End Sub
     Private Sub PageOtherLeft_Unloaded(sender As Object, e As RoutedEventArgs) Handles Me.Unloaded
         IsPageSwitched = False
+    End Sub
+
+    ''' <summary>
+    ''' 该设置子页面是否被「功能隐藏」关掉了。
+    ''' </summary>
+    Friend Shared Function IsPageHidden(ID As FormMain.PageSubType) As Boolean
+        Select Case ID
+            Case FormMain.PageSubType.SetupLaunch
+                Return Settings.Get(Of Boolean)("UiHiddenSetupLaunch")
+            Case FormMain.PageSubType.SetupLink
+                Return Settings.Get(Of Boolean)("UiHiddenSetupLink")
+            Case FormMain.PageSubType.SetupFrp
+                Return Settings.Get(Of Boolean)("UiHiddenSetupFrp")
+            Case FormMain.PageSubType.SetupJava
+                Return Settings.Get(Of Boolean)("UiHiddenSetupJava")
+            Case FormMain.PageSubType.SetupUI
+                Return Settings.Get(Of Boolean)("UiHiddenSetupUi")
+            Case FormMain.PageSubType.SetupFeature
+                Return Settings.Get(Of Boolean)("UiHiddenSetupFeature")
+            Case FormMain.PageSubType.SetupUpdate
+                Return Settings.Get(Of Boolean)("UiHiddenSetupUpdate")
+            Case FormMain.PageSubType.SetupSystem
+                Return Settings.Get(Of Boolean)("UiHiddenSetupSystem")
+            Case Else
+                Return False
+        End Select
+    End Function
+
+    ''' <summary>
+    ''' 按侧栏顺序找出第一个没被隐藏的子页面。全被隐藏时回落到「启动」，避免设置页进去一片空白。
+    ''' </summary>
+    Friend Shared Function FirstAvailablePage() As FormMain.PageSubType
+        For Each ID As FormMain.PageSubType In {
+                FormMain.PageSubType.SetupLaunch,
+                FormMain.PageSubType.SetupLink,
+                FormMain.PageSubType.SetupFrp,
+                FormMain.PageSubType.SetupJava,
+                FormMain.PageSubType.SetupUI,
+                FormMain.PageSubType.SetupFeature,
+                FormMain.PageSubType.SetupUpdate,
+                FormMain.PageSubType.SetupSystem}
+            If Not IsPageHidden(ID) Then Return ID
+        Next
+        Return FormMain.PageSubType.SetupLaunch
+    End Function
+
+    ''' <summary>
+    ''' 勾选侧栏中与指定页面对应的那一项。
+    ''' </summary>
+    Private Sub CheckPage(ID As FormMain.PageSubType)
+        Select Case ID
+            Case FormMain.PageSubType.SetupLink
+                ItemLink.SetChecked(True, False, False)
+            Case FormMain.PageSubType.SetupFrp
+                ItemFrp.SetChecked(True, False, False)
+            Case FormMain.PageSubType.SetupJava
+                ItemJava.SetChecked(True, False, False)
+            Case FormMain.PageSubType.SetupUI
+                ItemUI.SetChecked(True, False, False)
+            Case FormMain.PageSubType.SetupFeature
+                ItemFeature.SetChecked(True, False, False)
+            Case FormMain.PageSubType.SetupUpdate
+                ItemUpdate.SetChecked(True, False, False)
+            Case FormMain.PageSubType.SetupSystem
+                ItemSystem.SetChecked(True, False, False)
+            Case Else
+                ItemLaunch.SetChecked(True, False, False)
+        End Select
     End Sub
 
 #Region "页面切换"
@@ -41,18 +95,8 @@ Public Class PageSetupLeft
     Public PageID As FormMain.PageSubType
     Public Sub New()
         InitializeComponent()
-        '选择第一个未被禁用的子页面
-        If Not Settings.Get(Of Boolean)("UiHiddenSetupLaunch") Then
-            PageID = FormMain.PageSubType.SetupLaunch
-        ElseIf Not Settings.Get(Of Boolean)("UiHiddenSetupUi") Then
-            PageID = FormMain.PageSubType.SetupUI
-        ElseIf Not Settings.Get(Of Boolean)("UiHiddenSetupSystem") Then
-            PageID = FormMain.PageSubType.SetupSystem
-        ElseIf Not Settings.Get(Of Boolean)("UiHiddenSetupLink") Then
-            PageID = FormMain.PageSubType.SetupLink
-        Else
-            PageID = FormMain.PageSubType.SetupLaunch
-        End If
+        '选择第一个未被隐藏的子页面
+        PageID = FirstAvailablePage()
     End Sub
 
     ''' <summary>

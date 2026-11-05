@@ -403,21 +403,61 @@ Refresh:
             End If
             '版本设置子页面
             If FrmInstanceLeft IsNot Nothing Then
-                FrmInstanceLeft.ItemModify.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenFunctionInstanceModify"), Visibility.Collapsed, Visibility.Visible)
+                With FrmInstanceLeft
+                    .ItemSetup.Visibility = HiddenView("UiHiddenInstanceSetup")
+                    .ItemModify.Visibility = HiddenView("UiHiddenFunctionInstanceModify")
+                    .ItemSaves.Visibility = HiddenView("UiHiddenInstanceSaves")
+                    .ItemScreenshot.Visibility = HiddenView("UiHiddenInstanceScreenshot")
+                    .ItemResourcePacks.Visibility = HiddenView("UiHiddenInstanceResourcePacks")
+                    .ItemShaderPacks.Visibility = HiddenView("UiHiddenInstanceShaderPacks")
+                    .ItemExport.Visibility = HiddenView("UiHiddenInstanceExport")
+                    'Mod 管理有「该版本不支持 Mod」的替身项，交给它自己按隐藏设置选择
+                    .RefreshModDisabledVisibility()
+                    '当前正在看的子页面被隐藏了就退回概览
+                    If InstancePageHidden(.PageID) Then .ItemOverall.SetChecked(True, False, False)
+                End With
+            End If
+            '下载子页面
+            If FrmDownloadLeft IsNot Nothing Then
+                With FrmDownloadLeft
+                    .ItemMod.Visibility = HiddenView("UiHiddenDownloadMod")
+                    .ItemPack.Visibility = HiddenView("UiHiddenDownloadPack")
+                    .ItemDataPack.Visibility = HiddenView("UiHiddenDownloadDataPack")
+                    .ItemResourcePack.Visibility = HiddenView("UiHiddenDownloadResourcePack")
+                    .ItemShader.Visibility = HiddenView("UiHiddenDownloadShader")
+                    '当前正在看的子页面被隐藏了就退回「原版游戏」
+                    Dim Current As FormMain.PageSubType = .PageID
+                    Dim CurrentHidden As Boolean =
+                        (Current = FormMain.PageSubType.DownloadMod AndAlso .ItemMod.Visibility <> Visibility.Visible) OrElse
+                        (Current = FormMain.PageSubType.DownloadPack AndAlso .ItemPack.Visibility <> Visibility.Visible) OrElse
+                        (Current = FormMain.PageSubType.DownloadDataPack AndAlso .ItemDataPack.Visibility <> Visibility.Visible) OrElse
+                        (Current = FormMain.PageSubType.DownloadResourcePack AndAlso .ItemResourcePack.Visibility <> Visibility.Visible) OrElse
+                        (Current = FormMain.PageSubType.DownloadShader AndAlso .ItemShader.Visibility <> Visibility.Visible)
+                    If CurrentHidden Then .ItemInstall.SetChecked(True, False, False)
+                End With
             End If
             '设置子页面
             If FrmSetupLeft IsNot Nothing Then
-                FrmSetupLeft.ItemLaunch.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenSetupLaunch"), Visibility.Collapsed, Visibility.Visible)
-                FrmSetupLeft.ItemUI.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenSetupUi"), Visibility.Collapsed, Visibility.Visible)
-                FrmSetupLeft.ItemLink.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenSetupLink"), Visibility.Collapsed, Visibility.Visible)
-                FrmSetupLeft.ItemSystem.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenSetupSystem"), Visibility.Collapsed, Visibility.Visible)
-                '隐藏左边选择卡
-                Dim AvaliableCount As Integer = 0
-                If Not Settings.Get(Of Boolean)("UiHiddenSetupLaunch") Then AvaliableCount += 1
-                If Not Settings.Get(Of Boolean)("UiHiddenSetupUi") Then AvaliableCount += 1
-                If Not Settings.Get(Of Boolean)("UiHiddenSetupLink") Then AvaliableCount += 1
-                If Not Settings.Get(Of Boolean)("UiHiddenSetupSystem") Then AvaliableCount += 1
-                FrmSetupLeft.PanItem.Visibility = If(AvaliableCount < 2 AndAlso Not HiddenForceShow, Visibility.Collapsed, Visibility.Visible)
+                Dim Items As New List(Of MyListItem) From {
+                    FrmSetupLeft.ItemLaunch, FrmSetupLeft.ItemLink, FrmSetupLeft.ItemFrp, FrmSetupLeft.ItemJava,
+                    FrmSetupLeft.ItemUI, FrmSetupLeft.ItemFeature, FrmSetupLeft.ItemUpdate, FrmSetupLeft.ItemSystem}
+                For Each Item In Items
+                    Item.Visibility = HiddenView(HiddenSetupKey(Item))
+                Next
+                Dim Available As List(Of MyListItem) = Items.Where(Function(i) i.Visibility = Visibility.Visible).ToList()
+                If Available.Count = 0 Then
+                    '全被隐藏时至少留「启动」，否则设置页进去就是一片空白
+                    FrmSetupLeft.ItemLaunch.Visibility = Visibility.Visible
+                    Available.Add(FrmSetupLeft.ItemLaunch)
+                End If
+                '正在看的子页面被隐藏了就切到第一个可用的（正停在个性化编辑隐藏项时不动，否则一勾就把自己踢走）
+                Dim CurrentItem As MyListItem = Items.FirstOrDefault(Function(i) Val(i.Tag) = CInt(FrmSetupLeft.PageID))
+                If CurrentItem IsNot Nothing AndAlso CurrentItem.Visibility <> Visibility.Visible AndAlso
+                   FrmSetupLeft.PageID <> FormMain.PageSubType.SetupUI Then
+                    Available(0).SetChecked(True, False, False)
+                End If
+                '只剩一个子页面时没必要留侧栏
+                FrmSetupLeft.PanItem.Visibility = If(Available.Count < 2 AndAlso Not HiddenForceShow, Visibility.Collapsed, Visibility.Visible)
             End If
             '各个页面的入口
             If FrmMain.PageCurrent = FormMain.PageType.InstanceSelect Then FrmSelectRight.BtnEmptyDownload_Loaded()
@@ -430,35 +470,88 @@ Refresh:
         End Try
     End Sub
 
+    ''' <summary>
+    ''' 按设置决定某个隐藏项该不该显示。F12 临时显示时强制全部可见。
+    ''' </summary>
+    Private Shared Function HiddenView(Key As String) As Visibility
+        If HiddenForceShow Then Return Visibility.Visible
+        Return If(Settings.Get(Of Boolean)(Key), Visibility.Collapsed, Visibility.Visible)
+    End Function
+
+    ''' <summary>
+    ''' 设置子页面的侧栏项对应的隐藏设置键。
+    ''' </summary>
+    Private Shared Function HiddenSetupKey(Item As MyListItem) As String
+        If Item Is FrmSetupLeft.ItemLaunch Then Return "UiHiddenSetupLaunch"
+        If Item Is FrmSetupLeft.ItemLink Then Return "UiHiddenSetupLink"
+        If Item Is FrmSetupLeft.ItemFrp Then Return "UiHiddenSetupFrp"
+        If Item Is FrmSetupLeft.ItemJava Then Return "UiHiddenSetupJava"
+        If Item Is FrmSetupLeft.ItemUI Then Return "UiHiddenSetupUi"
+        If Item Is FrmSetupLeft.ItemFeature Then Return "UiHiddenSetupFeature"
+        If Item Is FrmSetupLeft.ItemUpdate Then Return "UiHiddenSetupUpdate"
+        If Item Is FrmSetupLeft.ItemSystem Then Return "UiHiddenSetupSystem"
+        Return ""
+    End Function
+
+    ''' <summary>
+    ''' 版本设置里某个子页面是否已被隐藏（依据侧栏项当前的可见性判断）。
+    ''' </summary>
+    Private Shared Function InstancePageHidden(ID As FormMain.PageSubType) As Boolean
+        Dim Item As MyListItem = Nothing
+        Select Case ID
+            Case FormMain.PageSubType.InstanceSetup
+                Item = FrmInstanceLeft.ItemSetup
+            Case FormMain.PageSubType.InstanceModify
+                Item = FrmInstanceLeft.ItemModify
+            Case FormMain.PageSubType.InstanceSaves
+                Item = FrmInstanceLeft.ItemSaves
+            Case FormMain.PageSubType.InstanceScreenshot
+                Item = FrmInstanceLeft.ItemScreenshot
+            Case FormMain.PageSubType.InstanceResourcePacks
+                Item = FrmInstanceLeft.ItemResourcePacks
+            Case FormMain.PageSubType.InstanceShaderPacks
+                Item = FrmInstanceLeft.ItemShaderPacks
+            Case FormMain.PageSubType.InstanceExport
+                Item = FrmInstanceLeft.ItemExport
+            Case FormMain.PageSubType.InstanceMod
+                'Mod 管理有两个替身项，都藏起来才算隐藏
+                Return FrmInstanceLeft.ItemMod.Visibility <> Visibility.Visible AndAlso
+                       FrmInstanceLeft.ItemModDisabled.Visibility <> Visibility.Visible
+            Case Else
+                Return False
+        End Select
+        Return Item IsNot Nothing AndAlso Item.Visibility <> Visibility.Visible
+    End Function
+
     'UI 协同改变
     Private Sub HiddenSetupMain() Handles CheckHiddenPageSetup.Change
-        '设置主页面
+        '设置主页面：勾上就把所有设置子页面一起勾上，取消时再一起放开
         If CheckHiddenPageSetup.Checked Then
-            '开启
-            CheckHiddenSetupLaunch.Checked = True
-            CheckHiddenSetupSystem.Checked = True
-            CheckHiddenSetupLink.Checked = True
-            CheckHiddenSetupUI.Checked = True
+            For Each Item In HiddenSetupItems()
+                Item.Checked = True
+            Next
         Else
-            '关闭
-            If Settings.Get(Of Boolean)("UiHiddenSetupLaunch") AndAlso Settings.Get(Of Boolean)("UiHiddenSetupUi") AndAlso Settings.Get(Of Boolean)("UiHiddenSetupSystem") AndAlso Settings.Get(Of Boolean)("UiHiddenSetupLink") Then
-                CheckHiddenSetupLaunch.Checked = False
-                CheckHiddenSetupSystem.Checked = False
-                CheckHiddenSetupLink.Checked = False
-                CheckHiddenSetupUI.Checked = False
+            If HiddenSetupItems().All(Function(i) i.Checked) Then
+                For Each Item In HiddenSetupItems()
+                    Item.Checked = False
+                Next
             End If
         End If
     End Sub
-    Private Sub HiddenSetupSub() Handles CheckHiddenSetupLaunch.Change, CheckHiddenSetupSystem.Change, CheckHiddenSetupLink.Change, CheckHiddenSetupUI.Change
+    Private Sub HiddenSetupSub() Handles CheckHiddenSetupLaunch.Change, CheckHiddenSetupSystem.Change, CheckHiddenSetupLink.Change,
+                                        CheckHiddenSetupUI.Change, CheckHiddenSetupFeature.Change, CheckHiddenSetupFrp.Change,
+                                        CheckHiddenSetupJava.Change, CheckHiddenSetupUpdate.Change
         '设置子页面
-        If Settings.Get(Of Boolean)("UiHiddenSetupLaunch") AndAlso Settings.Get(Of Boolean)("UiHiddenSetupUi") AndAlso Settings.Get(Of Boolean)("UiHiddenSetupSystem") AndAlso Settings.Get(Of Boolean)("UiHiddenSetupLink") Then
-            '已被全部隐藏
-            CheckHiddenPageSetup.Checked = True
-        Else
-            '未被全部隐藏
-            CheckHiddenPageSetup.Checked = False
-        End If
+        CheckHiddenPageSetup.Checked = HiddenSetupItems().All(Function(i) i.Checked)
     End Sub
+    ''' <summary>
+    ''' 「设置」主页面下所有可隐藏的子页面勾选项。
+    ''' </summary>
+    Private Function HiddenSetupItems() As List(Of MyCheckBox)
+        Return New List(Of MyCheckBox) From {
+            CheckHiddenSetupLaunch, CheckHiddenSetupLink, CheckHiddenSetupFrp, CheckHiddenSetupJava,
+            CheckHiddenSetupUI, CheckHiddenSetupFeature, CheckHiddenSetupUpdate, CheckHiddenSetupSystem}
+    End Function
     '警告提示
     Private Sub HiddenHint(sender As Object, user As Boolean) Handles CheckHiddenFunctionHidden.Change, CheckHiddenPageSetup.Change, CheckHiddenSetupUI.Change
         If AniControlEnabled = 0 AndAlso sender.Checked Then Hint("按 F12 即可暂时关闭功能隐藏设置。千万别忘了，要不然设置就改不回来了……")

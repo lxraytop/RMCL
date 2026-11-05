@@ -11,7 +11,18 @@ Public Class PageInstanceLeft
     End Sub
 
     Public Sub RefreshModDisabled() Handles Me.Loaded
-        If Instance IsNot Nothing AndAlso Instance.Modable Then
+        RefreshModDisabledVisibility()
+    End Sub
+
+    ''' <summary>
+    ''' 决定「Mod 管理」那一项的显示：被功能隐藏关掉时两项都藏起来，
+    ''' 否则按该版本是否支持 Mod 在正常页 / 提示页之间二选一。
+    ''' </summary>
+    Public Sub RefreshModDisabledVisibility()
+        If Settings.Get(Of Boolean)("UiHiddenInstanceMod") Then
+            ItemMod.Visibility = Visibility.Collapsed
+            ItemModDisabled.Visibility = Visibility.Collapsed
+        ElseIf Instance IsNot Nothing AndAlso Instance.Modable Then
             ItemMod.Visibility = Visibility.Visible
             ItemModDisabled.Visibility = Visibility.Collapsed
         Else
