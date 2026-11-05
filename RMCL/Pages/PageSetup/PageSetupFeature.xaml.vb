@@ -361,7 +361,11 @@ Public Class PageSetupFeature
                 Do While Task.State = LoadState.Loading
                     Dim Value As Double = Task.Progress
                     If Double.IsNaN(Value) OrElse Value < 0 Then Value = 0
-                    RunInUi(Sub() SetCustomProgress(Value, $"正在下载  {Value * 100:F0}%"))
+                    '大小与速度都取自 NetFile：它每 200ms 自己算一次速率，比在界面层估算准
+                    Dim Done As Long = File.DownloadDone
+                    Dim Total As Long = File.FileSize
+                    Dim Speed As Long = File.Speed
+                    RunInUi(Sub() SetCustomProgress(Value, CustomDownloadText(Value, Done, Total, Speed)))
                     '长时间停在很低的进度上，多半还在连接或探测文件大小
                     If Value < 0.05 AndAlso GetTimeMs() - StartTick > 3000 Then
                         RunInUi(Sub()
@@ -426,6 +430,21 @@ Public Class PageSetupFeature
             End Sub)
         End Sub, "下载自定义文件")
     End Sub
+
+    ''' <summary>
+    ''' 拼出下载中的状态文字：百分比 / 已下载与总大小 / 当前速度。
+    ''' 服务器没给 Content-Length 时只显示已下载量。
+    ''' </summary>
+    Private Shared Function CustomDownloadText(Value As Double, Done As Long, Total As Long, Speed As Long) As String
+        Dim Parts As New List(Of String) From {$"{Value * 100:F0}%"}
+        If Total > 0 Then
+            Parts.Add($"{FormatSize(Done)} / {FormatSize(Total)}")
+        ElseIf Done > 0 Then
+            Parts.Add(FormatSize(Done))
+        End If
+        If Speed > 0 Then Parts.Add(FormatSize(Speed) & "/s")
+        Return "正在下载  " & String.Join("  ", Parts)
+    End Function
 
     ''' <summary>
     ''' 刷新下载进度条。Value 为 0-1。

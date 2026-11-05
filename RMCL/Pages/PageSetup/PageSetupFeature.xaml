@@ -8,8 +8,6 @@
         <StackPanel x:Name="PanMain" Margin="25,10">
             <local:MyCard Margin="0,15" Title="创建快捷方式">
                 <StackPanel Margin="25,40,25,18">
-                    <TextBlock TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,10"
-                               Text="在桌面或开始菜单放一个快捷方式，双击即可打开启动器。" />
                     <TextBlock x:Name="LabShortcutInfo" Margin="1,0,0,12" FontSize="12.5" TextWrapping="Wrap"
                                Foreground="{DynamicResource ColorBrush3}" Text="正在检查快捷方式……" />
                     <Grid Height="35" Margin="0,0,0,0">
@@ -66,32 +64,37 @@
                                Text="填入一个直链地址，把文件下载到指定目录。适合下载没有收录进下载页的资源；需要登录、带防盗链或必须先进网页才能拿到地址的文件不适用。" />
                     <Grid Height="28" Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="70" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="文件地址" Margin="1,0,16,0" />
-                        <local:MyTextBox Grid.Column="1" x:Name="TextCustomUrl" Width="420" HorizontalAlignment="Left"
+                        <local:MyTextBox Grid.Column="1" x:Name="TextCustomUrl" Width="420" Height="28"
+                                         HorizontalAlignment="Left" VerticalAlignment="Center"
                                          HintText="https://example.com/file.zip" />
                     </Grid>
                     <Grid Height="28" Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="70" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="保存到" Margin="1,0,16,0" />
-                        <local:MyTextBox Grid.Column="1" x:Name="TextCustomFolder" Width="350" HorizontalAlignment="Left"
+                        <local:MyTextBox Grid.Column="1" x:Name="TextCustomFolder" Width="420" Height="28"
+                                         HorizontalAlignment="Left" VerticalAlignment="Center"
                                          HintText="选择一个文件夹" />
                         <local:MyButton Grid.Column="2" x:Name="BtnCustomFolder" Text="选择文件夹" MinWidth="110" Height="28"
-                                        Padding="13,0" HorizontalAlignment="Left" Margin="12,0,0,0" />
+                                        Padding="13,0" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="12,0,0,0" />
                     </Grid>
                     <Grid Height="28" Margin="0,0,0,12">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="70" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="文件名" Margin="1,0,16,0" />
-                        <local:MyTextBox Grid.Column="1" x:Name="TextCustomName" Width="300" HorizontalAlignment="Left"
+                        <local:MyTextBox Grid.Column="1" x:Name="TextCustomName" Width="420" Height="28"
+                                         HorizontalAlignment="Left" VerticalAlignment="Center"
                                          HintText="留空则按地址自动命名" />
                     </Grid>
                     <Grid Height="35" Margin="0,0,0,0">
