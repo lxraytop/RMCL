@@ -1,4 +1,4 @@
-# 构建说明（RMCL 2.20.0.1）
+# 构建说明（RMCL 2.20.1.0）
 
 RMCL 基于上游 2.14.0.0 开源基线重构，技术栈与上游一致：**.NET Framework 4.8 + WPF + VB.NET**（主工程为传统 vbproj，`RMCLCS` 与 `MeloongCore` 为 SDK 风格 csproj）。
 
@@ -81,12 +81,24 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 
 | 文件 | 大小 | 说明 |
 | --- | --- | --- |
-| `dist/RMCL 2.20.0.1/RMCL.exe` | 5.75 MB | 主程序，版本信息 `2.20.0.1 / Ray Minecraft Launcher` |
-| `dist/RMCL 2.20.0.1/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
-| `dist/RMCL-2.20.0.1-win.zip` | 2.58 MB | 上述两个文件的压缩包（sha256 `11ecc78e9b582520…`） |
+| `dist/RMCL 2.20.1.0/RMCL.exe` | 5.77 MB | 主程序，版本信息 `2.20.1.0 / Ray Minecraft Launcher` |
+| `dist/RMCL 2.20.1.0/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
+| `dist/RMCL-2.20.1.0-win.zip` | 2.58 MB | 上述两个文件的压缩包（sha256 `fa7562390cbc8964…`） |
 
-对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.20.0.1>，
-资产 `RMCL.exe`（6,025,216 B，sha256 `69b7ef88224692ce…`）与 `RMCL-2.20.0.1-win.zip`（2,701,353 B）。
+对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.20.1.0>，
+资产 `RMCL.exe`（6,053,888 B，sha256 `5d8874ace8486e47…`）与 `RMCL-2.20.1.0-win.zip`（2,710,336 B）。
+
+### 2.20.1.0 主要变更
+
+- 设置里新增「更新」独立子页面：版本信息、一键复制版本信息、更新源与官方源授权、
+  检查更新 / 下载并安装 / 立即重启安装、下载进度与更新公告，原来挤在「功能」页里的
+  软件更新整块迁出。
+- 设置 → 功能新增两项：「创建快捷方式」可在桌面或开始菜单生成指向当前 exe 的快捷方式，
+  「下载自定义文件」可填直链下载到指定目录，显示百分比、已下载 / 总大小与实时速度，
+  随时可取消，失败或取消都不会留下半个文件。
+- 「功能隐藏」补齐当前版本的全部页面与子页面：设置子页面（穿透 / Java / 功能 / 更新等）、
+  下载子页面、版本设置子页面（设置 / Mod 管理 / 存档 / 截图 / 资源包 / 光影包 / 导出）
+  均可单独隐藏，并按层级分组排列；被隐藏的当前子页面会自动回落到可用页。
 
 ### 2.20.0.1 主要变更
 
