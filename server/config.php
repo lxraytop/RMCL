@@ -79,6 +79,9 @@ return [
         // RaySkin 一键登录：允许校验的皮肤站域名，避免被拿来做 SSRF
         'rayskin_auto_register' => true,
         'rayskin_hosts' => ['mc.lxray.top', 'littleskin.cn'],
+        // join 被网络/代理拦截时，允许客户端提交 accessToken 由服务端调用 validate 校验。
+        // 关闭后只能走标准 join + hasJoined 流程。
+        'rayskin_allow_token' => true,
 
         // 单人每分钟最多发送的消息条数
         'msg_rate_per_min' => 40,

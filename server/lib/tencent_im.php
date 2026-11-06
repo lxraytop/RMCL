@@ -271,6 +271,51 @@ function friend_http_request(string $url, string $method = 'GET', ?string $body 
     return $result === false ? null : (string) $result;
 }
 
+/**
+ * 与 friend_http_request 相同，但同时返回状态码，用于需要区分 204/403 的校验接口。
+ *
+ * @return array{0:int,1:string} [status, body]
+ */
+function friend_http_request_ex(string $url, string $method = 'GET', ?string $body = null, int $timeout = 8): array
+{
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_CONNECTTIMEOUT => min(5, $timeout),
+            CURLOPT_CUSTOMREQUEST => $method,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json; charset=utf-8'],
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_FOLLOWLOCATION => false,
+        ]);
+        if ($method !== 'GET' && $body !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        }
+        $result = curl_exec($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        return [$code, $result === false ? '' : (string) $result];
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => $method,
+            'header' => "Content-Type: application/json; charset=utf-8\r\n",
+            'content' => $body ?? '',
+            'timeout' => $timeout,
+            'ignore_errors' => true,
+        ],
+        'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+    ]);
+    $result = @file_get_contents($url, false, $context);
+    $status = 0;
+    if (isset($http_response_header[0]) && preg_match('#\s(\d{3})\b#', (string) $http_response_header[0], $m)) {
+        $status = (int) $m[1];
+    }
+    return [$status, $result === false ? '' : (string) $result];
+}
+
 /** 读取群对应的 IM GroupId（表在 friend.php 中建） */
 function friend_group_im_id(int $groupId): string
 {

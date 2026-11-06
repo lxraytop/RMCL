@@ -274,6 +274,8 @@ Public Class PageFriendAccount
     Private RayskinPass As String = ""
     Private RayskinServer As String = ""
     Private RayskinAccess As String = ""
+    ''' <summary>最近一次 RaySkin 请求的地址，出错时写进日志便于定位。</summary>
+    Private LastRayskinUrl As String = ""
     Private RayskinUuid As String = ""
     Private RayskinName As String = ""
 
@@ -319,7 +321,7 @@ Public Class PageFriendAccount
     ''' 密码只在客户端与 RaySkin 之间传递，不会发给好友服务端。
     ''' </summary>
     Private Sub BtnRayskinLogin_Click(sender As Object, e As EventArgs) Handles BtnRayskinLogin.Click
-        If String.IsNullOrEmpty(RayskinEmail) OrElse String.IsNullOrEmpty(RayskinPass) Then
+        If String.IsNullOrEmpty(RayskinEmail) Then
             Status("没有可用的 RaySkin 登录记录", True)
             Return
         End If
@@ -338,80 +340,62 @@ Public Class PageFriendAccount
                 Dim Uuid As String = CachedUuid
                 Dim PlayerName As String = CachedName
                 Dim ServerId As String = Guid.NewGuid().ToString("N")
-                Dim Joined As Boolean = False
+                Dim UseToken As Boolean = False
 
-                '1. 优先复用启动页缓存的 accessToken：既快，也不会把启动页的会话顶掉
+                '不同电脑上「认证服务器」的写法可能不同（少写或多写 /api/yggdrasil），先校正再请求
+                Dim Resolved As String = RayskinResolveBase(Server)
+                If Not String.IsNullOrEmpty(Resolved) Then Server = Resolved
+
+                '1. 标准流程：join 一次，让服务端用 hasJoined 校验
                 If Not String.IsNullOrEmpty(Access) AndAlso Not String.IsNullOrEmpty(Uuid) Then
                     Try
                         RayskinJoin(Server, Access, Uuid, ServerId)
-                        Joined = True
-                        Logger.Info("RaySkin 一键登录：复用本机缓存令牌")
+                        Logger.Info("RaySkin 一键登录：已 join（标准流程）")
                     Catch ex As HttpRequestCodeException
-                        Logger.Info($"RaySkin 缓存令牌已失效（HTTP {CInt(ex.StatusCode)}），改用账号密码重新认证")
+                        'join 被网络/代理拦截、或站点不提供该端点时，改用 accessToken 校验
+                        UseToken = True
+                        Logger.Info($"RaySkin join 不可用（HTTP {CInt(ex.StatusCode)}），改用 accessToken 校验")
                     End Try
+                Else
+                    UseToken = True
                 End If
 
-                '2. 缓存不可用：用保存的密码重新认证；多角色时再用 refresh 指定角色
-                If Not Joined Then
+                '2. 没有可用令牌：用保存的密码重新认证（多角色会再走一次 refresh）
+                If String.IsNullOrEmpty(Access) OrElse String.IsNullOrEmpty(Uuid) Then
                     If String.IsNullOrEmpty(Pass) Then
                         Throw New FriendApiException("E_RAYSKIN", "本机 RaySkin 会话已失效，且没有保存密码。请先到「启动」页登录一次。")
                     End If
-                    Dim ClientToken As String = Guid.NewGuid().ToString("N")
-                    Dim AuthBody As New JObject From {
-                        {"agent", New JObject From {{"name", "Minecraft"}, {"version", 1}}},
-                        {"username", Email}, {"password", Pass},
-                        {"clientToken", ClientToken}, {"requestUser", True}
-                    }
-                    Dim AuthRaw As String = NetRequestByClient(Server & "/authserver/authenticate", HttpMethod.Post,
-                        AuthBody.ToString(Formatting.None), "application/json", "application/json", 20000, Nothing, RequireJson:=True)
-                    Dim Auth As JObject = JObject.Parse(AuthRaw)
-                    Access = Auth.Value(Of String)("accessToken")
-                    If String.IsNullOrEmpty(Access) Then
-                        Throw New FriendApiException("E_RAYSKIN", "RaySkin 没有返回 accessToken，请先到「启动」页重新登录")
-                    End If
-                    Dim Profile As JObject = TryCast(Auth("selectedProfile"), JObject)
-                    If Profile Is Nothing Then
-                        '多角色账号在 authenticate 时不会自动选角色，需要再用 refresh 指定
-                        Dim Chosen As JObject = ChooseRayskinProfile(TryCast(Auth("availableProfiles"), JArray), CachedUuid, CachedName)
-                        If Chosen Is Nothing Then
-                            Throw New FriendApiException("E_RAYSKIN", "这个 RaySkin 账号下没有可用角色，请先在皮肤站创建角色")
-                        End If
-                        Dim RefreshBody As New JObject From {
-                            {"accessToken", Access}, {"clientToken", ClientToken},
-                            {"selectedProfile", New JObject From {
-                                {"id", Chosen.Value(Of String)("id")},
-                                {"name", Chosen.Value(Of String)("name")}
-                            }},
-                            {"requestUser", True}
-                        }
-                        Dim RefreshRaw As String = NetRequestByClient(Server & "/authserver/refresh", HttpMethod.Post,
-                            RefreshBody.ToString(Formatting.None), "application/json", "application/json", 20000, Nothing, RequireJson:=True)
-                        Dim Refreshed As JObject = JObject.Parse(RefreshRaw)
-                        Dim NewAccess As String = Refreshed.Value(Of String)("accessToken")
-                        Dim NewProfile As JObject = TryCast(Refreshed("selectedProfile"), JObject)
-                        If String.IsNullOrEmpty(NewAccess) OrElse NewProfile Is Nothing Then
-                            Throw New FriendApiException("E_RAYSKIN", "RaySkin 未能切换到角色「" & Chosen.Value(Of String)("name") & "」")
-                        End If
-                        Access = NewAccess
-                        Profile = NewProfile
-                    End If
-                    Uuid = Profile.Value(Of String)("id")
-                    PlayerName = Profile.Value(Of String)("name")
-                    RayskinJoin(Server, Access, Uuid, ServerId)
+                    RayskinPasswordLogin(Server, Email, Pass, CachedUuid, CachedName, Access, Uuid, PlayerName)
                 End If
 
-                '3. hasJoined 需要角色名，缓存里没有就补查一次
-                If String.IsNullOrEmpty(PlayerName) Then
-                    PlayerName = RayskinProfileName(Server, Uuid)
-                    If String.IsNullOrEmpty(PlayerName) Then PlayerName = CachedName
-                End If
-
-                '4. 由好友服务端调用 hasJoined 完成最终校验
-                Dim Param As New JObject From {
-                    {"email", Email}, {"uuid", Uuid}, {"name", PlayerName},
-                    {"server_id", ServerId}, {"server", Server}
+                Dim Payload As New JObject From {
+                    {"email", Email}, {"uuid", Uuid}, {"name", PlayerName}, {"server", Server}
                 }
-                Dim Data As JObject = ModFriend.FriendApi("rayskin_login", Param, False, 25000)
+                If UseToken Then
+                    '兜底：不依赖 join，由服务端用 accessToken + profile 校验身份
+                    Payload("access_token") = Access
+                Else
+                    If String.IsNullOrEmpty(PlayerName) Then
+                        PlayerName = RayskinProfileName(Server, Uuid)
+                        If String.IsNullOrEmpty(PlayerName) Then PlayerName = CachedName
+                    End If
+                    Payload("name") = PlayerName
+                    Payload("server_id") = ServerId
+                End If
+
+                Dim Data As JObject
+                Try
+                    Data = ModFriend.FriendApi("rayskin_login", Payload, False, 25000)
+                Catch ex As FriendApiException When UseToken AndAlso ex.Code = "E_TOKEN_INVALID"
+                    'accessToken 也过期了：重新认证后再试一次
+                    If String.IsNullOrEmpty(Pass) Then Throw
+                    Logger.Info("RaySkin accessToken 已失效，重新认证后重试")
+                    RayskinPasswordLogin(Server, Email, Pass, CachedUuid, CachedName, Access, Uuid, PlayerName)
+                    Payload("access_token") = Access
+                    Payload("name") = PlayerName
+                    Data = ModFriend.FriendApi("rayskin_login", Payload, False, 25000)
+                End Try
+
                 ModFriend.FriendLoginSucceed(Data.Value(Of String)("token"), CType(Data("user"), JObject))
                 RunInUi(
                 Sub()
@@ -441,14 +425,104 @@ Public Class PageFriendAccount
     End Sub
 
     ''' <summary>
+    ''' 用账号密码重新认证 RaySkin，拿到 accessToken 与角色信息。
+    ''' 多角色账号在 authenticate 时不会自动选角色，需要再用 refresh 指定。
+    ''' 必须在工作线程调用。
+    ''' </summary>
+    Private Sub RayskinPasswordLogin(Server As String, Email As String, Pass As String,
+                                     CachedUuid As String, CachedName As String,
+                                     ByRef Access As String, ByRef Uuid As String, ByRef PlayerName As String)
+        Dim ClientToken As String = Guid.NewGuid().ToString("N")
+        Dim AuthBody As New JObject From {
+            {"agent", New JObject From {{"name", "Minecraft"}, {"version", 1}}},
+            {"username", Email}, {"password", Pass},
+            {"clientToken", ClientToken}, {"requestUser", True}
+        }
+        LastRayskinUrl = Server.TrimEnd("/"c) & "/authserver/authenticate"
+        Dim AuthRaw As String = NetRequestByClient(LastRayskinUrl, HttpMethod.Post,
+            AuthBody.ToString(Formatting.None), "application/json", "application/json", 20000, Nothing,
+            RequireJson:=True, SimulateBrowserHeaders:=True)
+        Dim Auth As JObject = JObject.Parse(AuthRaw)
+        Access = Auth.Value(Of String)("accessToken")
+        If String.IsNullOrEmpty(Access) Then
+            Throw New FriendApiException("E_RAYSKIN", "RaySkin 没有返回 accessToken，请先到「启动」页重新登录")
+        End If
+        Dim Profile As JObject = TryCast(Auth("selectedProfile"), JObject)
+        If Profile Is Nothing Then
+            Dim Chosen As JObject = ChooseRayskinProfile(TryCast(Auth("availableProfiles"), JArray), CachedUuid, CachedName)
+            If Chosen Is Nothing Then
+                Throw New FriendApiException("E_RAYSKIN", "这个 RaySkin 账号下没有可用角色，请先在皮肤站创建角色")
+            End If
+            Dim RefreshBody As New JObject From {
+                {"accessToken", Access}, {"clientToken", ClientToken},
+                {"selectedProfile", New JObject From {
+                    {"id", Chosen.Value(Of String)("id")},
+                    {"name", Chosen.Value(Of String)("name")}
+                }},
+                {"requestUser", True}
+            }
+            LastRayskinUrl = Server.TrimEnd("/"c) & "/authserver/refresh"
+            Dim RefreshRaw As String = NetRequestByClient(LastRayskinUrl, HttpMethod.Post,
+                RefreshBody.ToString(Formatting.None), "application/json", "application/json", 20000, Nothing,
+                RequireJson:=True, SimulateBrowserHeaders:=True)
+            Dim Refreshed As JObject = JObject.Parse(RefreshRaw)
+            Dim NewAccess As String = Refreshed.Value(Of String)("accessToken")
+            Dim NewProfile As JObject = TryCast(Refreshed("selectedProfile"), JObject)
+            If String.IsNullOrEmpty(NewAccess) OrElse NewProfile Is Nothing Then
+                Throw New FriendApiException("E_RAYSKIN", "RaySkin 未能切换到角色「" & Chosen.Value(Of String)("name") & "」")
+            End If
+            Access = NewAccess
+            Profile = NewProfile
+        End If
+        Uuid = Profile.Value(Of String)("id")
+        PlayerName = Profile.Value(Of String)("name")
+    End Sub
+
+    ''' <summary>
+    ''' 校正认证服务器基地址。
+    ''' 兼容两种常见填法：只填站点根（https://mc.lxray.top）或多写了一段路径；
+    ''' 返回真正能响应 Yggdrasil 元信息的地址（通常是 .../api/yggdrasil）。
+    ''' 必须在工作线程调用。
+    ''' </summary>
+    Private Function RayskinResolveBase(Server As String) As String
+        Dim Base As String = Server.TrimEnd("/"c)
+        If Base = "" Then Return ""
+        Dim Candidates As New List(Of String) From {Base}
+        If Base.EndsWith("/api/yggdrasil", StringComparison.OrdinalIgnoreCase) Then
+            Candidates.Add(Base.Substring(0, Base.Length - "/api/yggdrasil".Length).TrimEnd("/"c))
+        Else
+            Candidates.Add(Base & "/api/yggdrasil")
+        End If
+
+        For Each Candidate As String In Candidates
+            Try
+                Dim Raw As String = NetRequestByClient(Candidate, HttpMethod.Get, Nothing, Nothing,
+                                                       "application/json", 8000, Nothing,
+                                                       SimulateBrowserHeaders:=True)
+                Dim Text As String = Raw.Trim()
+                'Yggdrasil 元信息一定带 skinDomains，用它区分「站点首页」与「API 根」
+                If Text.StartsWith("{") AndAlso Text.Contains("skinDomains") Then
+                    If Candidate <> Base Then Logger.Info($"RaySkin 地址已自动校正：{Base} -> {Candidate}")
+                    Return Candidate
+                End If
+            Catch ex As Exception
+                '这个候选不可用，继续下一个
+            End Try
+        Next
+        Return Base
+    End Function
+
+    ''' <summary>
     ''' 让 RaySkin 记录一次 join 会话，供服务端 hasJoined 校验。
     ''' </summary>
     Private Sub RayskinJoin(Server As String, Access As String, Uuid As String, ServerId As String)
         Dim JoinBody As New JObject From {
             {"accessToken", Access}, {"selectedProfile", Uuid}, {"serverId", ServerId}
         }
-        NetRequestByClient(Server & "/sessionserver/session/minecraft/join", HttpMethod.Post,
-            JoinBody.ToString(Formatting.None), "application/json", "*/*", 15000)
+        LastRayskinUrl = Server.TrimEnd("/"c) & "/sessionserver/session/minecraft/join"
+        NetRequestByClient(LastRayskinUrl, HttpMethod.Post,
+            JoinBody.ToString(Formatting.None), "application/json", "*/*", 15000, Nothing,
+            SimulateBrowserHeaders:=True)
     End Sub
 
     ''' <summary>
@@ -456,9 +530,11 @@ Public Class PageFriendAccount
     ''' </summary>
     Private Function RayskinProfileName(Server As String, Uuid As String) As String
         Try
+            LastRayskinUrl = Server.TrimEnd("/"c) & "/sessionserver/session/minecraft/profile/" & Uri.EscapeDataString(Uuid)
             Dim Raw As String = NetRequestByClient(
-                Server & "/sessionserver/session/minecraft/profile/" & Uri.EscapeDataString(Uuid),
-                HttpMethod.Get, Nothing, Nothing, "application/json", 15000, Nothing, RequireJson:=True)
+                LastRayskinUrl,
+                HttpMethod.Get, Nothing, Nothing, "application/json", 15000, Nothing,
+                RequireJson:=True, SimulateBrowserHeaders:=True)
             Return JObject.Parse(Raw).Value(Of String)("name")
         Catch ex As Exception
             Logger.Warn(ex, "查询 RaySkin 角色名失败")
@@ -517,14 +593,29 @@ Public Class PageFriendAccount
         Catch
             '错误体不是 JSON 时忽略
         End Try
+        '把地址与响应体写进日志：405 这类问题只看状态码定位不了
+        Dim Body As String = If(ex.Response, "")
+        If Body.Length > 300 Then Body = Body.Substring(0, 300)
+        Logger.Warn($"RaySkin 请求失败：{LastRayskinUrl} -> HTTP {CInt(ex.StatusCode)}；{Body}")
+
         Select Case ErrorName
             Case "ForbiddenOperationException"
                 Return "RaySkin 账号或密码已失效，请到「启动」页重新登录后再试。"
             Case "IllegalArgumentException"
                 Return "RaySkin 认为账号格式不正确：" & If(String.IsNullOrEmpty(ErrorMessage), "请检查邮箱", ErrorMessage)
             Case Else
-                If CInt(ex.StatusCode) = 403 Then Return "RaySkin 拒绝了这次登录，请到「启动」页重新登录后再试。"
-                Return $"RaySkin 返回 HTTP {CInt(ex.StatusCode)}，请稍后再试。"
+                Select Case CInt(ex.StatusCode)
+                    Case 403
+                        Return "RaySkin 拒绝了这次登录，请到「启动」页重新登录后再试。"
+                    Case 404
+                        Return $"RaySkin 地址不存在（404）：{LastRayskinUrl}" & vbCrLf &
+                               "请检查「启动 → 账户」里的认证服务器地址是否填写完整（通常以 /api/yggdrasil 结尾）。"
+                    Case 405
+                        Return $"RaySkin 返回 405：{LastRayskinUrl}" & vbCrLf &
+                               "认证服务器不接受这种请求，请确认地址填写正确；若地址无误，可能是站点前面的防护拦截了启动器。"
+                    Case Else
+                        Return $"RaySkin 返回 HTTP {CInt(ex.StatusCode)}，请稍后再试。"
+                End Select
         End Select
     End Function
 

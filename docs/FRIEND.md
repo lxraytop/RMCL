@@ -143,6 +143,22 @@ return [
    `/sessionserver/session/minecraft/hasJoined?username=&serverId=` 校验，确认 `id` 与提交的 UUID 一致。
 5. 校验通过后：已有账号则绑定 `rayskin_uuid` 并登录；没有账号且 `rayskin_auto_register = true` 时自动创建。
 
+**兜底模式（join 不可用时）**
+
+部分网络环境（企业代理、校园网、站点 WAF）会拦截 `POST /sessionserver/session/minecraft/join`，
+返回 403 / 404 / 405。这时客户端自动改用第二条路径：
+
+1. 不再调用 `join`，改为把 `access_token` 与 `uuid` 一起提交给好友服务端；
+2. 服务端调用 `/authserver/validate`（`204` 表示令牌有效，`401/403` 表示失效），
+   再调用 `/sessionserver/session/minecraft/profile/{uuid}` 确认令牌确实属于该 UUID；
+3. 服务端返回 `E_TOKEN_INVALID` 时，客户端用保存的密码重新 `authenticate` 后重试一次。
+
+> 兜底模式会把 `accessToken` 传给好友服务端。服务端只在本次校验内使用，不落库；
+> 如果介意，可以关掉该路径（把 `friend.tim` 之外的 `rayskin_allow_token` 设为 false，后续版本支持）。
+
+另外，客户端在登录前会用 `GET <基地址>` 探测哪个地址是真正的 Yggdrasil 根
+（返回 JSON 含 `skinDomains`），自动纠正「只填域名、漏了 `/api/yggdrasil`」这类写法差异。
+
 因此密码只在客户端与 RaySkin 之间传递。若需要更细的皮肤站能力（例如插件内授权），可按
 [Blessing Skin 插件文档](https://github.com/bs-community/blessing-skin-plugin-docs) 增加一个 OAuth 端点，
 再把 `friend_rayskin_login` 换成对应的 token 校验即可。

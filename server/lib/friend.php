@@ -675,29 +675,72 @@ function friend_rayskin_login(): void
     $uuid = strtolower(str_replace('-', '', trim((string) input('uuid'))));
     $name = trim((string) input('name'));
     $serverId = trim((string) input('server_id'));
+    $accessToken = trim((string) input('access_token'));
     $server = rtrim(trim((string) input('server')), '/');
     $device = (string) input('device');
 
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         friend_err('E_EMAIL', 'RaySkin 账号的邮箱格式不正确');
     }
-    if ($uuid === '' || $name === '' || $serverId === '') {
+    // 两种模式：join + hasJoined（标准），或 accessToken + validate（join 被网络/代理拦截时的兜底）
+    if ($uuid === '' || ($serverId === '' && $accessToken === '')) {
         friend_err('E_RAYSKIN', 'RaySkin 返回的数据不完整');
     }
     if (!preg_match('#^https://#i', $server) || !friend_rayskin_allowed($server)) {
         friend_err('E_RAYSKIN', '不支持该认证服务器');
     }
 
-    $verifyUrl = $server . '/sessionserver/session/minecraft/hasJoined?username=' . rawurlencode($name)
-               . '&serverId=' . rawurlencode($serverId);
-    $raw = friend_http_request($verifyUrl, 'GET', null, 8);
-    $profile = $raw === null ? null : json_decode($raw, true);
-    if (!is_array($profile) || empty($profile['id'])) {
-        friend_err('E_RAYSKIN', 'RaySkin 校验失败，请到启动页重新登录后再试');
+    $profile = null;
+    if ($accessToken !== '') {
+        if (!friend_config('rayskin_allow_token', true)) {
+            friend_err('E_RAYSKIN', '当前服务端未启用 accessToken 校验，请在『启动』页登录后重试');
+        }
+        // 兜底模式：先用 validate 确认令牌有效（204 表示有效，401/403 表示失效）
+        [$status, $body] = friend_http_request_ex(
+            $server . '/authserver/validate',
+            'POST',
+            json_encode(['accessToken' => $accessToken], JSON_UNESCAPED_SLASHES),
+            8
+        );
+        if ($status === 401 || $status === 403) {
+            friend_err('E_TOKEN_INVALID', 'RaySkin 登录状态已失效，请重新登录');
+        }
+        if ($status !== 204) {
+            friend_err('E_RAYSKIN', "RaySkin 校验失败（HTTP {$status}）");
+        }
+        // 再用 profile 确认这个令牌确实属于提交的 UUID
+        [$pStatus, $pBody] = friend_http_request_ex(
+            $server . '/sessionserver/session/minecraft/profile/' . rawurlencode($uuid),
+            'GET',
+            null,
+            8
+        );
+        $profile = $pStatus === 200 ? json_decode((string) $pBody, true) : null;
+        if (!is_array($profile) || empty($profile['id'])) {
+            friend_err('E_RAYSKIN', 'RaySkin 校验失败，请到启动页重新登录后再试');
+        }
+        if (!empty($profile['name'])) {
+            $name = trim((string) $profile['name']);
+        }
+    } else {
+        if ($name === '') {
+            friend_err('E_RAYSKIN', 'RaySkin 返回的数据不完整');
+        }
+        $verifyUrl = $server . '/sessionserver/session/minecraft/hasJoined?username=' . rawurlencode($name)
+                   . '&serverId=' . rawurlencode($serverId);
+        $raw = friend_http_request($verifyUrl, 'GET', null, 8);
+        $profile = $raw === null ? null : json_decode($raw, true);
+        if (!is_array($profile) || empty($profile['id'])) {
+            friend_err('E_RAYSKIN', 'RaySkin 校验失败，请到启动页重新登录后再试');
+        }
     }
+
     $verifiedUuid = strtolower(str_replace('-', '', (string) $profile['id']));
     if ($verifiedUuid !== $uuid) {
         friend_err('E_RAYSKIN', 'RaySkin 校验结果与提交的账号不一致');
+    }
+    if ($name === '') {
+        $name = (string) ($profile['name'] ?? '');
     }
 
     $user = db_one('SELECT * FROM friend_user WHERE rayskin_uuid = ? OR email = ? ORDER BY id LIMIT 1', [$verifiedUuid, $email]);

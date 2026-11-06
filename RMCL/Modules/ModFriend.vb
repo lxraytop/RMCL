@@ -16,7 +16,7 @@ Public Module ModFriend
     ''' 默认好友服务地址。部署 server/ 后，把这里改成实际地址即可；
     ''' 用户也可以在「设置 → 功能 → 好友页面」里覆盖。
     ''' </summary>
-    Public Const DefaultFriendServer As String = "https://update.mc.lxray.top/"
+    Public Const DefaultFriendServer As String = "https://update.mc.lxray.top"
 
     ''' <summary>
     ''' 单个会话在本地最多保留的消息条数。
@@ -44,7 +44,8 @@ Public Module ModFriend
     ''' </summary>
     Public ReadOnly Property FriendServer As String
         Get
-            Return DefaultFriendServer
+            '去掉末尾斜杠，否则会拼出 https://host//index.php，部分主机对双斜杠会直接拒绝
+            Return DefaultFriendServer.TrimEnd("/"c)
         End Get
     End Property
 
@@ -142,7 +143,7 @@ Public Module ModFriend
     ''' </summary>
     Public Function FriendApi(Method As String, Optional Param As JObject = Nothing,
                               Optional NeedAuth As Boolean = True, Optional Timeout As Integer = 15000) As JObject
-        Dim Url As String = FriendServer
+        Dim Url As String = FriendServer.TrimEnd("/"c)
         If Not Url.EndsWith("index.php", StringComparison.OrdinalIgnoreCase) Then Url &= "/index.php"
         Url &= "?action=friend_" & Method
 
