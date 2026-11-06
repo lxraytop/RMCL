@@ -186,11 +186,29 @@ return [
 | `group_add_members` / `group_kick` | 群主邀请 / 移出成员 |
 | `send` / `poll` / `messages` / `read` | 发消息、增量拉取、会话历史、已读 |
 | `recall` | 撤回自己 2 分钟内发的消息（`msg_id`） |
-| `conversations` | 会话列表（含未读数） |
+| `conversations` | 会话列表（含未读数、在线状态、漫游状态；已注销账号的会话会自动清理） |
+| `conversation_delete` | 删除会话（只删会话列表记录 + 本机缓存） |
+| `roam_set` | 开启 / 关闭某个会话的聊天记录漫游 |
+| `roam_upload` | 把本机聊天记录上传到云端（仅已开启漫游的会话） |
+| `roam_restore` | 从云端分页恢复某个会话的漫游记录 |
 | `history` | 关键词检索全部历史 |
 | `sync` | 恢复本地聊天记录 |
 
-数据表：`friend_user`、`friend_invite`、`friend_token`、`friend_code`、`friend_relation`、`friend_request`、`friend_group`、`friend_group_member`、`friend_message`、`friend_conversation`、`friend_meta`。
+数据表：`friend_user`、`friend_invite`、`friend_token`、`friend_code`、`friend_relation`、`friend_request`、`friend_group`、`friend_group_member`、`friend_message`、`friend_conversation`、`friend_roam`、`friend_meta`。
+
+### 会话与聊天记录的生命周期
+
+| 场景 | 行为 |
+| --- | --- |
+| 账号被管理员删除 | `friend_conversation` 里「自己的」和「别人指向他的」记录一起删除；`conversations` 接口还会兜底清理对方已不存在的单聊会话 |
+| 删除好友 | 只解除关系，会话保留并标记 `friend_deleted`，界面上显示「（已删除的好友）」，可右键「删除会话」清除 |
+| 删除会话 | `conversation_delete` 删除该用户的会话记录与本地缓存；消息按漫游策略保留 |
+| 本地删除单条消息 | 客户端记入 `FriendDeletedIds`，`messages` / `sync` / `roam_restore` 都会跳过，不会被云端备份「复活」 |
+| 聊天记录漫游 | 默认关闭。单聊里任一方开启，该会话的消息就 `roamed = 1` 长期保存；群聊看发送方。关闭后新消息仍落库用于投递，但后台「清理历史消息」会把超过保留期的非漫游消息删掉 |
+| 开启漫游 | `roam_set` 会把该会话**已有**的消息一并标记为 `roamed = 1`，并返回云端当前条数 |
+| 上传 / 恢复 | 只有开启漫游的会话允许 `roam_upload` / `roam_restore`；上传按 `client_id` 与「发送者 + 时间 + 内容」双重去重，重复上传不会产生重复记录 |
+| 清空云端记录 | 后台「好友 → 维护 → 清空所有云端聊天记录」，需输入「清空」二次确认，只删 `friend_message`，不动本机缓存 |
+| 本机缓存写入 | 打开会话时 `friend_messages` 拉到的历史会通过 `LocalAppendRange` 落盘；此前只写轮询新消息，导致本机几乎为空、上传恒为 0 条 |
 
 ### 聊天记录存在哪里
 

@@ -67,16 +67,33 @@ function admin_friend_handle_post(string $action): void
             if ($id > 0) {
                 db_exec('DELETE FROM friend_relation WHERE user_id = ? OR friend_id = ?', [$id, $id]);
                 db_exec('DELETE FROM friend_group_member WHERE user_id = ?', [$id]);
-                db_exec('DELETE FROM friend_conversation WHERE user_id = ?', [$id]);
+                // 自己名下的会话 + 别人会话里指向他的那一行，一起清掉，避免残留「已注销用户」
+                db_exec('DELETE FROM friend_conversation WHERE user_id = ? OR (conv_type = 0 AND conv_key = ?)',
+                    [$id, (string) $id]);
+                db_exec('DELETE FROM friend_roam WHERE user_id = ? OR (conv_type = 0 AND conv_key = ?)',
+                    [$id, (string) $id]);
                 db_exec('DELETE FROM friend_token WHERE user_id = ?', [$id]);
                 db_exec('DELETE FROM friend_request WHERE from_id = ? OR to_id = ?', [$id, $id]);
                 db_exec('DELETE FROM friend_user WHERE id = ?', [$id]);
             }
             break;
 
+        case 'friend_clear_messages':
+            // 危险操作：清空所有云端聊天记录，必须手工输入确认词
+            if (trim((string) ($_POST['confirm'] ?? '')) !== '清空') {
+                flash('请输入「清空」两个字再提交', 'error');
+                $sub = 'maintenance';
+                break;
+            }
+            db_exec('DELETE FROM friend_message');
+            db_exec('UPDATE friend_conversation SET last_body = ?, last_at = 0, unread = 0', ['']);
+            $sub = 'maintenance';
+            break;
+
         case 'friend_purge_messages':
             $days = max(1, min(3650, (int) ($_POST['days'] ?? 90)));
-            db_exec('DELETE FROM friend_message WHERE created_at < ?', [time() - $days * 86400]);
+            // 只清未开启漫游的消息，漫游记录要一直保留
+            db_exec('DELETE FROM friend_message WHERE roamed = 0 AND created_at < ?', [time() - $days * 86400]);
             break;
 
         default:
@@ -252,12 +269,22 @@ function admin_friend_render(string $sub, string $q): void
 
         <?php else: ?>
             <h2>清理历史消息</h2>
-            <p class="desc">删除早于指定天数的消息。用户本地缓存不受影响。</p>
+            <p class="desc">删除早于指定天数的消息。已开启「聊天记录漫游」的会话不会被清理，用户本地缓存也不受影响。</p>
             <form method="post" action="admin.php" class="row">
                 <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
                 <input type="hidden" name="do" value="friend_purge_messages">
                 删除早于 <input type="number" name="days" value="90" min="1" max="3650" style="width:90px"> 天的消息
                 <button type="submit" class="btn danger" onclick="return confirm('确定要清理吗？此操作不可撤销。')">清理</button>
+            </form>
+
+            <h2 style="margin-top:26px">清空所有云端聊天记录</h2>
+            <p class="desc">删除 `friend_message` 里的全部消息，所有用户、所有会话的云端记录都会被清空，且不可恢复。本机缓存不受影响。</p>
+            <form method="post" action="admin.php" class="row" style="margin-top:8px"
+                  onsubmit="return confirm('这会删除所有用户、所有会话的云端聊天记录，且不可恢复。确定继续？')">
+                <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
+                <input type="hidden" name="do" value="friend_clear_messages">
+                输入 <b>清空</b> 确认：<input type="text" name="confirm" placeholder="清空" style="width:90px">
+                <button type="submit" class="btn danger">清空所有聊天记录</button>
             </form>
         <?php endif; ?>
     </div>

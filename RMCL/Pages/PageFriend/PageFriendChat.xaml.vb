@@ -127,6 +127,7 @@ Public Class PageFriendChat
         Dim TitleRow As New StackPanel With {.Orientation = Orientation.Horizontal}
         Dim TitleText As String = Conv.Title
         If Conv.ConvType = 1 AndAlso Conv.MemberCount > 0 Then TitleText &= $"（{Conv.MemberCount}）"
+        If Conv.FriendDeleted Then TitleText &= "（已删除的好友）"
         If Conv.ConvType = 0 Then
             TitleRow.Children.Add(New System.Windows.Shapes.Ellipse With {
                 .Width = 7, .Height = 7,
@@ -141,7 +142,7 @@ Public Class PageFriendChat
             .FontWeight = FontWeights.SemiBold,
             .TextTrimming = TextTrimming.CharacterEllipsis
         })
-        If Conv.ConvType = 0 Then
+        If Conv.ConvType = 0 AndAlso Not Conv.FriendDeleted Then
             TitleRow.Children.Add(New TextBlock With {
                 .Text = If(Conv.Online, "在线", "离线"),
                 .FontSize = 10.5,
@@ -196,8 +197,59 @@ Public Class PageFriendChat
                 Row.Background = NormalBrush
                 OpenConversation(Conv.ConvType, Conv.ConvKey, Conv.Title)
             End Sub
+        '右键：打开 / 删除会话
+        AddHandler Row.ContextMenuOpening,
+            Sub(sender As Object, ev As ContextMenuEventArgs)
+                Row.ContextMenu = BuildConversationMenu(Conv)
+            End Sub
         Return Row
     End Function
+
+    Private Function BuildConversationMenu(Conv As FriendConversation) As ContextMenu
+        Dim Menu As New ContextMenu()
+        Dim ItemOpen As New MyMenuItem With {.Header = "打开"}
+        AddHandler ItemOpen.Click, Sub(sender As Object, e As RoutedEventArgs) OpenConversation(Conv.ConvType, Conv.ConvKey, Conv.Title)
+        Menu.Items.Add(ItemOpen)
+
+        Dim ItemDelete As New MyMenuItem With {.Header = "删除会话"}
+        AddHandler ItemDelete.Click, Sub(sender As Object, e As RoutedEventArgs) DeleteConversationRow(Conv)
+        Menu.Items.Add(ItemDelete)
+        Return Menu
+    End Function
+
+    ''' <summary>删除会话：服务端会话列表与本机缓存一起清掉。</summary>
+    Private Sub DeleteConversationRow(Conv As FriendConversation)
+        Dim Tip As String = If(Conv.FriendDeleted,
+                               $"「{Conv.Title}」的好友关系已解除，删除后不会再出现在会话列表里。",
+                               $"删除与「{Conv.Title}」的会话？本机聊天记录会一并清除，服务器上的漫游记录不受影响。")
+        If MyMsgBox(Tip, "删除会话", "删除", "取消", IsWarn:=True) <> 1 Then Return
+        Dim ConvType As Integer = Conv.ConvType
+        Dim ConvKey As String = Conv.ConvKey
+        RunInNewThread(
+        Sub()
+            Try
+                ModFriend.DeleteConversation(ConvType, ConvKey)
+                RunInUi(
+                Sub()
+                    Conversations.RemoveAll(Function(c) c.ConvType = ConvType AndAlso c.ConvKey = ConvKey)
+                    BuildConversationList()
+                    If CurrentType = ConvType AndAlso CurrentKey = ConvKey Then
+                        CurrentType = -1
+                        CurrentKey = ""
+                        CurrentTitle = ""
+                        Messages.Clear()
+                        RenderMessages()
+                        LabConvTitle.Text = "选择一个会话"
+                        LabConvSub.Text = "也可以从通讯录或群聊里打开"
+                    End If
+                    LabConvHint.Text = If(Conversations.Count = 0, "还没有会话", $"{Conversations.Count} 个会话")
+                    Hint("已删除会话", HintType.Green, False)
+                End Sub)
+            Catch ex As Exception
+                RunInUi(Sub() Hint("删除会话失败：" & ModFriend.FriendErrorText(ex), HintType.Red))
+            End Try
+        End Sub, "Friend Delete Conversation")
+    End Sub
 
 #End Region
 
@@ -233,6 +285,16 @@ Public Class PageFriendChat
                 '标记已读
                 Try
                     ModFriend.FriendApi("read", New JObject From {{"conv_type", ConvType}, {"conv_key", ConvKey}})
+                    '服务端清零后立刻同步本地红点，不用等下一次轮询
+                    RunInUi(
+                    Sub()
+                        Dim Target As FriendConversation = Conversations.FirstOrDefault(
+                            Function(c) c.ConvType = ConvType AndAlso c.ConvKey = ConvKey)
+                        If Target IsNot Nothing AndAlso Target.Unread > 0 Then
+                            Target.Unread = 0
+                            BuildConversationList()
+                        End If
+                    End Sub)
                 Catch ex As Exception
                     Logger.Warn(ex, "标记好友消息已读失败")
                 End Try
@@ -249,7 +311,8 @@ Public Class PageFriendChat
         Dim Pending As List(Of FriendMessage) = Messages.Where(Function(m) m.Id <= 0).ToList()
         Dim Dict As New Dictionary(Of Long, FriendMessage)
         For Each Msg As FriendMessage In Remote
-            If Msg.Id > 0 Then Dict(Msg.Id) = Msg
+            '本机删掉的消息不要因为服务端还有备份就冒出来
+            If Msg.Id > 0 AndAlso Not ModFriend.IsDeleted(Msg.Id) Then Dict(Msg.Id) = Msg
         Next
         '本地缓存里可能有服务器只返回了最近 60 条之外的老消息
         For Each Msg As FriendMessage In Messages
@@ -258,6 +321,9 @@ Public Class PageFriendChat
         Messages.Clear()
         Messages.AddRange(Dict.Values.OrderBy(Function(m) m.Id))
         Messages.AddRange(Pending)
+        '把刚拉到的历史补进本机缓存。之前只写轮询收到的新消息，
+        '导致本机几乎没记录，漫游上传永远是 0 条、离线也看不到历史。
+        ModFriend.LocalAppendRange(Dict.Values.Where(Function(m) m.Id > 0))
     End Sub
 
 #End Region

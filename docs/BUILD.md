@@ -83,10 +83,10 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 | --- | --- | --- |
 | `dist/RMCL 2.20.2.1/RMCL.exe` | 5.90 MB | 主程序，版本信息 `2.20.2.1 / Ray Minecraft Launcher` |
 | `dist/RMCL 2.20.2.1/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
-| `dist/RMCL-2.20.2.1-win.zip` | 2.63 MB | 上述两个文件的压缩包（sha256 `96b449dac12cf7f1…`） |
+| `dist/RMCL-2.20.2.1-win.zip` | 2.63 MB | 上述两个文件的压缩包（sha256 `a04ca9dc128d1298…`） |
 
 对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.20.2.1>，
-资产 `RMCL.exe`（6,183,936 B，sha256 `95bba989f74f700d…`）与 `RMCL-2.20.2.1-win.zip`（2,753,745 B）。
+资产 `RMCL.exe`（6,196,736 B，sha256 `aa30e7b325b2334c…`）与 `RMCL-2.20.2.1-win.zip`（2,759,288 B）。
 
 ### 2.20.2.1 主要变更
 
@@ -102,6 +102,16 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 - 404 / 405 的提示会直接给出出错 URL，并把 URL 与响应体前 300 字写入日志，便于定位。
 - 服务端 `friend_rayskin_login` 支持 `access_token` 模式，新增 `friend.rayskin_allow_token`
   开关（默认开启），关闭后只允许标准 join 流程。
+- 修复已注销账号的会话清不掉：后台删账号时同步删除别人会话里指向他的记录，
+  `conversations` 接口也会兜底清理；好友关系解除但账号还在时标记为「已删除的好友」，可右键删除会话。
+- 修复本机聊天记录形同虚设：打开会话拉到的历史从未落盘，只有轮询新消息才写缓存，
+  导致离线看不到记录、漫游上传恒为 0 条。现在 `MergeRemote` 会把历史批量写入本机缓存。
+- 本地删除的聊天记录不会再被云端备份恢复：删除的 id 记入 `FriendDeletedIds`，
+  打开会话、恢复历史、漫游恢复都会跳过，服务端 `sync` 也支持 `exclude` 参数。
+- 新增聊天记录漫游：默认关闭，单聊任一方开启即长期保存；账号页可对每个会话单独开启、
+  上传本机记录、或从云端恢复到本机。上传按 `client_id` 与内容双重去重。
+- 修复已读后会话红点不消失：`read` 返回后立即把本地未读清零并重绘，不再等下一次轮询。
+- 后台维护页新增「清空所有云端聊天记录」，需输入「清空」二次确认。
 
 ### 2.20.2.0 主要变更
 

@@ -182,6 +182,7 @@ Public Class Settings
         New Setting("FriendSelfJson", "{}", Source:=Sources.Registry, Encrypted:=True), '好友账号信息缓存
         New Setting("FriendLastMsgId", 0L, Source:=Sources.Registry), '好友消息增量指针
         New Setting("FriendConvCollapsed", False, Source:=Sources.Registry), '消息页左侧会话列表是否收起
+        New Setting("FriendDeletedIds", "[]", Source:=Sources.Registry), '本机已删除的消息 id（避免被云端备份恢复）
         New Setting("UiHiddenPageDownload", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh),
         New Setting("UiHiddenPageSetup", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh),
         New Setting("UiHiddenFunctionSelect", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh),

@@ -35,17 +35,37 @@ function friend_tables(): void
     } catch (Throwable $e) {
         // friend_meta 还不存在，继续建表
     }
-    if ($version >= 2) {
+    if ($version >= 3) {
         return;
     }
     if ($version >= 1) {
-        // v1 -> v2：补上撤回时间。CREATE TABLE IF NOT EXISTS 不会给旧表加列，必须 ALTER
-        try {
-            $pdo->exec('ALTER TABLE friend_message ADD COLUMN recalled_at INTEGER NOT NULL DEFAULT 0');
-        } catch (Throwable $e) {
-            // 列已存在则忽略
+        // 增量迁移：CREATE TABLE IF NOT EXISTS 不会给旧表加列，必须 ALTER
+        if ($version < 2) {
+            try {
+                $pdo->exec('ALTER TABLE friend_message ADD COLUMN recalled_at INTEGER NOT NULL DEFAULT 0');
+            } catch (Throwable $e) {
+                // 列已存在则忽略
+            }
         }
-        db_exec("INSERT OR REPLACE INTO friend_meta (k, v) VALUES ('schema', '2')");
+        if ($version < 3) {
+            try {
+                $pdo->exec('ALTER TABLE friend_message ADD COLUMN roamed INTEGER NOT NULL DEFAULT 0');
+            } catch (Throwable $e) {
+                // 列已存在则忽略
+            }
+            $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS friend_roam (
+    user_id    INTEGER NOT NULL DEFAULT 0,
+    conv_type  INTEGER NOT NULL DEFAULT 0,
+    conv_key   TEXT    NOT NULL DEFAULT '',
+    enabled    INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, conv_type, conv_key)
+);
+SQL
+            );
+        }
+        db_exec("INSERT OR REPLACE INTO friend_meta (k, v) VALUES ('schema', '3')");
         return;
     }
     $pdo->exec(<<<'SQL'
@@ -157,7 +177,8 @@ CREATE TABLE IF NOT EXISTS friend_message (
     client_id  TEXT    NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL DEFAULT 0,
     im_msg_id  TEXT    NOT NULL DEFAULT '',
-    recalled_at INTEGER NOT NULL DEFAULT 0
+    recalled_at INTEGER NOT NULL DEFAULT 0,
+    roamed     INTEGER NOT NULL DEFAULT 0
 );
 SQL
     );
@@ -187,7 +208,18 @@ SQL
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_friend_msg_group ON friend_message(group_id, id)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_friend_token_user ON friend_token(user_id)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_friend_req_to ON friend_request(to_id, state)');
-    db_exec("INSERT OR REPLACE INTO friend_meta (k, v) VALUES ('schema', '2')");
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS friend_roam (
+    user_id    INTEGER NOT NULL DEFAULT 0,
+    conv_type  INTEGER NOT NULL DEFAULT 0,
+    conv_key   TEXT    NOT NULL DEFAULT '',
+    enabled    INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, conv_type, conv_key)
+);
+SQL
+    );
+    db_exec("INSERT OR REPLACE INTO friend_meta (k, v) VALUES ('schema', '3')");
 }
 
 function friend_ok(array $data = []): void
@@ -1232,10 +1264,30 @@ function friend_send_msg(): void
         }
     }
 
+    // 单聊里任一方开启漫游，这条消息就长期保存；群聊看发送方是否开启
+    $roamed = 0;
+    if ($convType === 0) {
+        $roamCount = (int) db_one(
+            'SELECT COUNT(*) AS c FROM friend_roam
+             WHERE conv_type = 0 AND enabled = 1
+               AND ((user_id = ? AND conv_key = ?) OR (user_id = ? AND conv_key = ?))',
+            [(int) $me['id'], (string) $toId, $toId, (string) $me['id']]
+        )['c'];
+        if ($roamCount > 0) {
+            $roamed = 1;
+        }
+    } else {
+        $roamRow = db_one('SELECT enabled FROM friend_roam WHERE user_id = ? AND conv_type = 1 AND conv_key = ?',
+            [(int) $me['id'], $convKey]);
+        if ($roamRow !== null && (int) $roamRow['enabled'] === 1) {
+            $roamed = 1;
+        }
+    }
+
     db_exec(
-        'INSERT INTO friend_message (conv_type, conv_key, from_id, to_id, group_id, body, kind, client_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [$convType, $convKey, (int) $me['id'], $toId, $groupId, $body, 'text', $clientId, friend_now()]
+        'INSERT INTO friend_message (conv_type, conv_key, from_id, to_id, group_id, body, kind, client_id, created_at, roamed)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [$convType, $convKey, (int) $me['id'], $toId, $groupId, $body, 'text', $clientId, friend_now(), $roamed]
     );
     $messageId = (int) db()->lastInsertId();
     $now = friend_now();
@@ -1362,7 +1414,10 @@ function friend_conversations(): void
     $rows = db_all(
         'SELECT c.*,
                 (SELECT COUNT(*) FROM friend_group_member gm WHERE gm.group_id = CAST(c.conv_key AS INTEGER)) AS member_count,
-                (SELECT u.last_seen_at FROM friend_user u WHERE u.id = CAST(c.conv_key AS INTEGER)) AS peer_seen
+                (SELECT u.last_seen_at FROM friend_user u WHERE u.id = CAST(c.conv_key AS INTEGER)) AS peer_seen,
+                (SELECT 1 FROM friend_user u2 WHERE u2.id = CAST(c.conv_key AS INTEGER)) AS peer_exists,
+                (SELECT 1 FROM friend_relation r WHERE r.user_id = c.user_id AND r.friend_id = CAST(c.conv_key AS INTEGER)) AS peer_friend,
+                (SELECT enabled FROM friend_roam rm WHERE rm.user_id = c.user_id AND rm.conv_type = c.conv_type AND rm.conv_key = c.conv_key) AS roam
          FROM friend_conversation c
          WHERE c.user_id = ? ORDER BY c.last_at DESC, c.rowid DESC LIMIT 200',
         [(int) $me['id']]
@@ -1370,6 +1425,12 @@ function friend_conversations(): void
     $items = [];
     foreach ($rows as $row) {
         $convType = (int) $row['conv_type'];
+        // 对方账号已被删除：顺手清掉这条会话，避免会话列表里永远留着一个点不开的名字
+        if ($convType === 0 && $row['peer_exists'] === null) {
+            db_exec('DELETE FROM friend_conversation WHERE user_id = ? AND conv_type = 0 AND conv_key = ?',
+                [(int) $me['id'], (string) $row['conv_key']]);
+            continue;
+        }
         $items[] = [
             'conv_type' => $convType,
             'conv_key' => (string) $row['conv_key'],
@@ -1379,6 +1440,9 @@ function friend_conversations(): void
             'unread' => (int) $row['unread'],
             'member_count' => $convType === 1 ? (int) $row['member_count'] : 0,
             'online' => $convType === 0 && friend_now() - (int) $row['peer_seen'] <= 120,
+            // 好友关系已解除但账号还在：会话保留，界面上标记为「已删除的好友」，可手动清除
+            'friend_deleted' => $convType === 0 && $row['peer_exists'] !== null && $row['peer_friend'] === null,
+            'roam' => (int) ($row['roam'] ?? 0) === 1,
         ];
     }
     friend_ok(['items' => $items]);
@@ -1391,7 +1455,211 @@ function friend_read(): void
     $convKey = trim((string) input('conv_key'));
     db_exec('UPDATE friend_conversation SET unread = 0 WHERE user_id = ? AND conv_type = ? AND conv_key = ?',
         [(int) $me['id'], $convType, $convKey]);
+    $total = (int) db_one('SELECT COALESCE(SUM(unread), 0) AS c FROM friend_conversation WHERE user_id = ?',
+        [(int) $me['id']])['c'];
+    friend_ok(['unread' => $total]);
+}
+
+/** 判断某个会话是否开启了聊天记录漫游 */
+function friend_roam_enabled(int $userId, int $convType, string $convKey): bool
+{
+    $row = db_one('SELECT enabled FROM friend_roam WHERE user_id = ? AND conv_type = ? AND conv_key = ?',
+        [$userId, $convType, $convKey]);
+    return $row !== null && (int) $row['enabled'] === 1;
+}
+
+/** 删除会话（只删会话列表里的那条记录，消息仍按漫游策略保留） */
+function friend_conversation_delete(): void
+{
+    $me = friend_auth();
+    $convType = (int) input('conv_type', 0) === 1 ? 1 : 0;
+    $convKey = trim((string) input('conv_key'));
+    if ($convKey === '') {
+        friend_err('E_PARAM', '会话无效');
+    }
+    db_exec('DELETE FROM friend_conversation WHERE user_id = ? AND conv_type = ? AND conv_key = ?',
+        [(int) $me['id'], $convType, $convKey]);
+    db_exec('DELETE FROM friend_roam WHERE user_id = ? AND conv_type = ? AND conv_key = ?',
+        [(int) $me['id'], $convType, $convKey]);
     friend_ok([]);
+}
+
+/** 开启 / 关闭某个会话的聊天记录漫游 */
+function friend_roam_set(): void
+{
+    $me = friend_auth();
+    $convType = (int) input('conv_type', 0) === 1 ? 1 : 0;
+    $convKey = trim((string) input('conv_key'));
+    $enabled = (bool) input('enabled', false);
+    if ($convKey === '') {
+        friend_err('E_PARAM', '会话无效');
+    }
+
+    if ($convType === 0) {
+        $other = (int) $convKey;
+        if (db_one('SELECT 1 FROM friend_user WHERE id = ?', [$other]) === null) {
+            friend_err('E_PARAM', '对方账号不存在');
+        }
+    } else {
+        if (db_one('SELECT 1 FROM friend_group_member WHERE group_id = ? AND user_id = ?',
+                [(int) $convKey, (int) $me['id']]) === null) {
+            friend_err('E_GROUP', '你不在这个群里');
+        }
+    }
+
+    db_exec(
+        'INSERT INTO friend_roam (user_id, conv_type, conv_key, enabled, updated_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(user_id, conv_type, conv_key) DO UPDATE SET enabled = excluded.enabled, updated_at = excluded.updated_at',
+        [(int) $me['id'], $convType, $convKey, $enabled ? 1 : 0, friend_now()]
+    );
+
+    // 开启时把该会话已有的消息一并标记，避免只有「开启之后」的消息能漫游
+    if ($enabled) {
+        if ($convType === 0) {
+            $other = (int) $convKey;
+            db_exec(
+                'UPDATE friend_message SET roamed = 1
+                 WHERE conv_type = 0 AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))',
+                [(int) $me['id'], $other, $other, (int) $me['id']]
+            );
+        } else {
+            db_exec('UPDATE friend_message SET roamed = 1 WHERE conv_type = 1 AND group_id = ?', [(int) $convKey]);
+        }
+    }
+    // 返回云端当前保存的条数，界面可以直接显示「已保存 N 条」
+    if ($convType === 0) {
+        $other = (int) $convKey;
+        $count = (int) db_one(
+            'SELECT COUNT(*) AS c FROM friend_message
+             WHERE conv_type = 0 AND roamed = 1 AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))',
+            [(int) $me['id'], $other, $other, (int) $me['id']]
+        )['c'];
+    } else {
+        $count = (int) db_one(
+            'SELECT COUNT(*) AS c FROM friend_message WHERE conv_type = 1 AND roamed = 1 AND group_id = ?',
+            [(int) $convKey]
+        )['c'];
+    }
+    friend_ok(['enabled' => $enabled, 'count' => $count]);
+}
+
+/** 把本地聊天记录上传到云端（仅限已开启漫游的会话） */
+function friend_roam_upload(): void
+{
+    $me = friend_auth();
+    $convType = (int) input('conv_type', 0) === 1 ? 1 : 0;
+    $convKey = trim((string) input('conv_key'));
+    if ($convKey === '') {
+        friend_err('E_PARAM', '会话无效');
+    }
+    if (!friend_roam_enabled((int) $me['id'], $convType, $convKey)) {
+        friend_err('E_ROAM', '请先为这个会话开启聊天记录漫游');
+    }
+
+    $toId = 0;
+    $groupId = 0;
+    if ($convType === 0) {
+        $toId = (int) $convKey;
+        if (db_one('SELECT 1 FROM friend_user WHERE id = ?', [$toId]) === null) {
+            friend_err('E_PARAM', '对方账号不存在');
+        }
+    } else {
+        $groupId = (int) $convKey;
+        if (db_one('SELECT 1 FROM friend_group_member WHERE group_id = ? AND user_id = ?',
+                [$groupId, (int) $me['id']]) === null) {
+            friend_err('E_GROUP', '你不在这个群里');
+        }
+    }
+
+    $list = input('messages', []);
+    $added = 0;
+    foreach ((array) $list as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $body = trim((string) ($item['body'] ?? ''));
+        if ($body === '' || mb_strlen($body) > 2000) {
+            continue;
+        }
+        $createdAt = (int) ($item['created_at'] ?? 0);
+        if ($createdAt <= 0 || $createdAt > friend_now() + 300) {
+            $createdAt = friend_now();
+        }
+        $clientId = trim((string) ($item['client_id'] ?? ''));
+        if ($clientId === '') {
+            $clientId = 'roam_' . (int) $me['id'] . '_' . md5($convType . '|' . $convKey . '|' . $body . '|' . $createdAt);
+        }
+        // client_id 全局去重，重复上传不会产生重复记录
+        if (db_one('SELECT 1 FROM friend_message WHERE client_id = ? LIMIT 1', [$clientId]) !== null) {
+            continue;
+        }
+        $fromId = (int) ($item['from_id'] ?? $me['id']);
+        if ($fromId <= 0 || ($convType === 0 && $fromId !== (int) $me['id'] && $fromId !== $toId)) {
+            $fromId = (int) $me['id'];
+        }
+        // 内容去重：服务端本来就有这条（只是没开漫游），不要再插一份
+        if (db_one(
+            'SELECT 1 FROM friend_message
+             WHERE conv_type = ? AND conv_key = ? AND from_id = ? AND created_at = ? AND body = ? LIMIT 1',
+            [$convType, $convKey, $fromId, $createdAt, $body]
+        ) !== null) {
+            continue;
+        }
+        db_exec(
+            'INSERT INTO friend_message (conv_type, conv_key, from_id, to_id, group_id, body, kind, client_id, created_at, roamed)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)',
+            [$convType, $convKey, $fromId, $toId, $groupId, $body, 'text', $clientId, $createdAt]
+        );
+        $added++;
+    }
+    friend_ok(['added' => $added]);
+}
+
+/** 从云端恢复某个会话的漫游记录（倒序分页，客户端自行合并） */
+function friend_roam_restore(): void
+{
+    $me = friend_auth();
+    $convType = (int) input('conv_type', 0) === 1 ? 1 : 0;
+    $convKey = trim((string) input('conv_key'));
+    $beforeId = (int) input('before_id', 0);
+    $limit = min(200, max(1, (int) input('limit', 100)));
+    if ($convKey === '') {
+        friend_err('E_PARAM', '会话无效');
+    }
+    if (!friend_roam_enabled((int) $me['id'], $convType, $convKey)) {
+        friend_err('E_ROAM', '这个会话还没有开启聊天记录漫游');
+    }
+
+    if ($convType === 0) {
+        $other = (int) $convKey;
+        $where = 'm.conv_type = 0 AND m.roamed = 1 AND ((m.from_id = ? AND m.to_id = ?) OR (m.from_id = ? AND m.to_id = ?))';
+        $params = [(int) $me['id'], $other, $other, (int) $me['id']];
+    } else {
+        $groupId = (int) $convKey;
+        if (db_one('SELECT 1 FROM friend_group_member WHERE group_id = ? AND user_id = ?',
+                [$groupId, (int) $me['id']]) === null) {
+            friend_err('E_GROUP', '你不在这个群里');
+        }
+        $where = 'm.conv_type = 1 AND m.roamed = 1 AND m.group_id = ?';
+        $params = [$groupId];
+    }
+    if ($beforeId > 0) {
+        $where .= ' AND m.id < ?';
+        $params[] = $beforeId;
+    }
+    $params[] = $limit;
+
+    $rows = db_all(
+        'SELECT m.*, u.nickname AS from_name FROM friend_message m LEFT JOIN friend_user u ON u.id = m.from_id
+         WHERE ' . $where . ' ORDER BY m.id DESC LIMIT ?',
+        $params
+    );
+    $items = [];
+    foreach ($rows as $row) {
+        $items[] = friend_message_payload($row, (int) $me['id']);
+    }
+    $next = count($items) > 0 ? (int) $items[count($items) - 1]['id'] : 0;
+    friend_ok(['items' => $items, 'next_before_id' => $next]);
 }
 
 function friend_history(): void
@@ -1452,12 +1720,31 @@ function friend_sync(): void
     $me = friend_auth();
     $since = (int) input('since_id', 0);
     $limit = min(500, max(1, (int) input('limit', 500)));
+    // 客户端本地删掉的消息不要在这里被「恢复」回来
+    $exclude = [];
+    foreach (explode(',', (string) input('exclude', '')) as $rawId) {
+        $num = (int) trim($rawId);
+        if ($num > 0) {
+            $exclude[] = $num;
+            if (count($exclude) >= 500) {
+                break;
+            }
+        }
+    }
+
+    $where = 'm.id > ? AND (m.to_id = ? OR m.from_id = ? OR
+             (m.conv_type = 1 AND m.group_id IN (SELECT group_id FROM friend_group_member WHERE user_id = ?)))';
+    $params = [$since, (int) $me['id'], (int) $me['id'], (int) $me['id']];
+    if ($exclude) {
+        $where .= ' AND m.id NOT IN (' . implode(',', array_fill(0, count($exclude), '?')) . ')';
+        $params = array_merge($params, $exclude);
+    }
+    $params[] = $limit;
+
     $rows = db_all(
         'SELECT m.*, u.nickname AS from_name FROM friend_message m LEFT JOIN friend_user u ON u.id = m.from_id
-         WHERE m.id > ? AND (m.to_id = ? OR m.from_id = ? OR
-             (m.conv_type = 1 AND m.group_id IN (SELECT group_id FROM friend_group_member WHERE user_id = ?)))
-         ORDER BY m.id ASC LIMIT ?',
-        [$since, (int) $me['id'], (int) $me['id'], (int) $me['id'], $limit]
+         WHERE ' . $where . ' ORDER BY m.id ASC LIMIT ?',
+        $params
     );
     $items = [];
     $maxId = $since;
@@ -1604,6 +1891,18 @@ function friend_handle(string $action): void
             return;
         case 'messages':
             friend_messages();
+            return;
+        case 'conversation_delete':
+            friend_conversation_delete();
+            return;
+        case 'roam_set':
+            friend_roam_set();
+            return;
+        case 'roam_upload':
+            friend_roam_upload();
+            return;
+        case 'roam_restore':
+            friend_roam_restore();
             return;
         case 'conversations':
             friend_conversations();

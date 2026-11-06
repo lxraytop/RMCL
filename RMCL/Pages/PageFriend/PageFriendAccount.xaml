@@ -216,6 +216,15 @@
                                    Text="只删除本机缓存，服务器上的历史记录不受影响，重新打开会话会再次同步。设置里的「清理游戏垃圾」不会动这里。" />
                     </StackPanel>
                 </local:MyCard>
+
+                <local:MyCard Margin="0,0,0,15" Title="聊天记录漫游">
+                    <StackPanel Margin="25,40,25,18">
+                        <TextBlock TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,12"
+                                   Text="默认不保存到云端。只有在这里开启漫游的会话，聊天记录才会长期保存在服务器上；换电脑或重装后可以单独把某个会话的记录恢复到本机。" />
+                        <StackPanel x:Name="PanRoam" />
+                        <TextBlock x:Name="LabRoamHint" Margin="1,10,0,0" FontSize="12" Opacity="0.62" TextWrapping="Wrap" Text="" />
+                    </StackPanel>
+                </local:MyCard>
             </StackPanel>
 
         </StackPanel>

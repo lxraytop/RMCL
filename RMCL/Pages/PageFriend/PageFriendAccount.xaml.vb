@@ -53,6 +53,7 @@ Public Class PageFriendAccount
     Private Sub PageFriendAccount_PageEnter() Handles Me.PageEnter
         RefreshSelfAsync()
         RefreshLocalInfo()
+        RefreshRoamList()
     End Sub
 
     ''' <summary>
@@ -678,6 +679,151 @@ Public Class PageFriendAccount
             End Try
         End Sub, "Friend Restore History")
     End Sub
+
+#End Region
+
+#Region "聊天记录漫游"
+
+    ''' <summary>列出所有会话及漫游状态，每行可单独开启 / 上传 / 恢复。</summary>
+    Private Sub RefreshRoamList(Optional Tip As String = "")
+        If Not ModFriend.IsLoggedIn Then Return
+        If PanRoam Is Nothing Then Return
+        LabRoamHint.Text = "正在读取会话……"
+        RunInNewThread(
+        Sub()
+            Try
+                Dim List As List(Of FriendConversation) = ModFriend.GetConversations()
+                RunInUi(
+                Sub()
+                    PanRoam.Children.Clear()
+                    For Each Conv As FriendConversation In List
+                        PanRoam.Children.Add(BuildRoamRow(Conv))
+                    Next
+                    LabRoamHint.Text = If(Tip <> "", Tip, If(List.Count = 0,
+                                          "还没有会话，先加个好友聊两句吧。",
+                                          $"共 {List.Count} 个会话。开启漫游后，这个会话的聊天记录会长期保存在服务器上。"))
+                End Sub)
+            Catch ex As Exception
+                RunInUi(Sub() LabRoamHint.Text = "读取会话失败：" & ModFriend.FriendErrorText(ex))
+            End Try
+        End Sub, "Friend Roam List")
+    End Sub
+
+    Private Function BuildRoamRow(Conv As FriendConversation) As FrameworkElement
+        Dim Row As New Grid With {.Height = 36, .Margin = New Thickness(0, 0, 0, 4)}
+        Row.ColumnDefinitions.Add(New ColumnDefinition With {.Width = New GridLength(1, GridUnitType.Star)})
+        Row.ColumnDefinitions.Add(New ColumnDefinition With {.Width = GridLength.Auto})
+        Row.ColumnDefinitions.Add(New ColumnDefinition With {.Width = GridLength.Auto})
+        Row.ColumnDefinitions.Add(New ColumnDefinition With {.Width = GridLength.Auto})
+
+        Dim Title As New TextBlock With {
+            .Text = If(Conv.ConvType = 1, $"群聊 · {Conv.Title}", Conv.Title),
+            .FontSize = 13,
+            .VerticalAlignment = VerticalAlignment.Center,
+            .TextTrimming = TextTrimming.CharacterEllipsis,
+            .Margin = New Thickness(0, 0, 12, 0)
+        }
+        Row.Children.Add(Title)
+
+        Dim BtnToggle As New MyButton With {
+            .Text = If(Conv.Roam, "漫游：已开启", "漫游：未开启"),
+            .MinWidth = 112, .Height = 26, .Padding = New Thickness(10, 0, 10, 0),
+            .Margin = New Thickness(0, 0, 8, 0)
+        }
+        AddHandler BtnToggle.Click,
+            Sub(sender As Object, e As MouseButtonEventArgs)
+                BtnToggle.IsEnabled = False
+                Dim Enable As Boolean = Not Conv.Roam
+                RunInNewThread(
+                Sub()
+                    Try
+                        Dim Count As Integer = ModFriend.SetRoam(Conv.ConvType, Conv.ConvKey, Enable)
+                        RunInUi(
+                        Sub()
+                            If Enable Then
+                                RefreshRoamList($"已为「{Conv.Title}」开启漫游，云端当前保存 {Count} 条记录。")
+                            Else
+                                RefreshRoamList($"已关闭「{Conv.Title}」的漫游，之后的新消息会按服务器的保留期限清理。")
+                            End If
+                        End Sub)
+                    Catch ex As Exception
+                        RunInUi(
+                        Sub()
+                            LabRoamHint.Text = "设置漫游失败：" & ModFriend.FriendErrorText(ex)
+                            BtnToggle.IsEnabled = True
+                        End Sub)
+                    End Try
+                End Sub, "Friend Roam Set")
+            End Sub
+        Grid.SetColumn(BtnToggle, 1)
+        Row.Children.Add(BtnToggle)
+
+        Dim BtnUpload As New MyButton With {
+            .Text = "上传", .MinWidth = 58, .Height = 26, .Padding = New Thickness(8, 0, 8, 0),
+            .Margin = New Thickness(0, 0, 8, 0), .IsEnabled = Conv.Roam
+        }
+        AddHandler BtnUpload.Click,
+            Sub(sender As Object, e As MouseButtonEventArgs)
+                BtnUpload.IsEnabled = False
+                LabRoamHint.Text = $"正在把「{Conv.Title}」的本机记录上传到云端……"
+                RunInNewThread(
+                Sub()
+                    Try
+                        Dim Result As ModFriend.RoamUploadResult = ModFriend.UploadRoam(Conv.ConvType, Conv.ConvKey)
+                        RunInUi(
+                        Sub()
+                            BtnUpload.IsEnabled = True
+                            If Result.LocalCount = 0 Then
+                                LabRoamHint.Text = $"「{Conv.Title}」本机没有记录可上传。这个会话的历史本来就在云端，换电脑后直接用「恢复到本机」即可。"
+                            ElseIf Result.Added = 0 Then
+                                LabRoamHint.Text = $"「{Conv.Title}」本机 {Result.LocalCount} 条记录，云端都已存在，无需重复上传。"
+                            Else
+                                LabRoamHint.Text = $"「{Conv.Title}」已上传 {Result.Added} 条（本机共 {Result.LocalCount} 条）。"
+                            End If
+                        End Sub)
+                    Catch ex As Exception
+                        RunInUi(
+                        Sub()
+                            LabRoamHint.Text = "上传失败：" & ModFriend.FriendErrorText(ex)
+                            BtnUpload.IsEnabled = True
+                        End Sub)
+                    End Try
+                End Sub, "Friend Roam Upload")
+            End Sub
+        Grid.SetColumn(BtnUpload, 2)
+        Row.Children.Add(BtnUpload)
+
+        Dim BtnRestore As New MyButton With {
+            .Text = "恢复到本机", .MinWidth = 96, .Height = 26, .Padding = New Thickness(8, 0, 8, 0),
+            .IsEnabled = Conv.Roam
+        }
+        AddHandler BtnRestore.Click,
+            Sub(sender As Object, e As MouseButtonEventArgs)
+                BtnRestore.IsEnabled = False
+                LabRoamHint.Text = $"正在从云端恢复「{Conv.Title}」的聊天记录……"
+                RunInNewThread(
+                Sub()
+                    Try
+                        Dim Count As Integer = ModFriend.RestoreRoam(Conv.ConvType, Conv.ConvKey)
+                        RunInUi(
+                        Sub()
+                            LabRoamHint.Text = $"「{Conv.Title}」恢复了 {Count} 条记录，重新打开该会话即可看到。"
+                            BtnRestore.IsEnabled = True
+                            RefreshLocalInfo()
+                        End Sub)
+                    Catch ex As Exception
+                        RunInUi(
+                        Sub()
+                            LabRoamHint.Text = "恢复失败：" & ModFriend.FriendErrorText(ex)
+                            BtnRestore.IsEnabled = True
+                        End Sub)
+                    End Try
+                End Sub, "Friend Roam Restore")
+            End Sub
+        Grid.SetColumn(BtnRestore, 3)
+        Row.Children.Add(BtnRestore)
+        Return Row
+    End Function
 
 #End Region
 

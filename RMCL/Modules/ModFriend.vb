@@ -237,6 +237,10 @@ Public Module ModFriend
         Public Unread As Integer
         Public MemberCount As Integer
         Public Online As Boolean
+        ''' <summary>好友关系已解除（账号还在），会话仍保留，界面上标记为「已删除的好友」。</summary>
+        Public FriendDeleted As Boolean
+        ''' <summary>是否开启了聊天记录漫游。</summary>
+        Public Roam As Boolean
         Public ReadOnly Property Key As String
             Get
                 Return ConvType & "|" & ConvKey
@@ -324,7 +328,9 @@ Public Module ModFriend
                 .LastAt = Obj.Value(Of Long)("last_at"),
                 .Unread = Obj.Value(Of Integer)("unread"),
                 .MemberCount = Obj.Value(Of Integer)("member_count"),
-                .Online = Obj.Value(Of Boolean)("online")
+                .Online = Obj.Value(Of Boolean)("online"),
+                .FriendDeleted = Obj.Value(Of Boolean)("friend_deleted"),
+                .Roam = Obj.Value(Of Boolean)("roam")
             })
         Next
         Return Result
@@ -456,12 +462,17 @@ Public Module ModFriend
         '服务端每页最多 500 条，这里最多翻 20 页（1 万条），够覆盖绝大多数使用场景
         For Page As Integer = 1 To 20
             Dim Param As New JObject From {{"since_id", Cursor}, {"limit", 500}}
+            Dim Excluded As List(Of Long) = DeletedSnapshot()
+            If Excluded.Count > 0 Then Param("exclude") = String.Join(",", Excluded.Take(500))
             Dim Data As JObject = FriendApi("sync", Param, True, 30000)
             If Data Is Nothing Then Exit For
             Dim Arr As JArray = TryCast(Data("messages"), JArray)
             If Arr Is Nothing OrElse Arr.Count = 0 Then Exit For
             For Each Token As JToken In Arr
-                LocalAppend(ParseMessage(CType(Token, JObject)))
+                Dim Msg As FriendMessage = ParseMessage(CType(Token, JObject))
+                '本机删掉的消息即使服务端还留着，也不要再恢复回来
+                If Msg.Id > 0 AndAlso IsDeleted(Msg.Id) Then Continue For
+                LocalAppend(Msg)
                 Added += 1
             Next
             Dim NewMax As Long = Cursor
@@ -573,6 +584,21 @@ Public Module ModFriend
     End Sub
 
     ''' <summary>
+    ''' 批量把消息并入本地缓存并落盘。用于打开会话时把服务端拉到的历史补进本机。
+    ''' </summary>
+    Public Sub LocalAppendRange(List As IEnumerable(Of FriendMessage))
+        If List Is Nothing Then Return
+        Dim Any As Boolean = False
+        For Each Msg As FriendMessage In List
+            If Msg Is Nothing OrElse Msg.Id <= 0 Then Continue For
+            If IsDeleted(Msg.Id) Then Continue For
+            LocalAppend(Msg)
+            Any = True
+        Next
+        If Any Then LocalFlush()
+    End Sub
+
+    ''' <summary>
     ''' 把内存中的改动批量写入磁盘。可在页面退出或轮询后调用，避免每条消息都写文件。
     ''' </summary>
     Public Sub LocalFlush()
@@ -602,6 +628,27 @@ Public Module ModFriend
         End SyncLock
     End Sub
 
+    ''' <summary>删除整个会话（服务端会话列表 + 本机缓存）。</summary>
+    Public Sub DeleteConversation(ConvType As Integer, ConvKey As String)
+        FriendApi("conversation_delete", New JObject From {{"conv_type", ConvType}, {"conv_key", ConvKey}})
+        LocalClearConversation(ConvType, ConvKey)
+    End Sub
+
+    ''' <summary>只清掉某个会话的本机缓存文件。</summary>
+    Public Sub LocalClearConversation(ConvType As Integer, ConvKey As String)
+        SyncLock LocalLock
+            Dim Key As String = LocalKey(ConvType, ConvKey)
+            LocalCache.Remove(Key)
+            LocalDirty.Remove(Key)
+            Try
+                Dim File As String = LocalPath(ConvType, ConvKey)
+                If FileUtils.Exists(File) Then FileUtils.Delete(File)
+            Catch ex As Exception
+                Logger.Warn(ex, "删除本机聊天缓存失败")
+            End Try
+        End SyncLock
+    End Sub
+
     ''' <summary>把缓存里的某条消息标记为已撤回。</summary>
     Public Sub LocalRecall(MsgId As Long)
         If MsgId <= 0 Then Return
@@ -620,12 +667,154 @@ Public Module ModFriend
     ''' <summary>从本地缓存里删掉某条消息（只影响本机，不动服务端记录）。</summary>
     Public Sub LocalRemove(MsgId As Long)
         If MsgId <= 0 Then Return
+        MarkDeleted(MsgId)
         SyncLock LocalLock
             For Each Pair As KeyValuePair(Of String, List(Of FriendMessage)) In LocalCache
                 If Pair.Value.RemoveAll(Function(m) m.Id = MsgId) > 0 Then LocalDirty.Add(Pair.Key)
             Next
         End SyncLock
     End Sub
+
+#Region "本地已删除的消息"
+
+    '本地手动删掉的消息 id。服务端仍保留着备份，恢复/合并时要跳过，否则会被「复活」
+    Private DeletedIds As HashSet(Of Long) = Nothing
+    Private ReadOnly DeletedLock As New Object
+    Private Const DeletedLimit As Integer = 2000
+
+    Private Sub EnsureDeletedLoaded()
+        If DeletedIds IsNot Nothing Then Return
+        DeletedIds = New HashSet(Of Long)()
+        Try
+            Dim Raw As String = Settings.Get(Of String)("FriendDeletedIds")
+            If Not String.IsNullOrWhiteSpace(Raw) Then
+                For Each Token As JToken In JArray.Parse(Raw)
+                    DeletedIds.Add(Token.Value(Of Long)())
+                Next
+            End If
+        Catch ex As Exception
+            Logger.Warn(ex, "读取已删除消息列表失败")
+        End Try
+    End Sub
+
+    ''' <summary>记住某条消息已在本地删除。</summary>
+    Public Sub MarkDeleted(MsgId As Long)
+        If MsgId <= 0 Then Return
+        SyncLock DeletedLock
+            EnsureDeletedLoaded()
+            If Not DeletedIds.Add(MsgId) Then Return
+            '超过上限时只保留最近的一半，避免设置项无限膨胀
+            Dim Keep As List(Of Long) = DeletedIds.OrderByDescending(Function(x) x).Take(DeletedLimit).ToList()
+            DeletedIds.Clear()
+            For Each Id As Long In Keep
+                DeletedIds.Add(Id)
+            Next
+            Dim Arr As New JArray()
+            For Each Id As Long In Keep
+                Arr.Add(Id)
+            Next
+            Settings.Set("FriendDeletedIds", Arr.ToString(Formatting.None))
+        End SyncLock
+    End Sub
+
+    ''' <summary>这条消息是不是被本机删过（恢复与合并时要跳过）。</summary>
+    Public Function IsDeleted(MsgId As Long) As Boolean
+        If MsgId <= 0 Then Return False
+        SyncLock DeletedLock
+            EnsureDeletedLoaded()
+            Return DeletedIds.Contains(MsgId)
+        End SyncLock
+    End Function
+
+    Public Function DeletedSnapshot() As List(Of Long)
+        SyncLock DeletedLock
+            EnsureDeletedLoaded()
+            Return DeletedIds.ToList()
+        End SyncLock
+    End Function
+
+#End Region
+
+#Region "聊天记录漫游"
+
+    ''' <summary>开启 / 关闭某个会话的聊天记录漫游，返回云端当前保存的条数。</summary>
+    Public Function SetRoam(ConvType As Integer, ConvKey As String, Enabled As Boolean) As Integer
+        Dim Data As JObject = FriendApi("roam_set", New JObject From {
+            {"conv_type", ConvType}, {"conv_key", ConvKey}, {"enabled", Enabled}
+        })
+        Return If(Data Is Nothing, 0, Data.Value(Of Integer)("count"))
+    End Function
+
+    Public Class RoamUploadResult
+        Public LocalCount As Integer
+        Public Added As Integer
+    End Class
+
+    ''' <summary>把本机保存的某个会话的聊天记录上传到云端（需先开启漫游）。</summary>
+    Public Function UploadRoam(ConvType As Integer, ConvKey As String) As RoamUploadResult
+        Dim Result As New RoamUploadResult()
+        Dim List As List(Of FriendMessage) = LocalLoad(ConvType, ConvKey)
+        Dim Batch As New JArray()
+        For Each Msg As FriendMessage In List
+            If Msg.Id <= 0 OrElse Msg.Recalled OrElse String.IsNullOrWhiteSpace(Msg.Body) Then Continue For
+            If IsDeleted(Msg.Id) Then Continue For
+            Result.LocalCount += 1
+            Batch.Add(New JObject From {
+                {"body", Msg.Body}, {"created_at", Msg.CreatedAt}, {"from_id", Msg.FromId},
+                {"client_id", $"rmcl_{Msg.Id}_{Msg.FromId}"}
+            })
+            If Batch.Count >= 100 Then
+                Result.Added += SendRoamBatch(ConvType, ConvKey, Batch)
+                Batch = New JArray()
+            End If
+        Next
+        If Batch.Count > 0 Then Result.Added += SendRoamBatch(ConvType, ConvKey, Batch)
+        Return Result
+    End Function
+
+    Private Function SendRoamBatch(ConvType As Integer, ConvKey As String, Batch As JArray) As Integer
+        Dim Data As JObject = FriendApi("roam_upload", New JObject From {
+            {"conv_type", ConvType}, {"conv_key", ConvKey}, {"messages", Batch}
+        }, True, 30000)
+        Return If(Data Is Nothing, 0, Data.Value(Of Integer)("added"))
+    End Function
+
+    ''' <summary>从云端把某个会话的漫游记录拉回本机，返回新增条数。</summary>
+    Public Function RestoreRoam(ConvType As Integer, ConvKey As String) As Integer
+        Dim Existing As New HashSet(Of Long)(
+            LocalLoad(ConvType, ConvKey).Where(Function(m) m.Id > 0).Select(Function(m) m.Id))
+        Dim Added As Integer = 0
+        Dim Before As Long = 0
+        '每页 200 条，最多翻 50 页（1 万条）
+        For Page As Integer = 1 To 50
+            Dim Param As New JObject From {
+                {"conv_type", ConvType}, {"conv_key", ConvKey},
+                {"before_id", Before}, {"limit", 200}
+            }
+            Dim Data As JObject = FriendApi("roam_restore", Param, True, 30000)
+            If Data Is Nothing Then Exit For
+            Dim Arr As JArray = TryCast(Data("items"), JArray)
+            If Arr Is Nothing OrElse Arr.Count = 0 Then Exit For
+            For Each Token As JToken In Arr
+                Dim Msg As FriendMessage = ParseMessage(CType(Token, JObject))
+                If Msg.Id <= 0 OrElse Existing.Contains(Msg.Id) OrElse IsDeleted(Msg.Id) Then Continue For
+                LocalAppend(Msg)
+                Existing.Add(Msg.Id)
+                Added += 1
+            Next
+            Dim NextId As Long = 0
+            If Data("next_before_id") IsNot Nothing AndAlso Data("next_before_id").Type <> JTokenType.Null Then
+                NextId = Data.Value(Of Long)("next_before_id")
+            End If
+            If NextId <= 0 OrElse NextId = Before Then Exit For
+            Before = NextId
+            If Arr.Count < 200 Then Exit For
+        Next
+        LocalFlush()
+        Return Added
+    End Function
+
+#End Region
 
     ''' <summary>
     ''' 清空所有本地缓存（退出账号时可调用，目前保留以便换号后重新同步）。

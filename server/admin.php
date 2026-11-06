@@ -174,6 +174,7 @@ try {
         case 'friend_toggle_user':
         case 'friend_delete_user':
         case 'friend_purge_messages':
+        case 'friend_clear_messages':
             admin_friend_handle_post($action);
             break;
 
