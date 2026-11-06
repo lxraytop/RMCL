@@ -1,4 +1,4 @@
-# 构建说明（RMCL 2.20.1.0）
+# 构建说明（RMCL 2.20.2.0）
 
 RMCL 基于上游 2.14.0.0 开源基线重构，技术栈与上游一致：**.NET Framework 4.8 + WPF + VB.NET**（主工程为传统 vbproj，`RMCLCS` 与 `MeloongCore` 为 SDK 风格 csproj）。
 
@@ -81,12 +81,35 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 
 | 文件 | 大小 | 说明 |
 | --- | --- | --- |
-| `dist/RMCL 2.20.1.0/RMCL.exe` | 5.77 MB | 主程序，版本信息 `2.20.1.0 / Ray Minecraft Launcher` |
-| `dist/RMCL 2.20.1.0/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
-| `dist/RMCL-2.20.1.0-win.zip` | 2.58 MB | 上述两个文件的压缩包（sha256 `fa7562390cbc8964…`） |
+| `dist/RMCL 2.20.2.0/RMCL.exe` | 5.90 MB | 主程序，版本信息 `2.20.2.0 / Ray Minecraft Launcher` |
+| `dist/RMCL 2.20.2.0/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
+| `dist/RMCL-2.20.2.0-win.zip` | 2.63 MB | 上述两个文件的压缩包（sha256 `8e1e699eacf358b3…`） |
 
-对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.20.1.0>，
-资产 `RMCL.exe`（6,053,888 B，sha256 `5d8874ace8486e47…`）与 `RMCL-2.20.1.0-win.zip`（2,710,336 B）。
+对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.20.2.0>，
+资产 `RMCL.exe`（6,182,400 B，sha256 `0037db7cbaaaa663…`）与 `RMCL-2.20.2.0-win.zip`（2,753,039 B）。
+
+### 2.20.2.0 主要变更
+
+- 新增「好友」顶级页面（默认隐藏，设置 → 功能最底部可开启）：账号、消息、通讯录、群聊、历史记录五个子页。
+- 账号支持邀请码 + 邮箱验证码注册、邮箱密码登录，以及 RaySkin 一键登录（复用启动页会话，
+  多角色账号自动走 `refresh` 选角色，密码不经过好友服务端）。
+- 好友与群聊：搜索添加、请求处理、创建群聊、群主可邀请好友入群 / 移出成员；
+  通讯录与会话显示在线状态，群会话标题带成员数。
+- 消息右键菜单：复制 / 转发 / 撤回 / 删除。撤回限本人 2 分钟内发送的消息，
+  服务端标记后对方下次轮询即显示「对方撤回了一条消息」；删除只影响本机。
+- 聊天里的内容可一键导入：`Pxxxx-xxxxx-xxxxx` 邀请码（先选版本再进房）、
+  `tcp://host:port` 节点、`frp-xxx.com:12345` 与 `http(s)://` 服务器地址（选版本后直接进服）。
+- 联机页完成页新增「游戏版本」下拉框与「分享给好友」，进房后仍可换版本再启动，
+  也能把当前邀请码直接发到好友或群聊。
+- 修复聊天记录会被「清理游戏垃圾」误删：本机缓存从 `%TEMP%\RMCL\Friend` 迁到
+  `<启动器目录>\RMCL\Friend\cache`，旧数据自动迁移，清理逻辑显式跳过该目录；
+  账号页可查看缓存位置与占用，并「清除本地聊天记录」（只删本机，服务器历史不受影响）。
+- 会话列表支持收起 / 展开，状态记忆；聊天气泡改为自己绿色、对方蓝色，适配深浅主题。
+- 服务端新增好友模块（`server/lib/friend.php`）：注册登录、邀请码、邮箱验证码（支持 SMTP 直连）、
+  RaySkin `hasJoined` 校验、好友与群组、消息落库与历史检索、增量同步；腾讯云 IM 仅做转发，
+  未配置时自动降级，聊天记录始终以 SQLite 为准。
+- 管理后台「好友」标签页并入 `admin.php?tab=friends`（用户 / 邀请码 / 群组 / 维护），
+  `admin-friend.php` 改为 302 兼容跳转；服务地址在客户端硬编码，不可见也不可改。
 
 ### 2.20.1.0 主要变更
 
