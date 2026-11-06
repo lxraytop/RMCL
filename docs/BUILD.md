@@ -1,4 +1,4 @@
-# 构建说明（RMCL 2.20.2.0）
+# 构建说明（RMCL 2.20.2.1）
 
 RMCL 基于上游 2.14.0.0 开源基线重构，技术栈与上游一致：**.NET Framework 4.8 + WPF + VB.NET**（主工程为传统 vbproj，`RMCLCS` 与 `MeloongCore` 为 SDK 风格 csproj）。
 
@@ -81,12 +81,27 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 
 | 文件 | 大小 | 说明 |
 | --- | --- | --- |
-| `dist/RMCL 2.20.2.0/RMCL.exe` | 5.90 MB | 主程序，版本信息 `2.20.2.0 / Ray Minecraft Launcher` |
-| `dist/RMCL 2.20.2.0/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
-| `dist/RMCL-2.20.2.0-win.zip` | 2.63 MB | 上述两个文件的压缩包（sha256 `8e1e699eacf358b3…`） |
+| `dist/RMCL 2.20.2.1/RMCL.exe` | 5.90 MB | 主程序，版本信息 `2.20.2.1 / Ray Minecraft Launcher` |
+| `dist/RMCL 2.20.2.1/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
+| `dist/RMCL-2.20.2.1-win.zip` | 2.63 MB | 上述两个文件的压缩包（sha256 `96b449dac12cf7f1…`） |
 
-对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.20.2.0>，
-资产 `RMCL.exe`（6,182,400 B，sha256 `0037db7cbaaaa663…`）与 `RMCL-2.20.2.0-win.zip`（2,753,039 B）。
+对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.20.2.1>，
+资产 `RMCL.exe`（6,183,936 B，sha256 `95bba989f74f700d…`）与 `RMCL-2.20.2.1-win.zip`（2,753,745 B）。
+
+### 2.20.2.1 主要变更
+
+- 修复 RaySkin 一键登录在部分网络下报 `HTTP 405`：这些环境会拦截
+  `POST /sessionserver/session/minecraft/join`。现在 join 失败（403 / 404 / 405）会自动降级，
+  改为把 `accessToken` 交给好友服务端，由服务端调用 `/authserver/validate` +
+  `/sessionserver/.../profile` 完成校验；令牌失效时再用保存的密码重新认证重试一次。
+- 一键登录前会探测认证服务器的真实根地址（返回 JSON 含 `skinDomains`），
+  自动纠正「只填域名、漏了 `/api/yggdrasil`」这类写法差异；换台电脑不用重新配置。
+- RaySkin 的四个请求改用浏览器 UA，并不再携带启动器内部使用的假 Referer，
+  减少被站点 WAF 拦截的概率。
+- 好友服务地址末尾多余的斜杠已去掉，避免拼出 `https://host//index.php`。
+- 404 / 405 的提示会直接给出出错 URL，并把 URL 与响应体前 300 字写入日志，便于定位。
+- 服务端 `friend_rayskin_login` 支持 `access_token` 模式，新增 `friend.rayskin_allow_token`
+  开关（默认开启），关闭后只允许标准 join 流程。
 
 ### 2.20.2.0 主要变更
 
