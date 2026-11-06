@@ -1,4 +1,4 @@
-Imports System.Runtime.InteropServices
+﻿Imports System.Runtime.InteropServices
 
 ''' <summary>
 ''' 内存优化与垃圾清理。
@@ -208,8 +208,8 @@ Friend Module ModFeature
         Dim Failed As Integer = 0
         '下载缓存
         Freed += ClearFolder(PathTemp & "Cache\", Failed)
-        '临时文件（跳过缓存目录，避免重复统计）
-        Freed += ClearFolder(PathTemp, Failed, {"cache"})
+        '临时文件（跳过缓存目录，避免重复统计；friend 是旧版本聊天记录，不能删）
+        Freed += ClearFolder(PathTemp, Failed, {"cache", "friend"})
         '启动器日志
         Freed += ClearFiles(Paths.Base & "RMCL\", "Log*.txt", Failed)
         If ShowHint Then
@@ -227,7 +227,9 @@ Friend Module ModFeature
     ''' </summary>
     Public Function GetRubbishSummary() As (Total As Long, Details As List(Of String))
         Dim CacheSize As Long = GetFolderSize(PathTemp & "Cache\")
-        Dim TempSize As Long = GetFolderSize(PathTemp) - CacheSize
+        'Friend 是聊天记录，不算垃圾，统计时要扣掉，否则会显示成「临时文件」
+        Dim FriendSize As Long = GetFolderSize(PathTemp & "Friend\")
+        Dim TempSize As Long = GetFolderSize(PathTemp) - CacheSize - FriendSize
         Dim LogSize As Long = GetFilePatternSize(Paths.Base & "RMCL\", "Log*.txt")
         Dim Details As New List(Of String) From {
             $"下载缓存：{FormatSize(CacheSize)}",

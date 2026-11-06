@@ -1,4 +1,4 @@
-Imports System.Security.Cryptography
+﻿Imports System.Security.Cryptography
 
 Public Class Settings
 
@@ -177,6 +177,11 @@ Public Class Settings
         New Setting("UiMusicStart", False),
         New Setting("UiMusicRandom", True),
         New Setting("UiMusicAuto", True),
+        New Setting("UiPageFriends", False, Source:=Sources.Registry, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '顶部栏好友页面（默认隐藏）
+        New Setting("FriendToken", "", Source:=Sources.Registry, Encrypted:=True), '好友服务登录令牌
+        New Setting("FriendSelfJson", "{}", Source:=Sources.Registry, Encrypted:=True), '好友账号信息缓存
+        New Setting("FriendLastMsgId", 0L, Source:=Sources.Registry), '好友消息增量指针
+        New Setting("FriendConvCollapsed", False, Source:=Sources.Registry), '消息页左侧会话列表是否收起
         New Setting("UiHiddenPageDownload", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh),
         New Setting("UiHiddenPageSetup", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh),
         New Setting("UiHiddenFunctionSelect", False, OnChanged:=AddressOf PageSetupUI.HiddenRefresh),

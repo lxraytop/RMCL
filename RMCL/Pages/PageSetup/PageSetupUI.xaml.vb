@@ -387,7 +387,9 @@ Refresh:
         If FrmMain.PanTitleSelect Is Nothing OrElse Not FrmMain.PanTitleSelect.IsLoaded Then Return
         Try
             '顶部栏
-            If Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenPageDownload") AndAlso Settings.Get(Of Boolean)("UiHiddenPageSetup") Then
+            Dim FriendsVisible As Boolean = HiddenForceShow OrElse Settings.Get(Of Boolean)("UiPageFriends")
+            FrmMain.BtnTitleSelect3.Visibility = FriendsVisible.ToVisibility()
+            If Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenPageDownload") AndAlso Settings.Get(Of Boolean)("UiHiddenPageSetup") AndAlso Not FriendsVisible Then
                 '顶部栏已被全部隐藏（连同玻璃胶囊容器一起隐藏，避免留下空壳）
                 FrmMain.BorderTitleDock.Visibility = Visibility.Collapsed
             Else
@@ -396,6 +398,8 @@ Refresh:
                 FrmMain.BtnTitleSelect1.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenPageDownload"), Visibility.Collapsed, Visibility.Visible)
                 FrmMain.BtnTitleSelect2.Visibility = If(Not HiddenForceShow AndAlso Settings.Get(Of Boolean)("UiHiddenPageSetup"), Visibility.Collapsed, Visibility.Visible)
             End If
+            '好友页面被关掉时，如果正停在好友页就先退回启动页
+            If Not FriendsVisible AndAlso FrmMain.PageCurrent.Page = FormMain.PageType.Friends Then FrmMain.PageChange(FormMain.PageType.Launch)
             '功能
             FrmLaunchLeft.RefreshButtonsUI()
             If FrmSetupUI IsNot Nothing Then

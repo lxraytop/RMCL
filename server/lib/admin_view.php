@@ -1,7 +1,12 @@
 <?php
 /** 管理后台主视图（由 admin.php 在已登录后引入，共享其作用域） */
 
-$tab = in_array($_GET['tab'] ?? '', ['codes', 'releases', 'notices', 'logs'], true) ? $_GET['tab'] : 'codes';
+// 「好友」标签页同样在主视图里渲染，tab 白名单必须包含它，否则会被回落到「验证码」
+$adminTabs = ['codes', 'releases', 'notices', 'friends', 'logs'];
+$tab = in_array($_GET['tab'] ?? '', $adminTabs, true) ? (string) $_GET['tab'] : 'codes';
+$friendSub = in_array($_GET['sub'] ?? '', ['users', 'invites', 'groups', 'maintenance'], true)
+    ? (string) $_GET['sub']
+    : 'users';
 $flash = take_flash();
 $csrf = csrf_token();
 $siteUrl = base_url();
@@ -93,6 +98,7 @@ $postMax = ini_get('post_max_size');
             <a href="admin.php?tab=codes" class="<?= $tab === 'codes' ? 'on' : '' ?>">验证码</a>
             <a href="admin.php?tab=releases" class="<?= $tab === 'releases' ? 'on' : '' ?>">版本发布</a>
             <a href="admin.php?tab=notices" class="<?= $tab === 'notices' ? 'on' : '' ?>">联网通知</a>
+            <a href="admin.php?tab=friends" class="<?= $tab === 'friends' ? 'on' : '' ?>">好友</a>
             <a href="admin.php?tab=logs" class="<?= $tab === 'logs' ? 'on' : '' ?>">日志</a>
         </nav>
         <div class="who">
@@ -584,7 +590,7 @@ $postMax = ini_get('post_max_size');
         </table>
     </div>
 
-<?php else: ?>
+<?php elseif ($tab === 'logs'): ?>
     <div class="card">
         <h2>最近日志</h2>
         <p class="desc">激活成功 / 失败、票据签发与后台操作。只保留最近 200 条。</p>
@@ -606,6 +612,8 @@ $postMax = ini_get('post_max_size');
             </tbody>
         </table>
     </div>
+<?php elseif ($tab === 'friends'): ?>
+    <?php admin_friend_render($friendSub, trim((string) ($_GET['q'] ?? ''))); ?>
 <?php endif; ?>
 </main>
 </body>

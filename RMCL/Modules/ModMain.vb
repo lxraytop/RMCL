@@ -395,6 +395,14 @@ Public FrmSetupUpdate As PageSetupUpdate
 Public FrmSetupFrp As PageSetupFrp
 Public FrmSetupJava As PageSetupJava
 
+    '好友页面声明（默认隐藏，可在 设置-功能 中开启）
+    Public FrmFriendLeft As PageFriendLeft
+    Public FrmFriendChat As PageFriendChat
+    Public FrmFriendContact As PageFriendContact
+    Public FrmFriendGroup As PageFriendGroup
+    Public FrmFriendHistory As PageFriendHistory
+    Public FrmFriendAccount As PageFriendAccount
+
     '登录页面声明
     Public FrmLoginLegacy As PageLoginLegacy
     Public FrmLoginNide As PageLoginNide

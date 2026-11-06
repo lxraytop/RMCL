@@ -460,6 +460,7 @@ Public Class PageLinkMain
             '房主的游戏已经开着了，不需要再启动一次
             BtnFinishLaunch.Visibility = Visibility.Collapsed
             LabFinishLaunchHint.Visibility = Visibility.Collapsed
+            PanFinishVersion.Visibility = Visibility.Collapsed
             '下边栏
             BtnFinishPort.Visibility = Visibility.Visible
             LabFinishPort.Visibility = Visibility.Visible
@@ -468,13 +469,14 @@ Public Class PageLinkMain
             LabFinishPort.Text = ServerPort
         Else
             LabFinishTitle.Text = "已加入房间"
-            LabFinishDesc.Text = $"联机房间会出现在多人游戏页面的最下方。{vbCrLf}若没有出现，可以点击下方的地址复制，在{vbLQ}直接连接{vbRQ}中粘贴。"
+            LabFinishDesc.Text = $"联机房间会出现在多人游戏页面的最下方。{vbCrLf}下面是启动版本，进房后随时可以切换；若没看到房间，也可以复制下方地址手动连接。"
             BtnFinishExit.Text = "离开"
             BtnFinishPing.ToolTip = "与房主的延迟"
             BtnFinishCopy.Visibility = Visibility.Collapsed
             '一键启动并进入
             BtnFinishLaunch.Visibility = Visibility.Visible
             LabFinishLaunchHint.Visibility = Visibility.Visible
+            PanFinishVersion.Visibility = Visibility.Visible
             RefreshLaunchVersionList()
             '下边栏
             BtnFinishPort.Visibility = Visibility.Collapsed
@@ -483,6 +485,8 @@ Public Class PageLinkMain
             BtnFinishIp.Visibility = Visibility.Visible
             LabFinishIp.Visibility = Visibility.Visible
         End If
+        '好友功能没开启时不显示分享入口
+        BtnFinishShare.Visibility = If(Settings.Get(Of Boolean)("UiPageFriends"), Visibility.Visible, Visibility.Collapsed)
         Update() '立即刷新
     End Sub
 
@@ -537,6 +541,10 @@ Public Class PageLinkMain
     ''' 是否正在由代码刷新「游戏版本」下拉框，用于忽略由此产生的事件。
     ''' </summary>
     Private IsRefreshingVersion As Boolean
+    ''' <summary>
+    ''' 当前选择的启动版本；等待页和完成页的两个下拉框共用它。
+    ''' </summary>
+    Private LaunchInstance As McInstance = Nothing
 
     ''' <summary>
     ''' 刷新「游戏版本」下拉框，并尽量保留玩家上一次的选择。
@@ -562,35 +570,58 @@ Public Class PageLinkMain
                 If Not Versions.Contains(Instance) Then Versions.Add(Instance)
             Next
         Next
-        '重建下拉框
+        '优先保留上次选择，其次是启动页当前版本，最后取第一个
         Dim SavedName As String = Settings.Get(Of String)("LinkLaunchVersion")
-        Dim Target As MyComboBoxItem = Nothing
-        IsRefreshingVersion = True
-        ComboLaunchVersion.Items.Clear()
-        For Each Instance As McInstance In Versions
-            Dim Item As New MyComboBoxItem With {.Content = Instance.Name, .Tag = Instance}
-            ComboLaunchVersion.Items.Add(Item)
-            If Instance.Name = SavedName Then Target = Item
-        Next
-        '没记录过就用启动页当前选择的版本，再不行就用第一个
+        Dim Target As McInstance = Versions.FirstOrDefault(Function(i) i.Name = SavedName)
         If Target Is Nothing AndAlso McInstanceSelected IsNot Nothing Then
-            Target = ComboLaunchVersion.Items.OfType(Of MyComboBoxItem)().
-                FirstOrDefault(Function(i) DirectCast(i.Tag, McInstance) Is McInstanceSelected)
+            Target = Versions.FirstOrDefault(Function(i) i Is McInstanceSelected)
         End If
-        If Target Is Nothing AndAlso ComboLaunchVersion.Items.Count > 0 Then
-            Target = TryCast(ComboLaunchVersion.Items(0), MyComboBoxItem)
-        End If
-        ComboLaunchVersion.SelectedItem = Target
+        If Target Is Nothing AndAlso Versions.Count > 0 Then Target = Versions(0)
+        LaunchInstance = Target
+
+        IsRefreshingVersion = True
+        FillVersionCombo(ComboLaunchVersion, Versions, Target)
+        If ComboFinishVersion IsNot Nothing Then FillVersionCombo(ComboFinishVersion, Versions, Target)
         IsRefreshingVersion = False
         UpdateLaunchHint()
     End Sub
 
-    '记住选择
+    Private Sub FillVersionCombo(Combo As MyComboBox, Versions As List(Of McInstance), Target As McInstance)
+        If Combo Is Nothing Then Return
+        Combo.Items.Clear()
+        For Each Instance As McInstance In Versions
+            Combo.Items.Add(New MyComboBoxItem With {.Content = Instance.Name, .Tag = Instance})
+        Next
+        Combo.SelectedItem = Combo.Items.OfType(Of MyComboBoxItem)().
+            FirstOrDefault(Function(i) DirectCast(i.Tag, McInstance) Is Target)
+    End Sub
+
+    '记住选择（等待页）
     Private Sub ComboLaunchVersion_SelectionChanged(sender As Object, e As SelectionChangedEventArgs) Handles ComboLaunchVersion.SelectionChanged
         If IsRefreshingVersion Then Return
-        Dim Item = TryCast(ComboLaunchVersion.SelectedItem, MyComboBoxItem)
+        ApplyVersionSelection(ComboLaunchVersion, ComboFinishVersion)
+    End Sub
+
+    '记住选择（完成页）
+    Private Sub ComboFinishVersion_SelectionChanged(sender As Object, e As SelectionChangedEventArgs) Handles ComboFinishVersion.SelectionChanged
+        If IsRefreshingVersion Then Return
+        ApplyVersionSelection(ComboFinishVersion, ComboLaunchVersion)
+    End Sub
+
+    ''' <summary>
+    ''' 两个版本下拉框互相同步，并记住选择。
+    ''' </summary>
+    Private Sub ApplyVersionSelection(Source As MyComboBox, Other As MyComboBox)
+        Dim Item = TryCast(Source.SelectedItem, MyComboBoxItem)
         If Item Is Nothing Then Return
+        LaunchInstance = TryCast(Item.Tag, McInstance)
         Settings.Set("LinkLaunchVersion", Item.Content.ToString())
+        If Other IsNot Nothing Then
+            IsRefreshingVersion = True
+            Other.SelectedItem = Other.Items.OfType(Of MyComboBoxItem)().
+                FirstOrDefault(Function(i) i.Content.ToString() = Item.Content.ToString())
+            IsRefreshingVersion = False
+        End If
         UpdateLaunchHint()
     End Sub
 
@@ -598,6 +629,7 @@ Public Class PageLinkMain
     ''' 获取当前选择用于启动的游戏版本；没有可用版本时返回 Nothing。
     ''' </summary>
     Private Function GetLaunchInstance() As McInstance
+        If LaunchInstance IsNot Nothing Then Return LaunchInstance
         Dim Item = TryCast(ComboLaunchVersion.SelectedItem, MyComboBoxItem)
         If Item Is Nothing Then Return Nothing
         Return TryCast(Item.Tag, McInstance)
@@ -622,6 +654,69 @@ Public Class PageLinkMain
 
     Private Sub BtnFinishLaunch_Click(sender As Object, e As MouseButtonEventArgs)
         LaunchAndJoin()
+    End Sub
+
+    ''' <summary>
+    ''' 把当前邀请码分享给好友或群聊。
+    ''' </summary>
+    Private Sub BtnFinishShare_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnFinishShare.Click
+        If Not ModFriend.IsLoggedIn Then
+            Hint("请先到「好友」页面登录账号，再分享邀请码", HintType.Red)
+            Return
+        End If
+        Dim Code As String = GetInviteCode()
+        If String.IsNullOrEmpty(Code) Then Return
+        BtnFinishShare.IsEnabled = False
+        RunInNewThread(
+        Sub()
+            Try
+                Dim Contacts As List(Of FriendContact) = ModFriend.GetContacts()
+                Dim Groups As List(Of FriendGroup) = ModFriend.GetGroups()
+                RunInUi(
+                Sub()
+                    BtnFinishShare.IsEnabled = True
+                    ShowSharePicker(Code, Contacts, Groups)
+                End Sub)
+            Catch ex As Exception
+                RunInUi(
+                Sub()
+                    BtnFinishShare.IsEnabled = True
+                    Hint("读取好友列表失败：" & ModFriend.FriendErrorText(ex), HintType.Red)
+                End Sub)
+            End Try
+        End Sub, "Friend Share Invite")
+    End Sub
+
+    Private Sub ShowSharePicker(Code As String, Contacts As List(Of FriendContact), Groups As List(Of FriendGroup))
+        Dim Options As New List(Of IMyRadio)
+        Dim Targets As New List(Of Tuple(Of Integer, String, String))
+        For Each Contact As FriendContact In Contacts
+            Options.Add(New MyRadioBox With {.Text = $"好友 · {Contact.Nickname}"})
+            Targets.Add(New Tuple(Of Integer, String, String)(0, Contact.Id.ToString(), Contact.Nickname))
+        Next
+        For Each Group As FriendGroup In Groups
+            Options.Add(New MyRadioBox With {.Text = $"群聊 · {Group.Name}（{Group.MemberCount}）"})
+            Targets.Add(New Tuple(Of Integer, String, String)(1, Group.Id.ToString(), Group.Name))
+        Next
+        If Options.Count = 0 Then
+            Hint("通讯录里还没有好友或群聊", HintType.Red)
+            Return
+        End If
+        Dim Selected As Integer? = MyMsgBoxSelect(Options, "分享邀请码", "发送", "取消")
+        If Selected Is Nothing Then Return
+        Dim Index As Integer = CInt(Selected)
+        If Index < 0 OrElse Index >= Targets.Count Then Return
+        Dim Target = Targets(Index)
+        Dim Text As String = $"在 RMCL 启动器中输入邀请码【{Code}】，即可加入联机房间！"
+        RunInNewThread(
+        Sub()
+            Try
+                ModFriend.SendMessage(Target.Item1, Target.Item2, Text)
+                RunInUi(Sub() Hint($"邀请码已发送给 {Target.Item3}", HintType.Green))
+            Catch ex As Exception
+                RunInUi(Sub() Hint("发送失败：" & ModFriend.FriendErrorText(ex), HintType.Red))
+            End Try
+        End Sub, "Friend Share Invite Send")
     End Sub
 
     ''' <summary>

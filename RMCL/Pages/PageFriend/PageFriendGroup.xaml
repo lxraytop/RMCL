@@ -1,0 +1,75 @@
+﻿<local:MyPageRight
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:RMCL" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d" x:Class="PageFriendGroup" PanScroll="PanBack">
+    <local:MyScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" x:Name="PanBack">
+        <StackPanel Margin="25,10">
+
+            <local:MyCard Margin="0,15" Title="创建群聊">
+                <StackPanel Margin="25,40,25,18">
+                    <Grid Height="30" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="70" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="群名称" VerticalAlignment="Center" Margin="1,0,16,0" />
+                        <local:MyTextBox Grid.Column="1" x:Name="TextGroupName" Height="30" HintText="2-24 个字符" />
+                        <local:MyButton Grid.Column="2" x:Name="BtnCreateGroup" Text="创建" MinWidth="90" Height="30"
+                                        Padding="13,0" Margin="10,0,0,0" ColorType="Highlight" />
+                    </Grid>
+                    <TextBlock Text="选择要拉进群的好友（可多选）" FontSize="12" Opacity="0.6" Margin="1,0,0,8" />
+                    <local:MyScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="PanFriendPick" />
+                    </local:MyScrollViewer>
+                    <TextBlock x:Name="LabCreateHint" FontSize="12.5" TextWrapping="Wrap" Margin="1,10,0,0"
+                               Foreground="{DynamicResource ColorBrush3}" Text="" />
+                </StackPanel>
+            </local:MyCard>
+
+            <local:MyCard x:Name="CardManage" Margin="0,0,0,15" Title="群成员管理" Visibility="Collapsed">
+                <StackPanel Margin="25,40,25,18">
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="LabManageTitle" FontSize="13.5" FontWeight="SemiBold" VerticalAlignment="Center" Text="群成员" TextTrimming="CharacterEllipsis" />
+                        <local:MyButton Grid.Column="1" x:Name="BtnManageClose" Text="关闭" MinWidth="64" Height="26" Padding="10,0" />
+                    </Grid>
+                    <TextBlock Text="成员" FontSize="12" Opacity="0.6" Margin="1,0,0,6" />
+                    <StackPanel x:Name="PanMembers" />
+                    <TextBlock Text="邀请好友入群" FontSize="12" Opacity="0.6" Margin="1,12,0,6" />
+                    <local:MyScrollViewer MaxHeight="130" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="PanInvite" />
+                    </local:MyScrollViewer>
+                    <Grid Margin="0,10,0,0" Height="30">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <local:MyButton x:Name="BtnInvite" Text="邀请选中好友" MinWidth="130" Height="30" Padding="13,0" ColorType="Highlight" />
+                        <TextBlock Grid.Column="1" x:Name="LabManageHint" VerticalAlignment="Center" FontSize="12" Opacity="0.6" Margin="12,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </StackPanel>
+            </local:MyCard>
+
+            <local:MyCard Margin="0,0,0,15" Title="我的群聊">
+                <StackPanel Margin="25,40,25,18">
+                    <Grid Height="26" Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="LabGroupHint" VerticalAlignment="Center" FontSize="12" Opacity="0.6" Text="加载中……" />
+                        <local:MyButton Grid.Column="1" x:Name="BtnRefresh" Text="刷新" MinWidth="64" Height="26"
+                                        Padding="8,0" />
+                    </Grid>
+                    <StackPanel x:Name="PanGroups" />
+                </StackPanel>
+            </local:MyCard>
+
+        </StackPanel>
+    </local:MyScrollViewer>
+</local:MyPageRight>

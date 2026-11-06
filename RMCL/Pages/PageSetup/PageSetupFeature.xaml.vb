@@ -32,6 +32,18 @@ Public Class PageSetupFeature
         Reload()
     End Sub
 
+#Region "好友页面"
+
+    Private Sub BtnOpenFriend_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnOpenFriend.Click
+        If Not Settings.Get(Of Boolean)("UiPageFriends") Then
+            Hint("请先勾选上方的「显示好友页面」", HintType.Red)
+            Return
+        End If
+        FrmMain.PageChange(FormMain.PageType.Friends)
+    End Sub
+
+#End Region
+
 #Region "内存优化"
 
     Private Sub RefreshMemoryInfo()

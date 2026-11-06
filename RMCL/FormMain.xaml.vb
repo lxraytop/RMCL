@@ -957,6 +957,10 @@ Public Class FormMain
         ''' </summary>
         Setup = 2
         ''' <summary>
+        ''' 好友。默认隐藏在「设置 → 功能」里开启后才会出现在顶部栏。
+        ''' </summary>
+        Friends = 3
+        ''' <summary>
         ''' 版本选择。这是一个副页面。
         ''' </summary>
         InstanceSelect = 5
@@ -993,6 +997,11 @@ Public Class FormMain
         SetupFrp = 5
         SetupJava = 6
         SetupUpdate = 7
+        FriendChat = 0
+        FriendContact = 1
+        FriendGroup = 2
+        FriendHistory = 3
+        FriendAccount = 4
         LinkMain = 0
         InstanceOverall = 0
         InstanceSetup = 1
@@ -1055,6 +1064,9 @@ Public Class FormMain
                 Case PageType.Setup
                     If FrmSetupLeft Is Nothing Then FrmSetupLeft = New PageSetupLeft
                     Return FrmSetupLeft.PageID
+                Case PageType.Friends
+                    If FrmFriendLeft Is Nothing Then FrmFriendLeft = New PageFriendLeft
+                    Return FrmFriendLeft.PageID
                 Case PageType.InstanceSetup
                     If FrmInstanceLeft Is Nothing Then FrmInstanceLeft = New PageInstanceLeft
                     Return FrmInstanceLeft.PageID
@@ -1123,6 +1135,11 @@ Public Class FormMain
                 Case PageType.Setup
                     If FrmSetupLeft Is Nothing Then FrmSetupLeft = New PageSetupLeft
                     CType(FrmSetupLeft.PanItem.Children(SubType), MyListItem).SetChecked(True, True, Stack = PageCurrent)
+                Case PageType.Friends
+                    If FrmFriendLeft Is Nothing Then FrmFriendLeft = New PageFriendLeft
+                    '未登录时好友页只有一个入口：账号
+                    If Not ModFriend.IsLoggedIn Then SubType = PageSubType.FriendAccount
+                    CType(FrmFriendLeft.PanItem.Children(SubType), MyListItem).SetChecked(True, True, Stack = PageCurrent)
             End Select
             PageChangeActual(Stack, SubType)
         Else
@@ -1138,7 +1155,7 @@ Public Class FormMain
     ''' <summary>
     ''' 通过点击导航栏改变页面。
     ''' </summary>
-    Private Sub BtnTitleSelect_Click(sender As MyRadioButton, raiseByMouse As Boolean) Handles BtnTitleSelect0.Check, BtnTitleSelect1.Check, BtnTitleSelect2.Check
+    Private Sub BtnTitleSelect_Click(sender As MyRadioButton, raiseByMouse As Boolean) Handles BtnTitleSelect0.Check, BtnTitleSelect1.Check, BtnTitleSelect2.Check, BtnTitleSelect3.Check
         If IsChangingPage Then Return
         PageChangeActual(Val(sender.Tag))
     End Sub
@@ -1220,6 +1237,9 @@ Public Class FormMain
                 Case PageType.Setup '设置
                     If FrmSetupLeft Is Nothing Then FrmSetupLeft = New PageSetupLeft
                     PageChangeAnim(FrmSetupLeft, FrmSetupLeft.PageGet(SubType))
+                Case PageType.Friends '好友
+                    If FrmFriendLeft Is Nothing Then FrmFriendLeft = New PageFriendLeft
+                    PageChangeAnim(FrmFriendLeft, FrmFriendLeft.PageGet(SubType))
                 Case PageType.InstanceSelect '版本选择
                     If FrmSelectLeft Is Nothing Then FrmSelectLeft = New PageSelectLeft
                     If FrmSelectRight Is Nothing Then FrmSelectRight = New PageSelectRight

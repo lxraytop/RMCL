@@ -53,4 +53,46 @@ return [
 
     // 可选：GitHub Token。填了能提高 API 限额（未认证 60 次/小时），同步私有仓库时必须填。
     'github_token' => '',
+
+    // ---- 好友功能（账号 / 好友 / 群聊 / 历史记录）----
+    //
+    // 腾讯云即时通信 IM 只负责实时转发，聊天记录同时保存在本服务的 SQLite 里。
+    // 未填 sdkappid / key 时，好友功能依然可用（消息通过客户端轮询服务端收发），
+    // 只是不具备 IM 的多端同步等能力。开通与密钥位置：
+    // https://console.cloud.tencent.com/im
+    'friend' => [
+        // 注册是否需要邀请码。首个管理员邀请码可以在 admin-friend.php 里生成
+        'require_invite' => true,
+        // 注册成功后赠送的邀请码可用次数（0 表示不赠送）
+        'register_bonus_invite' => 3,
+        // 登录令牌有效期（天）
+        'token_days' => 30,
+
+        // 邮箱验证。虚拟主机默认用 PHP mail()；发不出去时可以关掉，
+        // 此时验证码会以 dev_code 形式回给客户端（仅建议在测试环境这么做）。
+        'email_enabled' => true,
+        'email_from' => 'noreply@example.com',
+        'email_subject' => 'RMCL 好友功能验证码',
+        'code_minutes' => 10,
+        'debug_code' => false,
+
+        // RaySkin 一键登录：允许校验的皮肤站域名，避免被拿来做 SSRF
+        'rayskin_auto_register' => true,
+        'rayskin_hosts' => ['mc.lxray.top', 'littleskin.cn'],
+
+        // 单人每分钟最多发送的消息条数
+        'msg_rate_per_min' => 40,
+
+        // 腾讯云即时通信 IM
+        // 密钥不写在这里：放到 data/tim.key（data 目录已被版本库与 Web 访问双重隔离）。
+        // 也可以直接把密钥填到 key 字段，key 优先于 key_file。
+        'tim' => [
+            'enabled' => true,
+            'sdkappid' => 1600171310,
+            'key' => '',
+            'key_file' => 'tim.key',
+            'admin' => 'administrator',
+            'group_type' => 'Private', // Private / Public / ChatRoom / AVChatRoom
+        ],
+    ],
 ];

@@ -4,3 +4,6 @@ data/*
 
 # server 目录的打包产物（FTP 上传用的 zip），不进版本库
 *.zip
+
+# SMTP 凭据（含授权码），不进入版本库
+config.smtp.php

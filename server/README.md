@@ -6,6 +6,8 @@
 - 管理后台签发验证码（一码一设备）、解绑换机、续期、停用、发布版本、查日志。
 - 下载走一次性（短时有效）票据，支持 `Range`，配合客户端的多线程分段下载。
 - 服务器只提供版本信息与文件，永远不直接暴露发布包路径。
+- 同一个站点的 `index.php` 还承载**好友功能**（账号 / 好友 / 群聊 / 聊天记录，腾讯云 IM 转发），
+  接口以 `friend_` 开头，管理后台在 `admin.php` 的「好友」标签页，详见 [../docs/FRIEND.md](../docs/FRIEND.md)。
 
 ---
 
@@ -54,7 +56,7 @@ location ^~ /rmcl-update/data/ {
     return 403;
 }
 
-location ~ ^/rmcl-update/(api/[a-z]+|download/[A-Fa-f0-9]+)$ {
+location ~ ^/rmcl-update/(api/[a-z_]+|download/[A-Fa-f0-9]+)$ {
     rewrite ^/rmcl-update/(.*)$ /rmcl-update/index.php?action=$1 last;
 }
 

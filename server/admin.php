@@ -14,6 +14,8 @@ declare(strict_types=1);
 require __DIR__ . '/lib/core.php';
 require __DIR__ . '/lib/license.php';
 require __DIR__ . '/lib/github.php';
+require __DIR__ . '/lib/friend.php';
+require __DIR__ . '/lib/admin_friend.php';
 
 session_name('rmcl_admin');
 session_set_cookie_params([
@@ -53,7 +55,18 @@ function check_csrf(): void
     $sent = (string) ($_POST['csrf'] ?? '');
     if ($sent === '' || !hash_equals((string) ($_SESSION['csrf'] ?? ''), $sent)) {
         flash('表单已过期，请重新提交', 'error');
-        redirect('codes');
+        // 回到提交前的标签页，而不是一律丢回「验证码」
+        $tab = (string) ($_POST['tab'] ?? '');
+        $allowed = ['codes', 'releases', 'notices', 'friends', 'logs'];
+        if (!in_array($tab, $allowed, true)) {
+            $tab = 'codes';
+        }
+        $query = [];
+        if ($tab === 'friends') {
+            $sub = (string) ($_POST['sub'] ?? 'users');
+            $query['sub'] = in_array($sub, ['users', 'invites', 'groups', 'maintenance'], true) ? $sub : 'users';
+        }
+        redirect($tab, $query);
     }
 }
 
@@ -154,6 +167,16 @@ if ($action !== '') {
 
 try {
     switch ($action) {
+        // 好友管理（集成在本后台的「好友」标签页）
+        case 'friend_create_invite':
+        case 'friend_toggle_invite':
+        case 'friend_delete_invite':
+        case 'friend_toggle_user':
+        case 'friend_delete_user':
+        case 'friend_purge_messages':
+            admin_friend_handle_post($action);
+            break;
+
         case 'create_codes':
             $count = max(1, min(200, (int) ($_POST['count'] ?? 1)));
             $mode = ($_POST['mode'] ?? 'day') === 'date' ? 'date' : 'day';

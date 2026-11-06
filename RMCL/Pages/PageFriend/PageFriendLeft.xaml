@@ -1,0 +1,18 @@
+﻿<local:MyPageLeft
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:RMCL" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="d" x:Class="PageFriendLeft"
+             d:DesignWidth="152" AnimatedControl="PanItem">
+    <StackPanel Margin="0,12,0,0" x:Name="PanItem">
+        <local:MyListItem x:Name="ItemChat" IsScaleAnimationEnabled="False" Tag="0" MinPaddingRight="35" Height="36" VerticalAlignment="Top" Title="消息" Type="RadioBox"
+            LogoScale="0.78" Logo="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM7 9h10v2H7V9zm6 5H7v-2h6v2zm4-6H7V6h10v2z" />
+        <local:MyListItem x:Name="ItemContact" IsScaleAnimationEnabled="False" Tag="1" MinPaddingRight="35" Height="36" VerticalAlignment="Top" Title="通讯录" Type="RadioBox"
+            LogoScale="0.78" Logo="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+        <local:MyListItem x:Name="ItemGroup" IsScaleAnimationEnabled="False" Tag="2" MinPaddingRight="35" Height="36" VerticalAlignment="Top" Title="群聊" Type="RadioBox"
+            LogoScale="0.8" Logo="M12 12.75c1.63 0 3.07.39 4.24.9 1.08.48 1.76 1.56 1.76 2.73V18H6v-1.61c0-1.18.68-2.26 1.76-2.73 1.17-.52 2.61-.91 4.24-.91zM4 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm1.13 1.1c-.37-.06-.74-.1-1.13-.1-.99 0-1.93.21-2.78.58C.48 14.9 0 15.62 0 16.43V18h4.5v-1.61c0-.83.23-1.61.63-2.29zM20 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm4 3.43c0-.81-.48-1.53-1.22-1.85-.85-.37-1.79-.58-2.78-.58-.39 0-.76.04-1.13.1.4.68.63 1.46.63 2.29V18H24v-1.57zM12 6c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3z" />
+        <local:MyListItem x:Name="ItemHistory" IsScaleAnimationEnabled="False" Tag="3" MinPaddingRight="35" Height="36" VerticalAlignment="Top" Title="历史记录" Type="RadioBox"
+            LogoScale="0.82" Logo="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z" />
+        <local:MyListItem x:Name="ItemAccount" IsScaleAnimationEnabled="False" Tag="4" MinPaddingRight="35" Height="36" VerticalAlignment="Top" Title="账号" Type="RadioBox"
+            LogoScale="0.8" Logo="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+    </StackPanel>
+</local:MyPageLeft>

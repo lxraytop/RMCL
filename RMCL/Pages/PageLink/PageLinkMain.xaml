@@ -195,6 +195,17 @@
                                                Foreground="{DynamicResource ColorBrushGray2}" />
                                 </StackPanel>
                             </StackPanel>
+                            <Grid x:Name="PanFinishVersion" Margin="0,14,0,0" Height="28">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="1*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock VerticalAlignment="Center" Text="游戏版本" Margin="0,0,12,0" FontSize="13"
+                                           Foreground="{DynamicResource ColorBrushGray3}" />
+                                <local:MyComboBox Grid.Column="1" x:Name="ComboFinishVersion"
+                                                  ToolTip="进入房间后随时可以换版本，点「启动并进入」会使用这里选择的版本。"
+                                                  HintText="选择要启动的 Minecraft 版本" />
+                            </Grid>
                             <StackPanel Orientation="Horizontal" Margin="0,16,0,0" HorizontalAlignment="Left">
                                 <StackPanel x:Name="BtnFinishPing" Orientation="Horizontal" Margin="0,0,14,0"
                                             Background="{DynamicResource ColorBrushSemiTransparent}"
@@ -236,6 +247,8 @@
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0" Height="28">
                                 <local:MyButton x:Name="BtnFinishLaunch" Text="启动并进入" Width="130" Height="28" Padding="0"
                                                 ColorType="Highlight" Margin="0,0,10,0" Click="BtnFinishLaunch_Click" />
+                                <local:MyButton x:Name="BtnFinishShare" Text="分享给好友" Width="110" Height="28" Padding="0"
+                                                Margin="0,0,10,0" />
                                 <local:MyButton x:Name="BtnFinishCopy" Text="复制邀请码" Width="110" Height="28" Padding="0"
                                                 ColorType="Highlight" Margin="0,0,10,0" />
                                 <local:MyButton x:Name="BtnFinishExit" Text="退出" Width="80" Height="28" Padding="0" />

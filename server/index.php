@@ -60,7 +60,7 @@ function resolve_action(): string
     }
     $path = '/' . trim($path, '/');
 
-    if (preg_match('#^/api/([a-z]+)$#i', $path, $m)) {
+    if (preg_match('#^/api/([a-z_]+)$#i', $path, $m)) {
         return strtolower($m[1]);
     }
     if (preg_match('#^/download/([A-Fa-f0-9]+)$#', $path, $m)) {
@@ -198,6 +198,13 @@ HTML;
 
 try {
     $action = resolve_action();
+
+    // 好友功能的接口统一走 friend_ 前缀，交给 lib/friend.php 处理
+    if (str_starts_with($action, 'friend_')) {
+        require __DIR__ . '/lib/friend.php';
+        friend_handle(substr($action, 7));
+        exit;
+    }
 
     switch ($action) {
         case 'home':
