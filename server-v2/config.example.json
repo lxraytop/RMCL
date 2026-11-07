@@ -1,0 +1,15 @@
+{
+  "db": "data/friend.db",
+  "token_ttl_days": 30,
+  "debug_code": true,
+  "presence_grace_seconds": 30,
+  "event_retention_days": 7,
+  "tim": {
+    "enabled": true,
+    "sdkappid": 1600171310,
+    "key_file": "../server/data/tim.key",
+    "admin": "administrator",
+    "group_type": "Private",
+    "friendship_mirror": false
+  }
+}
