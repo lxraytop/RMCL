@@ -487,13 +487,28 @@ Public Class PageFriendAccount
     ''' </summary>
     Private Function RayskinResolveBase(Server As String) As String
         Dim Base As String = Server.TrimEnd("/"c)
-        If Base = "" Then Return ""
-        Dim Candidates As New List(Of String) From {Base}
-        If Base.EndsWith("/api/yggdrasil", StringComparison.OrdinalIgnoreCase) Then
-            Candidates.Add(Base.Substring(0, Base.Length - "/api/yggdrasil".Length).TrimEnd("/"c))
+        if (Base = "") Then Return ""
+
+        'http 一律先按 https 试：服务端只接受 https，老配置里残留的 http 会直接被拒
+        Dim Bases As New List(Of String)
+        If Base.StartsWith("http://", StringComparison.OrdinalIgnoreCase) Then
+            Bases.Add("https://" & Base.Substring("http://".Length))
+            Bases.Add(Base)
         Else
-            Candidates.Add(Base & "/api/yggdrasil")
+            Bases.Add(Base)
         End If
+
+        Dim Candidates As New List(Of String)
+        For Each Item As String In Bases
+            If Not Candidates.Contains(Item) Then Candidates.Add(Item)
+            Dim Alt As String
+            If Item.EndsWith("/api/yggdrasil", StringComparison.OrdinalIgnoreCase) Then
+                Alt = Item.Substring(0, Item.Length - "/api/yggdrasil".Length).TrimEnd("/"c)
+            Else
+                Alt = Item & "/api/yggdrasil"
+            End If
+            If Not Candidates.Contains(Alt) Then Candidates.Add(Alt)
+        Next
 
         For Each Candidate As String In Candidates
             Try
@@ -669,6 +684,10 @@ Public Class PageFriendAccount
                 Sub()
                     LabRestoreStatus.Text = If(Count > 0, $"已恢复 {Count} 条消息到本地。", "没有需要恢复的新消息。")
                     SetBusy(False)
+                    '恢复完立刻把当前打开的会话重载一遍，不用手动重开
+                    If Count > 0 AndAlso FrmFriendChat IsNot Nothing AndAlso FrmFriendChat.IsLoaded Then
+                        FrmFriendChat.ReloadCurrent()
+                    End If
                 End Sub)
             Catch ex As Exception
                 RunInUi(
@@ -807,9 +826,15 @@ Public Class PageFriendAccount
                         Dim Count As Integer = ModFriend.RestoreRoam(Conv.ConvType, Conv.ConvKey)
                         RunInUi(
                         Sub()
-                            LabRoamHint.Text = $"「{Conv.Title}」恢复了 {Count} 条记录，重新打开该会话即可看到。"
+                            LabRoamHint.Text = If(Count > 0,
+                                                  $"「{Conv.Title}」恢复了 {Count} 条记录，已经同步到聊天页。",
+                                                  $"「{Conv.Title}」云端没有新的记录需要恢复。")
                             BtnRestore.IsEnabled = True
                             RefreshLocalInfo()
+                            '正在看这个会话的话立即刷新消息区
+                            If Count > 0 AndAlso FrmFriendChat IsNot Nothing AndAlso FrmFriendChat.IsLoaded Then
+                                FrmFriendChat.ReloadIfCurrent(Conv.ConvType, Conv.ConvKey)
+                            End If
                         End Sub)
                     Catch ex As Exception
                         RunInUi(

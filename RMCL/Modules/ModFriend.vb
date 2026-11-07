@@ -463,7 +463,7 @@ Public Module ModFriend
         For Page As Integer = 1 To 20
             Dim Param As New JObject From {{"since_id", Cursor}, {"limit", 500}}
             Dim Excluded As List(Of Long) = DeletedSnapshot()
-            If Excluded.Count > 0 Then Param("exclude") = String.Join(",", Excluded.Take(500))
+            If Excluded.Count > 0 Then Param("exclude") = String.Join(",", Excluded.Take(2000))
             Dim Data As JObject = FriendApi("sync", Param, True, 30000)
             If Data Is Nothing Then Exit For
             Dim Arr As JArray = TryCast(Data("messages"), JArray)
@@ -779,10 +779,19 @@ Public Module ModFriend
         Return If(Data Is Nothing, 0, Data.Value(Of Integer)("added"))
     End Function
 
+    ''' <summary>
+    ''' 内容指纹：上传过的本机记录在服务端会拿到新的 id，
+    ''' 只按 id 去重会让同一句话在本地出现两次，所以再按「发送者 + 时间 + 内容」判重。
+    ''' </summary>
+    Private Function RoamContentKey(Msg As FriendMessage) As String
+        Return $"{Msg.FromId}|{Msg.CreatedAt}|{Msg.Body}"
+    End Function
+
     ''' <summary>从云端把某个会话的漫游记录拉回本机，返回新增条数。</summary>
     Public Function RestoreRoam(ConvType As Integer, ConvKey As String) As Integer
-        Dim Existing As New HashSet(Of Long)(
-            LocalLoad(ConvType, ConvKey).Where(Function(m) m.Id > 0).Select(Function(m) m.Id))
+        Dim Local As List(Of FriendMessage) = LocalLoad(ConvType, ConvKey)
+        Dim Existing As New HashSet(Of Long)(Local.Where(Function(m) m.Id > 0).Select(Function(m) m.Id))
+        Dim ExistingContent As New HashSet(Of String)(Local.Select(Function(m) RoamContentKey(m)))
         Dim Added As Integer = 0
         Dim Before As Long = 0
         '每页 200 条，最多翻 50 页（1 万条）
@@ -798,8 +807,11 @@ Public Module ModFriend
             For Each Token As JToken In Arr
                 Dim Msg As FriendMessage = ParseMessage(CType(Token, JObject))
                 If Msg.Id <= 0 OrElse Existing.Contains(Msg.Id) OrElse IsDeleted(Msg.Id) Then Continue For
+                Dim Key As String = RoamContentKey(Msg)
+                If ExistingContent.Contains(Key) Then Continue For
                 LocalAppend(Msg)
                 Existing.Add(Msg.Id)
+                ExistingContent.Add(Key)
                 Added += 1
             Next
             Dim NextId As Long = 0

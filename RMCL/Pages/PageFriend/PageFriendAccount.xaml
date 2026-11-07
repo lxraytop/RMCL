@@ -185,7 +185,7 @@
                 <local:MyCard Margin="0,0,0,15" Title="聊天记录">
                     <StackPanel Margin="25,40,25,18">
                         <TextBlock TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,14"
-                                   Text="聊天记录同时保存在本机与服务器。重装启动器、换电脑或者换了本地缓存目录后，可以从服务器把历史消息恢复到本地，恢复后离线也能查看。" />
+                                   Text="把服务器上已有的历史一次性回填到本机缓存（不受「漫游」开关限制），恢复后离线也能查看。只想恢复某个会话，用下面的「聊天记录漫游」卡片。" />
                         <Grid Height="35">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />

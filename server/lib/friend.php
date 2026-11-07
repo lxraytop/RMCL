@@ -25,6 +25,18 @@ function friend_tables(): void
     $done = true;
     $pdo = db();
 
+    // 轮询按 to_id / from_id / (conv_type, conv_key) 过滤，缺索引时消息一多就会明显变慢
+    try {
+        if (db_one("SELECT v FROM friend_meta WHERE k = 'idx'") === null) {
+            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_friend_msg_to ON friend_message(to_id, id)');
+            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_friend_msg_from ON friend_message(from_id, id)');
+            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_friend_msg_conv ON friend_message(conv_type, conv_key, id)');
+            db_exec("INSERT OR REPLACE INTO friend_meta (k, v) VALUES ('idx', '1')");
+        }
+    } catch (Throwable $e) {
+        // friend_meta 还没建好，等下面的建表流程走完再说
+    }
+
     // 已经建过表就直接返回，避免每个请求都跑一遍 CREATE TABLE
     $version = 0;
     try {
@@ -718,8 +730,13 @@ function friend_rayskin_login(): void
     if ($uuid === '' || ($serverId === '' && $accessToken === '')) {
         friend_err('E_RAYSKIN', 'RaySkin 返回的数据不完整');
     }
+    // 老配置里可能是 http，统一升级成 https 再校验（白名单仍然生效，不会放宽 SSRF 面）
+    if (preg_match('#^http://#i', $server)) {
+        $server = 'https://' . substr($server, 7);
+    }
     if (!preg_match('#^https://#i', $server) || !friend_rayskin_allowed($server)) {
-        friend_err('E_RAYSKIN', '不支持该认证服务器');
+        $host = (string) parse_url($server, PHP_URL_HOST);
+        friend_err('E_RAYSKIN', "不支持该认证服务器（{$host}）。如果这是你自己的皮肤站，请把域名加入 config.php 的 friend.rayskin_hosts");
     }
 
     $profile = null;
@@ -1726,7 +1743,7 @@ function friend_sync(): void
         $num = (int) trim($rawId);
         if ($num > 0) {
             $exclude[] = $num;
-            if (count($exclude) >= 500) {
+            if (count($exclude) >= 2000) {
                 break;
             }
         }

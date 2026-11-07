@@ -22,7 +22,8 @@ Public Class PageFriendChat
 
     Private Sub PageFriendChat_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded
         If PollTimer Is Nothing Then
-            PollTimer = New DispatcherTimer With {.Interval = TimeSpan.FromSeconds(6)}
+            '好友页在前台时 3 秒拉一次，接近即时（离开页面会停止）
+            PollTimer = New DispatcherTimer With {.Interval = TimeSpan.FromSeconds(3)}
             AddHandler PollTimer.Tick, Sub() PollOnce()
         End If
         '恢复上次的会话列表折叠状态
@@ -108,6 +109,48 @@ Public Class PageFriendChat
         For Each Conv As FriendConversation In Conversations
             PanConv.Children.Add(BuildConversationRow(Conv))
         Next
+    End Sub
+
+    ''' <summary>
+    ''' 本地更新某个会话的摘要（最后一条消息 / 时间 / 未读）。
+    ''' 发送、接收、撤回、已读等本地动作都直接改这里，界面立刻一致，不再等一次服务器往返。
+    ''' 只改数据，重绘由 ApplyConversationOrder 统一完成，避免连续多条消息时反复重建列表。
+    ''' </summary>
+    Private Function TouchConversation(ConvType As Integer, ConvKey As String, Body As String, At As Long,
+                                       Optional UnreadDelta As Integer = 0,
+                                       Optional ClearUnread As Boolean = False) As Boolean
+        Dim Conv As FriendConversation = Conversations.FirstOrDefault(
+            Function(c) c.ConvType = ConvType AndAlso c.ConvKey = ConvKey)
+        If Conv Is Nothing Then Return False
+        If Not String.IsNullOrEmpty(Body) Then Conv.LastBody = Body
+        If At > 0 Then Conv.LastAt = At
+        If ClearUnread Then
+            Conv.Unread = 0
+        ElseIf UnreadDelta > 0 Then
+            Conv.Unread += UnreadDelta
+        End If
+        Return True
+    End Function
+
+    ''' <summary>按最后消息时间重排会话并重建卡片。</summary>
+    Private Sub ApplyConversationOrder()
+        Dim Sorted As List(Of FriendConversation) =
+            Conversations.OrderByDescending(Function(c) c.LastAt).ToList()
+        Conversations.Clear()
+        Conversations.AddRange(Sorted)
+        BuildConversationList()
+    End Sub
+
+    ''' <summary>供其它页面调用：如果正在看这个会话，就把消息重新载入一遍。</summary>
+    Public Sub ReloadIfCurrent(ConvType As Integer, ConvKey As String)
+        If CurrentType = ConvType AndAlso CurrentKey = ConvKey Then
+            OpenConversation(ConvType, ConvKey, CurrentTitle)
+        End If
+    End Sub
+
+    ''' <summary>供其它页面调用：重新载入当前会话（全量恢复历史后用）。</summary>
+    Public Sub ReloadCurrent()
+        If CurrentType >= 0 Then OpenConversation(CurrentType, CurrentKey, CurrentTitle)
     End Sub
 
     Private Function BuildConversationRow(Conv As FriendConversation) As FrameworkElement
@@ -269,7 +312,7 @@ Public Class PageFriendChat
         '先显示本地缓存，界面立刻有内容
         Messages.Clear()
         Messages.AddRange(ModFriend.LocalLoad(ConvType, ConvKey))
-        RenderMessages()
+        RenderMessages(True)
 
         '再补拉服务器上的最新消息
         RunInNewThread(
@@ -330,7 +373,22 @@ Public Class PageFriendChat
 
 #Region "渲染"
 
-    Private Sub RenderMessages()
+    ''' <summary>当前视图是不是已经在底部附近（新消息要不要自动滚动看它）。</summary>
+    Private Function IsNearBottom() As Boolean
+        Try
+            If PanMsgScroll.ExtentHeight <= 0 Then Return True
+            Return PanMsgScroll.VerticalOffset + PanMsgScroll.ViewportHeight >= PanMsgScroll.ExtentHeight - 80
+        Catch
+            Return True
+        End Try
+    End Function
+
+    ''' <summary>
+    ''' 重建消息区。ForceBottom=True 时强制滚到底部（切换会话、自己发消息）；
+    ''' 否则只有原本就在底部附近才跟着滚动，避免翻历史时被新消息打断。
+    ''' </summary>
+    Private Sub RenderMessages(Optional ForceBottom As Boolean = False)
+        Dim StickToBottom As Boolean = ForceBottom OrElse IsNearBottom()
         PanMsg.Children.Clear()
         PanMsg.Children.Add(BtnLoadMore)
         BtnLoadMore.Visibility = If(Messages.Count >= Limit, Visibility.Visible, Visibility.Collapsed)
@@ -343,8 +401,11 @@ Public Class PageFriendChat
         For Each Msg As FriendMessage In Messages.Skip(Math.Max(0, Messages.Count - Limit))
             PanMsg.Children.Add(BuildMessageRow(Msg))
         Next
-        '等布局完成后再滚到底部，避免长消息把最后一条挡在视口外
-        Dispatcher.BeginInvoke(New Action(Sub() PanMsgScroll.ScrollToEnd()), System.Windows.Threading.DispatcherPriority.Background)
+        If StickToBottom Then
+            '等布局完成后再滚到底部，避免长消息把最后一条挡在视口外
+            Dispatcher.BeginInvoke(New Action(Sub() PanMsgScroll.ScrollToEnd()),
+                                   System.Windows.Threading.DispatcherPriority.Background)
+        End If
     End Sub
 
     Private Function BuildMessageRow(Msg As FriendMessage) As FrameworkElement
@@ -486,7 +547,7 @@ Public Class PageFriendChat
                     Msg.Kind = "recalled"
                     Msg.Body = ""
                     RenderMessages()
-                    RefreshConversations(True)
+                    If TouchConversation(CurrentType, CurrentKey, "[已撤回]", NowUnix()) Then ApplyConversationOrder()
                     Hint("已撤回", HintType.Green, False)
                 End Sub)
             Catch ex As Exception
@@ -501,6 +562,14 @@ Public Class PageFriendChat
         ModFriend.LocalRemove(Msg.Id)
         ModFriend.LocalFlush()
         RenderMessages()
+        '删掉的如果是最后一条，会话卡片的预览也要跟着变
+        Dim Last As FriendMessage = Messages.
+            Where(Function(m) m.Id > 0).
+            OrderByDescending(Function(m) m.CreatedAt).
+            FirstOrDefault()
+        If TouchConversation(CurrentType, CurrentKey,
+                             If(Last Is Nothing, "", Last.Body),
+                             If(Last Is Nothing, 0, Last.CreatedAt)) Then ApplyConversationOrder()
     End Sub
 
     Private Sub ForwardMessage(Msg As FriendMessage)
@@ -592,7 +661,9 @@ Public Class PageFriendChat
         Messages.Add(Pending)
         TextMessage.Text = ""
         IsSending = True
-        RenderMessages()
+        RenderMessages(True)
+        '乐观更新：会话卡片立刻显示这条消息，不等网络
+        If TouchConversation(CurrentType, CurrentKey, Text, Pending.CreatedAt) Then ApplyConversationOrder()
 
         Dim ConvType As Integer = CurrentType
         Dim ConvKey As String = CurrentKey
@@ -606,7 +677,8 @@ Public Class PageFriendChat
                     If Not Messages.Any(Function(m) m.Id = Sent.Id) Then Messages.Add(Sent)
                     IsSending = False
                     RenderMessages()
-                    RefreshConversations(True)
+                    '用服务端的真实时间校准一次，会话卡片仍然本地更新，不做整体刷新
+                    If TouchConversation(ConvType, ConvKey, Sent.Body, Sent.CreatedAt) Then ApplyConversationOrder()
                 End Sub)
             Catch ex As Exception
                 RunInUi(
@@ -653,7 +725,25 @@ Public Class PageFriendChat
                         Next
                     End If
                     If NeedRender Then RenderMessages()
-                    RefreshConversations(True)
+
+                    '会话卡片：按本次新消息在本地聚合更新，不再整体拉一次列表
+                    Dim Unknown As Boolean = False
+                    Dim Touched As Boolean = False
+                    For Each Group In Polled.Messages.
+                            GroupBy(Function(m) m.ConvType & "|" & m.ConvKey)
+                        Dim Last As FriendMessage = Group.OrderBy(Function(m) m.Id).Last()
+                        Dim IsCurrent As Boolean = Last.ConvType = CurrentType AndAlso Last.ConvKey = CurrentKey
+                        Dim Body As String = If(Last.Recalled, "[已撤回]", Last.Body)
+                        If TouchConversation(Last.ConvType, Last.ConvKey, Body, Last.CreatedAt,
+                                             If(IsCurrent, 0, Group.Count())) Then
+                            Touched = True
+                        Else
+                            '本地还没有这个会话（第一次收到消息）：交给一次列表刷新补全标题
+                            Unknown = True
+                        End If
+                    Next
+                    If Touched Then ApplyConversationOrder()
+                    If Unknown Then RefreshConversations(True)
                 End Sub)
             Catch ex As Exception
                 Logger.Warn(ex, "拉取好友新消息失败")
