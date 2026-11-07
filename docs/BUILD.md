@@ -1,4 +1,4 @@
-# 构建说明（RMCL 2.20.2.1）
+# 构建说明（RMCL 2.20.2.2）
 
 RMCL 基于上游 2.14.0.0 开源基线重构，技术栈与上游一致：**.NET Framework 4.8 + WPF + VB.NET**（主工程为传统 vbproj，`RMCLCS` 与 `MeloongCore` 为 SDK 风格 csproj）。
 
@@ -81,12 +81,33 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 
 | 文件 | 大小 | 说明 |
 | --- | --- | --- |
-| `dist/RMCL 2.20.2.1/RMCL.exe` | 5.90 MB | 主程序，版本信息 `2.20.2.1 / Ray Minecraft Launcher` |
-| `dist/RMCL 2.20.2.1/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
-| `dist/RMCL-2.20.2.1-win.zip` | 2.63 MB | 上述两个文件的压缩包（sha256 `a04ca9dc128d1298…`） |
+| `dist/RMCL 2.20.2.2/RMCL.exe` | 5.91 MB | 主程序，版本信息 `2.20.2.2 / Ray Minecraft Launcher` |
+| `dist/RMCL 2.20.2.2/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
+| `dist/RMCL-2.20.2.2-win.zip` | 2.63 MB | 上述两个文件的压缩包 |
 
-对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.20.2.1>，
-资产 `RMCL.exe`（6,196,736 B，sha256 `aa30e7b325b2334c…`）与 `RMCL-2.20.2.1-win.zip`（2,759,288 B）。
+对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.20.2.2>，
+资产 `RMCL.exe`（6,198,784 B，sha256 `d4d246de54c38a3a…`）与
+`RMCL-2.20.2.2-win.zip`（2,754,381 B，sha256 `787d22076e79f56d…`）。
+
+### 2.20.2.2 主要变更
+
+好友模块整体切到 v2 网关（`server-v2/`，FastAPI + WebSocket），客户端默认服务地址
+`https://immc.lxray.top`，旧的 `action=friend_*` 轮询接口与 `FriendApi(action)` 兼容层全部移除。
+
+- 全面校正 v2 接口契约：修复「加好友」按钮点不动（`relation` 取值没换算）、单聊消息
+  `conv_key` 与会话键两套体系导致推送匹配不上、历史检索 `scope` 失效、验证码字段名不符、
+  好友申请列表混入已处理记录。
+- 实时推送改用 WebSocket：`hello → resume → event`，断线自动重连补拉，移除在线状态、
+  好友分组、漫游等体验版不支持的功能；未读红点保留，以服务端为准。
+- 修复退出登录崩溃、WS 连上就断（`FriendLastSeq` 未注册导致 `KeyNotFoundException`）。
+- 修复清除本地聊天记录后会话卡片仍显示旧消息，切回页面还会把内存副本写回磁盘「复活」。
+- 修复两个账号来回切换时未读红点叠加：新登录从 `hello.server_seq` 起步不重放历史事件；
+  会话代号 + 主动断开旧 socket 防止双连接重复计数；换号时清空事件队列与各页面缓存。
+- 清理旧服务端遗留代码：删掉漫游空实现、恒为 False 的在线字段、只写不读的
+  `FriendLastMsgId`，好友请求与历史结果改为强类型。
+- 服务端新增 `/admin` 网页管理后台、健康检查诊断，并把 `/docs` 的 Swagger 资源改成本地静态文件
+  （国内访问 jsdelivr 会白屏）。
+- 接口清单见 `docs/FRIEND-V2-API.md`，宝塔部署见 `server-v2/DEPLOY-BT.md`。
 
 ### 2.20.2.1 主要变更
 
