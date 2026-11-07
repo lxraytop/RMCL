@@ -86,8 +86,8 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 | `dist/RMCL-2.20.2.2-win.zip` | 2.63 MB | 上述两个文件的压缩包 |
 
 对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.20.2.2>，
-资产 `RMCL.exe`（6,198,784 B，sha256 `d4d246de54c38a3a…`）与
-`RMCL-2.20.2.2-win.zip`（2,754,381 B，sha256 `787d22076e79f56d…`）。
+资产 `RMCL.exe`（6,198,784 B，sha256 `526703eec3b0afa7…`）与
+`RMCL-2.20.2.2-win.zip`（2,754,367 B，sha256 `d09abfd9f88df3a4…`）。
 
 ### 2.20.2.2 主要变更
 
