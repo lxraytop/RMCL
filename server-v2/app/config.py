@@ -55,6 +55,7 @@ def describe() -> dict:
         "path": str(CONFIG_PATH),
         "exists": CONFIG_PATH.is_file(),
         "debug_code": bool(CONFIG.get("debug_code")),
+        "admin_enabled": bool(CONFIG.get("admin_password")),
         "tim_enabled": bool(CONFIG.get("tim", {}).get("enabled")),
         "tim_key": str(TIM_KEY_FILE),
         "tim_key_exists": bool(TIM_KEY_FILE and TIM_KEY_FILE.is_file()),

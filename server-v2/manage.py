@@ -40,8 +40,8 @@ def cmd_user(email: str, password: str, nickname: str) -> None:
             print("邮箱已存在")
             return
         conn.execute(
-            "INSERT INTO user (email, nickname, pass_hash, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)",
-            (email, nickname, hash_password(password), now(), now()),
+            "INSERT INTO user (email, nickname, pass_hash, created_at) VALUES (?, ?, ?, ?)",
+            (email, nickname, hash_password(password), now()),
         )
         uid = int(conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"])
         token = new_token()

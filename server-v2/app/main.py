@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import tim
+from .admin import AdminAuthError, router as admin_router
 from .api import ApiError, router
 from .db import init_db, one, rows, tx
 from .hub import HUB, trim_events
@@ -46,11 +47,17 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(admin_router)
 
 
 @app.exception_handler(ApiError)
 async def api_error_handler(request, exc: ApiError):
     return JSONResponse(status_code=exc.status, content={"error": {"code": exc.code, "message": exc.message}})
+
+
+@app.exception_handler(AdminAuthError)
+async def admin_auth_handler(request, exc: AdminAuthError):
+    return JSONResponse(status_code=401, content={"error": "需要登录"})
 
 
 @app.get("/")
