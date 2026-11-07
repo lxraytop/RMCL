@@ -85,6 +85,20 @@ def user_public(row: dict) -> dict:
     }
 
 
+def self_public(conn, row: dict) -> dict:
+    """只在登录/注册/me 返回：带上自己的邀请码与用量。"""
+    item = user_public(row)
+    code = row.get("invite_code") or ""
+    used = 0
+    max_uses = 0
+    if code:
+        used = int(one(conn, "SELECT COUNT(*) AS c FROM user WHERE invite_code = ?", (code,))["c"])
+        inv = one(conn, "SELECT max_uses FROM invite WHERE code = ?", (code,))
+        max_uses = int(inv["max_uses"]) if inv else 0
+    item.update({"invite_code": code, "invite_used": used, "invite_max": max_uses})
+    return item
+
+
 def msg_payload(row: dict) -> dict:
     return {
         "id": int(row["id"]),
@@ -189,8 +203,9 @@ async def register(body: dict):
             (token, uid, body.get("device") or "", now(), now() + int(CONFIG["token_ttl_days"]) * 86400),
         )
         user = one(conn, "SELECT * FROM user WHERE id = ?", (uid,))
+        self_view = self_public(conn, user)
     asyncio.create_task(tim.account_import(uid, nickname))
-    return {"ok": True, "token": token, "user": user_public(user),
+    return {"ok": True, "token": token, "user": self_view,
             "user_sig": tim.user_sig(str(uid)) if tim.enabled() else ""}
 
 
@@ -207,7 +222,8 @@ async def login(body: dict):
             "INSERT INTO auth_token (token, user_id, device, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
             (token, user["id"], body.get("device") or "", now(), now() + int(CONFIG["token_ttl_days"]) * 86400),
         )
-    return {"ok": True, "token": token, "user": user_public(user),
+        self_view = self_public(conn, user)
+    return {"ok": True, "token": token, "user": self_view,
             "user_sig": tim.user_sig(str(user["id"])) if tim.enabled() else ""}
 
 
@@ -283,8 +299,9 @@ async def rayskin_login(body: dict):
             (token, uid, body.get("device") or "", now(), now() + int(CONFIG["token_ttl_days"]) * 86400),
         )
         user = one(conn, "SELECT * FROM user WHERE id = ?", (uid,))
+        self_view = self_public(conn, user)
     asyncio.create_task(tim.account_import(uid, user["nickname"]))
-    return {"ok": True, "token": token, "user": user_public(user),
+    return {"ok": True, "token": token, "user": self_view,
             "user_sig": tim.user_sig(str(uid)) if tim.enabled() else ""}
 
 
@@ -303,7 +320,8 @@ async def me(user: dict = Depends(current_user)):
                          (user["id"],))["c"])
         pending = int(one(conn, "SELECT COUNT(*) AS c FROM friend_request WHERE to_id = ? AND status = 'pending'",
                           (user["id"],))["c"])
-    return {"user": user_public(user), "unread": unread, "pending_requests": pending}
+        self_view = self_public(conn, user)
+    return {"user": self_view, "unread": unread, "pending_requests": pending}
 
 
 # ---------------------------------------------------------------- 好友
