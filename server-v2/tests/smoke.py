@@ -168,10 +168,58 @@ async def main() -> None:
               api(tb, "POST", "/api/v1/messages", {"conv": f"1:{gid}", "body": "还在吗"}).get("error", {}).get("code")
               == "E_NOT_MEMBER")
 
+    print("== 搜索 / 好友申请状态（客户端按钮依赖这些取值） ==")
+    tc, idc = register("carol")
+    found = api(ta, "GET", "/api/v1/search?q=carol")
+    hit = next((x for x in found["items"] if x["id"] == idc), None)
+    check("搜索能查到用户", hit is not None, str(found)[:200])
+    check("陌生人的 relation 是 none", hit is not None and hit["relation"] == "none", str(hit))
+
+    req2 = api(ta, "POST", "/api/v1/friend-requests", {"to_id": idc, "wording": "hi"})
+    check("向 carol 发送申请", req2.get("ok") is True, str(req2))
+    check("重复发送不新建申请",
+          api(ta, "POST", "/api/v1/friend-requests", {"to_id": idc, "wording": "hi"}).get("duplicated") is True)
+    hit = next(x for x in api(ta, "GET", "/api/v1/search?q=carol")["items"] if x["id"] == idc)
+    check("发起方看到 requested", hit["relation"] == "requested", str(hit))
+    hit = next(x for x in api(tc, "GET", "/api/v1/search?q=alice")["items"] if x["id"] == ida)
+    check("接收方看到 incoming", hit["relation"] == "incoming", str(hit))
+    check("搜索空关键词返回空列表", api(ta, "GET", "/api/v1/search?q=")["items"] == [])
+
+    carol_in = api(tc, "GET", "/api/v1/friend-requests?box=in")
+    check("待处理申请在列表里", len(carol_in["items"]) == 1 and carol_in["items"][0]["status"] == "pending",
+          str(carol_in)[:200])
+    check("同意 carol 的申请", api(tc, "POST", f"/api/v1/friend-requests/{req2['id']}/accept").get("ok") is True)
+    check("同意后待处理列表清空", api(tc, "GET", "/api/v1/friend-requests?box=in")["items"] == [])
+    handled = api(tc, "GET", "/api/v1/friend-requests?box=in&include_handled=true")["items"]
+    check("include_handled 能查到已处理的申请",
+          any(x["id"] == req2["id"] and x["status"] == "accepted" for x in handled), str(handled)[:200])
+    hit = next(x for x in api(ta, "GET", "/api/v1/search?q=carol")["items"] if x["id"] == idc)
+    check("成为好友后 relation 是 friend", hit["relation"] == "friend", str(hit))
+
+    print("== 消息 conv_key 与历史检索 ==")
+    api(ta, "POST", "/api/v1/messages", {"conv": f"0:{idc}", "body": "历史检索样本"})
+    convs_a = api(ta, "GET", "/api/v1/conversations")["items"]
+    single = next(c for c in convs_a if c["conv_type"] == 0 and c["conv_key"] == str(idc))
+    check("会话表的 conv_key 是自己视角的对方 id", single["conv_key"] == str(idc), str(single))
+    msgs_c = api(tc, "GET", f"/api/v1/messages?conv=0:{ida}")["items"]
+    check("消息表用 min_max 形式的 conv_key",
+          msgs_c and all("_" in m["conv_key"] for m in msgs_c) and
+          msgs_c[0]["conv_key"] == "_".join(str(x) for x in sorted((ida, idc))),
+          str(msgs_c[:1])[:200])
+
+    hf = api(ta, "GET", "/api/v1/history?scope=friend&keyword=历史检索样本")
+    check("scope=friend 只返回单聊", hf["items"] and all(x["conv_type"] == 0 for x in hf["items"]),
+          str(hf)[:200])
+    hg = api(ta, "GET", "/api/v1/history?scope=group&keyword=群里好")
+    check("scope=group 只返回群聊", hg["items"] and all(x["conv_type"] == 1 for x in hg["items"]), str(hg)[:200])
+    ha = api(ta, "GET", "/api/v1/history?keyword=历史检索样本")
+    check("scope 缺省等于 all", ha["items"] and ha["items"][0]["body"] == "历史检索样本", str(ha)[:200])
+
     print("== 删除好友 ==")
     api(ta, "DELETE", f"/api/v1/friends/{idb}")
     fa = api(ta, "GET", "/api/v1/friends")
-    check("好友列表清空", fa["total"] == 0, str(fa["total"]))
+    check("删除后好友列表不再包含对方",
+          all(x["id"] != idb for x in fa["items"]) and fa["total"] == len(fa["items"]), str(fa)[:200])
     check("非好友不能发消息",
           api(ta, "POST", "/api/v1/messages", {"conv": f"0:{idb}", "body": "x"}).get("error", {}).get("code")
           == "E_NOT_FRIEND")

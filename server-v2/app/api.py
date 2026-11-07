@@ -401,20 +401,23 @@ def _request_view(it: dict, box: str) -> dict:
 
 
 @router.get("/friend-requests")
-async def list_requests(box: str = Query("in"), user: dict = Depends(current_user)):
+async def list_requests(box: str = Query("in"), include_handled: bool = Query(False),
+                        user: dict = Depends(current_user)):
+    """默认只返回待处理的申请。已同意/已拒绝的留在列表里会让人点了没反应。"""
+    cond = "" if include_handled else " AND r.status = 'pending'"
     with tx() as conn:
         if box == "out":
             items = rows(
                 conn,
                 "SELECT r.*, u.nickname, u.avatar, u.email FROM friend_request r JOIN user u ON u.id = r.to_id\n"
-                " WHERE r.from_id = ? ORDER BY r.id DESC LIMIT 100",
+                " WHERE r.from_id = ?" + cond + " ORDER BY r.id DESC LIMIT 100",
                 (user["id"],),
             )
         else:
             items = rows(
                 conn,
                 "SELECT r.*, u.nickname, u.avatar, u.email FROM friend_request r JOIN user u ON u.id = r.from_id\n"
-                " WHERE r.to_id = ? ORDER BY r.id DESC LIMIT 100",
+                " WHERE r.to_id = ?" + cond + " ORDER BY r.id DESC LIMIT 100",
                 (user["id"],),
             )
     return {"items": [_request_view(it, box) for it in items]}
@@ -857,8 +860,8 @@ async def search(q: str = Query(""), user: dict = Depends(current_user)):
     with tx() as conn:
         items = rows(
             conn,
-            "SELECT * FROM user WHERE status = 'active' AND id <> ? AND (email = ? OR nickname LIKE ?) LIMIT 20",
-            (user["id"], q.lower(), f"%{q}%"),
+            "SELECT * FROM user WHERE status = 'active' AND id <> ? AND (email = ? OR email LIKE ? OR nickname LIKE ?) LIMIT 20",
+            (user["id"], q.lower(), f"%{q.lower()}%", f"%{q}%"),
         )
         out = []
         for it in items:

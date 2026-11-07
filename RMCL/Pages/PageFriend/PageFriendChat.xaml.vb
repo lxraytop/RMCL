@@ -699,6 +699,14 @@ Public Class PageFriendChat
                 '有当前会话的新消息就追加显示，其它会话只更新列表
                 Dim ForCurrent As List(Of FriendMessage) =
                     Polled.Messages.Where(Function(m) m.ConvType = CurrentType AndAlso m.ConvKey = CurrentKey).ToList()
+                '正在看这个会话：顺手把服务端未读清掉，否则红点会一直挂在列表上
+                If ForCurrent.Count > 0 AndAlso CurrentType >= 0 Then
+                    Try
+                        ModFriend.MarkRead(CurrentType, CurrentKey)
+                    Catch ex As Exception
+                        Logger.Warn(ex, "标记好友消息已读失败")
+                    End Try
+                End If
                 RunInUi(
                 Sub()
                     Dim NeedRender As Boolean = False
@@ -729,7 +737,7 @@ Public Class PageFriendChat
                         Dim IsCurrent As Boolean = Last.ConvType = CurrentType AndAlso Last.ConvKey = CurrentKey
                         Dim Body As String = If(Last.Recalled, "[已撤回]", Last.Body)
                         If TouchConversation(Last.ConvType, Last.ConvKey, Body, Last.CreatedAt,
-                                             If(IsCurrent, 0, Group.Count())) Then
+                                             If(IsCurrent, 0, Group.Count()), IsCurrent) Then
                             Touched = True
                         Else
                             '本地还没有这个会话（第一次收到消息）：交给一次列表刷新补全标题

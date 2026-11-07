@@ -220,6 +220,7 @@
             Return
         End If
         LabSearchHint.Text = $"找到 {Items.Count} 个用户。"
+        Dim Incoming As Integer = 0
         For Each Token As JToken In Items
             Dim Obj As JObject = CType(Token, JObject)
             Dim Contact As FriendContact = ModFriend.ParseContact(Obj)
@@ -231,18 +232,39 @@
             Info.Children.Add(New TextBlock With {.Text = $"{Contact.Nickname}（{Contact.Email}）", .FontSize = 13})
             Row.Children.Add(Info)
 
-            Dim Relation As String = Contact.Relation
+            '关系取值由 ModFriend 统一换算过：""（可加）/ friend / pending / incoming / self
+            Dim Relation As String = If(Contact.Relation, "").Trim().ToLowerInvariant()
+            Dim BtnText As String
+            Dim CanAdd As Boolean = False
+            Select Case Relation
+                Case "friend"
+                    BtnText = "已是好友"
+                Case "pending"
+                    BtnText = "已发送申请"
+                Case "incoming"
+                    BtnText = "对方已申请"
+                    Incoming += 1
+                Case "self"
+                    BtnText = "这是你"
+                Case Else
+                    BtnText = "加好友"
+                    CanAdd = True
+            End Select
             Dim Btn As New MyButton With {
-                .Text = If(Relation = "friend", "已是好友", If(Relation = "pending", "已发送申请", If(Relation = "self", "这是你", "加好友"))),
+                .Text = BtnText,
                 .MinWidth = 96, .Height = 28, .Padding = New Thickness(10, 0, 10, 0),
-                .IsEnabled = String.IsNullOrEmpty(Relation)
+                .IsEnabled = CanAdd
             }
-            If String.IsNullOrEmpty(Relation) Then Btn.ColorType = MyButton.ColorState.Highlight
+            If CanAdd Then Btn.ColorType = MyButton.ColorState.Highlight
             AddHandler Btn.Click, Sub(sender As Object, e As MouseButtonEventArgs) AddFriend(Contact)
             Grid.SetColumn(Btn, 1)
             Row.Children.Add(Btn)
             PanSearchResult.Children.Add(Row)
         Next
+        If Incoming > 0 Then
+            LabSearchHint.Text = $"找到 {Items.Count} 个用户。" &
+                If(Incoming = Items.Count, "对方已经向你发送过申请，到下方「好友请求」里同意即可。", "")
+        End If
     End Sub
 
     Private Sub AddFriend(Contact As FriendContact)

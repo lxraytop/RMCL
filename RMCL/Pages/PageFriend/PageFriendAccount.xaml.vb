@@ -155,7 +155,11 @@ Public Class PageFriendAccount
             Try
                 Dim Param As New JObject From {{"email", Email}, {"purpose", "register"}}
                 Dim Data As JObject = ModFriend.FriendApi("send_code", Param, False)
-                Dim DevCode As String = If(Data Is Nothing, "", Data.Value(Of String)("dev_code"))
+                '服务端 debug_code（旧字段名 dev_code）用于本地调试直接回显验证码
+                Dim DevCode As String = If(Data Is Nothing, "", Data.Value(Of String)("debug_code"))
+                If String.IsNullOrEmpty(DevCode) AndAlso Data IsNot Nothing Then
+                    DevCode = Data.Value(Of String)("dev_code")
+                End If
                 RunInUi(
                 Sub()
                     If Not String.IsNullOrEmpty(DevCode) Then

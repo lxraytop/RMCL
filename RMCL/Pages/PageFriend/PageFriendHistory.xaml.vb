@@ -28,9 +28,17 @@
 
     Private Sub Query(Append As Boolean)
         If Not ModFriend.IsLoggedIn Then Return
-        Dim Scope As Integer = 0
+        '服务端只认 all / friend / group，下拉里用的是 0/1/2
+        Dim Scope As String = "all"
         Dim Item As MyComboBoxItem = TryCast(ComboScope.SelectedItem, MyComboBoxItem)
-        If Item IsNot Nothing Then Scope = Val(Item.Tag)
+        If Item IsNot Nothing Then
+            Select Case Val(Item.Tag)
+                Case 1
+                    Scope = "friend"
+                Case 2
+                    Scope = "group"
+            End Select
+        End If
         Dim Param As New JObject From {
             {"keyword", TextKeyword.Text.Trim()},
             {"scope", Scope},

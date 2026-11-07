@@ -225,10 +225,15 @@ Public Module ModFriend
                 Next
                 Return New JObject From {{"items", Items}}
             Case "requests"
-                Dim Data As JObject = CallApi(HttpMethod.Get, "/friend-requests", New JObject From {{"box", "in"}})
+                Dim Data As JObject = CallApi(HttpMethod.Get, "/friend-requests",
+                                              New JObject From {{"box", "in"}, {"include_handled", False}})
                 Dim Items As New JArray()
                 For Each Token As JToken In DirectCast(If(Data("items"), New JArray()), JArray)
                     Dim Obj As JObject = CType(Token, JObject)
+                    '只显示待处理的申请：已同意/已拒绝的留着会让「同意」点了没反应
+                    Dim Status As String = Obj.Value(Of String)("status")
+                    If Not String.IsNullOrEmpty(Status) AndAlso
+                       Not String.Equals(Status, "pending", StringComparison.OrdinalIgnoreCase) Then Continue For
                     Dim UserObj As JObject = TryCast(Obj("user"), JObject)
                     Items.Add(New JObject From {
                         {"id", Obj("id")},
@@ -254,7 +259,7 @@ Public Module ModFriend
                 Dim Data As JObject = CallApi(HttpMethod.Get, "/search", New JObject From {{"q", Param.Value(Of String)("keyword")}})
                 Dim Items As New JArray()
                 For Each Token As JToken In DirectCast(If(Data("items"), New JArray()), JArray)
-                    Items.Add(ContactJson(CType(Token, JObject), "none"))
+                    Items.Add(ContactJson(CType(Token, JObject), ""))
                 Next
                 Return New JObject From {{"items", Items}}
             Case "add"
@@ -307,10 +312,37 @@ Public Module ModFriend
                 For Each Token As JToken In Items
                     Dim Id As Long = Token.Value(Of Long)("id")
                     If NextBefore = 0 OrElse Id < NextBefore Then NextBefore = Id
+                    '单聊消息里的 conv_key 是 min_max 形式，点击结果要按「对方 id」打开会话
+                    Dim Obj As JObject = CType(Token, JObject)
+                    Obj("conv_key") = PeerConvKey(Obj.Value(Of Integer)("conv_type"), Obj.Value(Of String)("conv_key"))
                 Next
                 Return New JObject From {{"items", Items}, {"next_before", NextBefore}}
             Case Else
                 Throw New FriendApiException("E_UNKNOWN", "未知的接口：" & Action)
+        End Select
+    End Function
+
+    ''' <summary>
+    ''' 把服务端的关系字段统一成界面认识的一小组取值。
+    '''
+    ''' 服务端 /search 返回 none / friend / requested / incoming，
+    ''' 界面按 ""（可加）/ friend / pending（已发送）/ incoming（对方已申请）/ self 判断，
+    ''' 中间必须经过换算，否则「加好友」按钮会因为拿到没见过的取值而一直灰着。
+    ''' </summary>
+    Private Function NormalizeRelation(Raw As String, DefaultRelation As String) As String
+        Select Case If(Raw, "").Trim().ToLowerInvariant()
+            Case "friend", "accepted"
+                Return "friend"
+            Case "requested", "pending", "sent"
+                Return "pending"
+            Case "incoming", "received"
+                Return "incoming"
+            Case "self"
+                Return "self"
+            Case "", "none", "stranger"
+                Return DefaultRelation
+            Case Else
+                Return Raw
         End Select
     End Function
 
@@ -320,8 +352,7 @@ Public Module ModFriend
             {"email", Obj("email")},
             {"nickname", Obj("nickname")},
             {"remark", ""},
-            {"relation", If(String.IsNullOrEmpty(Obj.Value(Of String)("relation")), DefaultRelation,
-                            Obj.Value(Of String)("relation"))},
+            {"relation", NormalizeRelation(Obj.Value(Of String)("relation"), DefaultRelation)},
             {"online", False}
         }
     End Function
@@ -487,6 +518,11 @@ Public Module ModFriend
         Dim Seq As Long = If(Obj("seq") Is Nothing, 0L, Obj.Value(Of Long)("seq"))
         If Seq > 0 Then SaveSeqCursor(Seq)
         RealtimeQueue.Enqueue(Obj)
+        '不在好友页时没人消费队列，限制长度避免长时间挂机后无限增长
+        Dim Dropped As JObject = Nothing
+        While RealtimeQueue.Count > 800
+            If Not RealtimeQueue.TryDequeue(Dropped) Then Exit While
+        End While
         RaiseEvent RealtimeActivity()
     End Sub
 
@@ -572,6 +608,24 @@ Public Module ModFriend
         Public Role As Integer
     End Class
 
+    ''' <summary>
+    ''' 单聊会话键换算成「对方 id」。
+    '''
+    ''' 服务端消息表用与视角无关的键（min_max，例如 12_34），而会话列表、本地缓存、
+    ''' 页面跳转统一按「对方 id」组织。所有从消息里拿到的 conv_key 都要过一遍这里，
+    ''' 否则同一个会话会被当成两个：推送来的消息进不了当前对话，红点也清不掉。
+    ''' </summary>
+    Public Function PeerConvKey(ConvType As Integer, ConvKey As String) As String
+        If ConvType <> 0 OrElse String.IsNullOrEmpty(ConvKey) Then Return ConvKey
+        If Not ConvKey.Contains("_") Then Return ConvKey
+        Dim Parts As String() = ConvKey.Split("_"c)
+        If Parts.Length <> 2 Then Return ConvKey
+        Dim Mine As String = MyId.ToString()
+        If Parts(0) = Mine Then Return Parts(1)
+        If Parts(1) = Mine Then Return Parts(0)
+        Return ConvKey
+    End Function
+
     Public Function ParseMessage(Obj As JObject) As FriendMessage
         Dim Item As New FriendMessage With {
             .Id = Obj.Value(Of Long)("id"),
@@ -583,6 +637,7 @@ Public Module ModFriend
             .Kind = If(Obj.Value(Of String)("kind"), "text"),
             .CreatedAt = Obj.Value(Of Long)("created_at")
         }
+        Item.ConvKey = PeerConvKey(Item.ConvType, Item.ConvKey)
         Item.IsMine = Item.FromId = MyId
         Return Item
     End Function
@@ -818,6 +873,24 @@ Public Module ModFriend
                             Logger.Warn(ex, "迁移旧聊天记录缓存失败")
                         End Try
                     End If
+                End If
+                If Not FileUtils.Exists(File) AndAlso ConvType = 0 Then
+                    '更早的预览版按服务端的 min_max 键命名文件（例如 12_34），并到「对方 id」名下
+                    Try
+                        Dim Mine As Long = MyId
+                        Dim Peer As Long = CLng(ConvKey)
+                        If Mine > 0 AndAlso Peer > 0 Then
+                            Dim Canonical As String = Math.Min(Mine, Peer) & "_" & Math.Max(Mine, Peer)
+                            Dim Old As String = LocalPath(ConvType, Canonical)
+                            If FileUtils.Exists(Old) Then
+                                Directory.CreateDirectory(LocalFolder & "cache")
+                                FileUtils.Write(File, FileUtils.TryReadAsString(Old))
+                                Logger.Info($"已迁移 min_max 命名的聊天记录缓存：{Old}")
+                            End If
+                        End If
+                    Catch ex As Exception
+                        Logger.Warn(ex, "迁移 min_max 命名的聊天记录缓存失败")
+                    End Try
                 End If
                 If FileUtils.Exists(File) Then
                     Dim Arr As JArray = JArray.Parse(FileUtils.TryReadAsString(File))
