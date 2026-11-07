@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from . import tim
 from .api import ApiError, router
 from .db import init_db, one, rows, tx
-from .hub import HUB, broadcast_presence, presence_after_disconnect, trim_events
+from .hub import HUB, trim_events
 from .security import now
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -87,11 +87,9 @@ async def websocket_endpoint(ws: WebSocket, token: str = ""):
         return
 
     uid = int(user["id"])
-    became_online = await HUB.register(uid, ws)
+    await HUB.register(uid, ws)
     server_seq = HUB.snapshot_seq(uid)
     await ws.send_text(json.dumps({"op": "hello", "user_id": uid, "server_seq": server_seq}, ensure_ascii=False))
-    if became_online:
-        await broadcast_presence(uid, True)
 
     async def send_events(since: int) -> int:
         with tx() as conn:
@@ -139,6 +137,4 @@ async def websocket_endpoint(ws: WebSocket, token: str = ""):
     except Exception as exc:
         log.warning("ws 异常 user=%s: %s", uid, exc)
     finally:
-        offline = await HUB.unregister(uid, ws)
-        if offline:
-            asyncio.create_task(presence_after_disconnect(uid))
+        await HUB.unregister(uid, ws)

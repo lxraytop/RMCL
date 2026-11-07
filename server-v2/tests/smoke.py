@@ -1,4 +1,8 @@
-"""端到端冒烟：注册 → 加好友 → 同意 → WS 实时消息 → 未读 → 撤回 → 群聊。
+"""端到端冒烟（Lite 范围）。
+
+覆盖：注册 → 加好友 → 申请 → 同意 → 好友列表 → WS 实时消息 → 幂等 → 撤回
+      → 断线补发 → 建群/踢人/越权 → 删好友后拒发
+不含：未读、在线、分组、备注、黑名单、漫游
 
 前置：uvicorn 跑在 127.0.0.1:8099，config.json 里 debug_code=true
 运行：python tests/smoke.py
@@ -51,6 +55,7 @@ async def main() -> None:
     print("== 健康检查 ==")
     h = api(None, "GET", "/api/v1/health")
     check("health ok", h.get("ok") is True, str(h))
+    check("health 带 WS 连接数", "ws_connections" in h, str(h))
 
     print("== 注册 ==")
     ta, ida = register("alice")
@@ -62,26 +67,16 @@ async def main() -> None:
     check("发送申请", r.get("ok") is True, str(r))
     req_id = r["id"]
 
+    out = api(ta, "GET", "/api/v1/friend-requests?box=out")
+    check("发起方能查到自己的申请", any(x["id"] == req_id for x in out["items"]), str(out))
     bob_in = api(tb, "GET", "/api/v1/friend-requests?box=in")
-    check("Bob 收到申请且未读", bob_in["unread"] == 1, str(bob_in))
-    check("申请列表带验证消息", bob_in["items"][0]["wording"] == "我是 Alice", str(bob_in["items"][0]))
-
-    api(tb, "POST", "/api/v1/friend-requests/read")
-    bob_in = api(tb, "GET", "/api/v1/friend-requests?box=in")
-    check("已读后红点清零", bob_in["unread"] == 0, str(bob_in))
+    check("接收方收到申请", any(x["id"] == req_id and x["wording"] == "我是 Alice" for x in bob_in["items"]), str(bob_in))
 
     check("同意申请", api(tb, "POST", f"/api/v1/friend-requests/{req_id}/accept").get("ok") is True)
     fa = api(ta, "GET", "/api/v1/friends")
     fb = api(tb, "GET", "/api/v1/friends")
     check("双方好友列表都有对方", fa["total"] == 1 and fb["total"] == 1, f"{fa['total']}/{fb['total']}")
-
-    print("== 分组 / 备注 ==")
-    g = api(ta, "POST", "/api/v1/friend-groups", {"name": "同学"})
-    check("创建分组", g.get("ok") is True, str(g))
-    api(ta, "PATCH", f"/api/v1/friends/{idb}", {"remark": "小 B", "group_id": g["id"]})
-    fa = api(ta, "GET", "/api/v1/friends")
-    grp = next(x for x in fa["groups"] if x["id"] == g["id"])
-    check("备注与分组生效", grp["count"] == 1 and grp["items"][0]["remark"] == "小 B", json.dumps(grp, ensure_ascii=False))
+    check("好友列表是平铺结构", "items" in fa and "groups" not in fa, str(fa)[:120])
 
     print("== WebSocket 实时消息 ==")
     async with websockets.connect(f"{WS}?token={tb}") as wsb:
@@ -96,22 +91,20 @@ async def main() -> None:
         while evt.get("type") != "message.new":
             evt = json.loads(await asyncio.wait_for(wsb.recv(), timeout=5))
         check("Bob 通过 WS 收到消息", evt["data"]["message"]["body"] == "你好 Bob", str(evt)[:200])
-        check("事件 seq 单调", isinstance(evt.get("seq"), int) and evt["seq"] > 0, str(evt.get("seq")))
+        check("事件 seq 单调递增", isinstance(evt.get("seq"), int) and evt["seq"] > 0, str(evt.get("seq")))
+        check("事件里带接收方视角的会话", evt["data"]["conv"] == f"0:{ida}", str(evt["data"].get("conv")))
 
         convs = api(tb, "GET", "/api/v1/conversations")
         bob_conv = next(c for c in convs["items"] if c["conv"] == f"0:{ida}")
-        check("Bob 会话未读为 1", bob_conv["unread"] == 1, str(bob_conv))
-
-        read = api(tb, "POST", f"/api/v1/conversations/0:{ida}/read")
-        check("已读返回剩余总数", read.get("unread") == 0, str(read))
-        convs = api(tb, "GET", "/api/v1/conversations")
-        check("会话未读清零", next(c for c in convs["items"] if c["conv"] == f"0:{ida}")["unread"] == 0)
+        check("会话列表更新到最后一条", bob_conv["last_body"] == "你好 Bob", str(bob_conv))
+        check("会话不再返回未读字段", "unread" not in bob_conv, str(bob_conv))
 
         print("== 幂等 ==")
         r1 = api(ta, "POST", "/api/v1/messages", {"conv": f"0:{idb}", "body": "重复", "client_msg_id": "dup-1"})
         r2 = api(ta, "POST", "/api/v1/messages", {"conv": f"0:{idb}", "body": "重复", "client_msg_id": "dup-1"})
-        check("同一 client_msg_id 只落一条", r2.get("duplicated") is True and r1["message"]["id"] == r2["message"]["id"],
-              f"{r1.get('message',{}).get('id')}/{r2.get('message',{}).get('id')}")
+        check("同一 client_msg_id 只落一条",
+              r2.get("duplicated") is True and r1["message"]["id"] == r2["message"]["id"],
+              f"{r1.get('message', {}).get('id')}/{r2.get('message', {}).get('id')}")
 
         print("== 撤回 ==")
         mid = r1["message"]["id"]
@@ -119,6 +112,9 @@ async def main() -> None:
         msgs = api(tb, "GET", f"/api/v1/messages?conv=0:{ida}")
         recalled = [m for m in msgs["items"] if m["id"] == mid][0]
         check("对方看到已撤回", recalled["kind"] == "recalled" and recalled["body"] == "", str(recalled))
+        check("会话预览同步为已撤回",
+              next(c for c in api(tb, "GET", "/api/v1/conversations")["items"]
+                   if c["conv"] == f"0:{ida}")["last_body"] == "[已撤回]")
 
         print("== 断线补发 ==")
         seq_before = 0
@@ -132,8 +128,7 @@ async def main() -> None:
 
     async with websockets.connect(f"{WS}?token={tb}") as wsb2:
         hello = json.loads(await asyncio.wait_for(wsb2.recv(), timeout=5))
-        check("hello 带 server_seq", hello.get("op") == "hello", str(hello))
-        # 客户端应该用「自己最后收到的 seq」续传，而不是服务端当前最大值
+        check("重连拿到 hello", hello.get("op") == "hello", str(hello))
         check("断线前有已收到的 seq", seq_before > 0, str(seq_before))
         await wsb2.send(json.dumps({"op": "resume", "since": seq_before}))
         got = []
@@ -142,26 +137,34 @@ async def main() -> None:
             if e.get("op") == "resumed":
                 break
             got.append(e)
-        check("重连补发离线消息", any(x.get("type") == "message.new" and x["data"]["message"]["body"] == "离线期间的消息" for x in got),
+        check("重连补发离线消息",
+              any(x.get("type") == "message.new" and x["data"]["message"]["body"] == "离线期间的消息" for x in got),
               str(got)[:200])
 
         print("== 群聊 ==")
-        grp_res = api(ta, "POST", "/api/v1/groups", {"name": "测试群", "members": [idb]})
-        check("建群成功", grp_res.get("ok") is True, str(grp_res))
-        gid = grp_res["id"]
+        grp = api(ta, "POST", "/api/v1/groups", {"name": "测试群", "members": [idb]})
+        check("建群成功", grp.get("ok") is True, str(grp))
+        gid = grp["id"]
         groups_b = api(tb, "GET", "/api/v1/groups")
         check("成员看到群", any(x["id"] == gid for x in groups_b["items"]), str(groups_b))
         api(ta, "POST", "/api/v1/messages", {"conv": f"1:{gid}", "body": "群里好"})
         convs_b = api(tb, "GET", "/api/v1/conversations")
-        check("群会话出现且未读", any(c["conv"] == f"1:{gid}" and c["unread"] >= 1 for c in convs_b["items"]), str(convs_b["items"])[:300])
+        check("群会话出现在列表", any(c["conv"] == f"1:{gid}" and c["last_body"] == "群里好" for c in convs_b["items"]),
+              str(convs_b["items"])[:300])
+        detail = api(tb, "GET", f"/api/v1/groups/{gid}")
+        check("群详情带成员", len(detail["members"]) == 2, str(detail)[:200])
         check("踢人成功", api(ta, "DELETE", f"/api/v1/groups/{gid}/members/{idb}").get("ok") is True)
-        check("被踢后不能发言", api(tb, "POST", "/api/v1/messages", {"conv": f"1:{gid}", "body": "还在吗"}).get("error", {}).get("code") == "E_NOT_MEMBER")
+        check("被踢后不能发言",
+              api(tb, "POST", "/api/v1/messages", {"conv": f"1:{gid}", "body": "还在吗"}).get("error", {}).get("code")
+              == "E_NOT_MEMBER")
 
     print("== 删除好友 ==")
     api(ta, "DELETE", f"/api/v1/friends/{idb}")
     fa = api(ta, "GET", "/api/v1/friends")
     check("好友列表清空", fa["total"] == 0, str(fa["total"]))
-    check("非好友不能发消息", api(ta, "POST", "/api/v1/messages", {"conv": f"0:{idb}", "body": "x"}).get("error", {}).get("code") == "E_NOT_FRIEND")
+    check("非好友不能发消息",
+          api(ta, "POST", "/api/v1/messages", {"conv": f"0:{idb}", "body": "x"}).get("error", {}).get("code")
+          == "E_NOT_FRIEND")
 
     print(f"\n结果：{ok_count} 通过 / {fail_count} 失败")
     if fail_count:

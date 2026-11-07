@@ -3,6 +3,10 @@
 > 分支：`refactor/friend-im-v2`
 > 目标：用腾讯云 IM 官方 Web 示例的「单一数据源 + 事件驱动」模型，替换现有基于 HTTP 轮询、多份真相的伪 IM 实现。
 > 本文档先给结论，再给差距、架构、数据模型、接口、阶段计划与验收标准。
+>
+> **11-07 范围收敛**：按「只做体验版能做到的功能」的要求，去掉未读、在线状态、好友分组、
+> 好友关系链（备注/黑名单/镜像）与漫游，最终范围见第 12 节。第 1–10 节保留原始分析，
+> 用于说明为什么砍掉这些能力，以及将来要加回来时的设计依据。
 
 ---
 
@@ -655,3 +659,82 @@ AddHandler Store.Changed, AddressOf RenderAll
 1. 客户端新增 `FriendApi.vb`（REST + WS 客户端）与 `FriendStore.vb`（状态 + Apply(event)）。
 2. 重写通讯录页（申请中心 + 分组好友列表 + 资料卡）。
 3. 灰度开关 `Settings("FriendImV2")`，旧页面保留可回滚。
+
+
+---
+
+## 12. 范围收敛（Lite，最终实施范围）
+
+### 12.1 取舍
+
+| 能力 | 是否保留 | 原因 |
+| --- | --- | --- |
+| 好友列表（平铺） | ✅ | 基础 |
+| 搜索用户 / 发起申请 / 同意 / 拒绝 | ✅ | 加好友的最小闭环 |
+| 删除好友 | ✅ | 基础 |
+| 单聊 / 群聊 / 会话列表 | ✅ | 基础 |
+| 消息撤回（2 分钟） | ✅ | 已有交互，成本低 |
+| 历史分页 | ✅ | 基础 |
+| 建群 / 邀请 / 踢人 / 退群 | ✅ | 体验版支持 |
+| 未读红点 / 已读上报 | ❌ | 用户明确不要；体验版也无已读回执 |
+| 在线状态 | ❌ | 体验版不支持用户状态（需旗舰版） |
+| 好友分组 | ❌ | 用户明确不要 |
+| 备注 / 黑名单 / 关系链镜像 | ❌ | 归入「好友关系」复杂功能，去掉 |
+| 聊天记录漫游上传 / 恢复 | ❌ | 体验版本就有 7 天云端漫游，无需自建 |
+
+### 12.2 收敛后的数据模型
+
+`user` / `auth_token` / `auth_code` / `invite` / `friend_request` / `friendship` /
+`conversation` / `message` / `chat_group` / `group_member` / `event_log` / `meta`（12 张）。
+
+相比全量方案删掉了：`friend_group`、`block`、`presence`；
+`conversation` 去掉 `unread` / `pinned` / `muted`；`friendship` 去掉 `remark` / `group_id`；
+`friend_request` 去掉 `read_at`。
+
+### 12.3 收敛后的接口
+
+| 分组 | 接口 |
+| --- | --- |
+| 认证 | `POST /auth/send-code`、`/auth/register`、`/auth/login`、`/auth/logout`、`GET /me` |
+| 好友 | `GET /friends`、`GET /friends/{id}`、`DELETE /friends/{id}` |
+| 申请 | `GET /friend-requests?box=in|out`、`POST /friend-requests`、`POST /friend-requests/{id}/accept`、`/reject` |
+| 会话 | `GET /conversations`、`DELETE /conversations/{conv}` |
+| 消息 | `GET /messages`、`POST /messages`、`POST /messages/{id}/recall` |
+| 群组 | `GET /groups`、`POST /groups`、`GET /groups/{id}`、`PATCH /groups/{id}`、`POST /groups/{id}/members`、`DELETE /groups/{id}/members/{uid}` |
+| 其他 | `GET /search`、`GET /snapshot`、`GET /health` |
+
+删除的接口：`/friend-groups*`、`/blocks*`、`/presence`、`/conversations/{conv}/read`、
+`/friend-requests/read`、`PATCH /friends/{id}`。
+
+### 12.4 收敛后的事件
+
+`friend.request`、`friend.accepted`、`friend.request.handled`、`friend.removed`、
+`message.new`、`message.recalled`、`group.updated`、`group.removed`、`conversation.removed`。
+
+删除：`presence.changed`、`friend.group.updated`、`block.updated`、`conversation.updated`（原用于未读）。
+
+### 12.5 验收标准（替代第 8 节）
+
+| 场景 | 通过条件 |
+| --- | --- |
+| 添加好友 | A 搜索 B → 发申请 → B 在 1 秒内收到 `friend.request` 事件；同意后双方列表即时出现对方，无需刷新 |
+| 申请重复 | 同一对用户重复提交，只产生一条 `pending`，返回 `duplicated` |
+| 删除好友 | 双方列表移除；再发消息返回 `E_NOT_FRIEND` |
+| 实时消息 | A 发送后 B 在 300ms 内收到 `message.new`；会话列表 `last_body` 同步更新 |
+| 幂等 | 同一 `client_msg_id` 连发 3 次，库里只有 1 条，返回 `duplicated` |
+| 撤回 | 2 分钟内可撤回；双方 1 秒内看到「已撤回」，会话预览变 `[已撤回]`；超时返回 `E_EXPIRE` |
+| 断线补发 | 断开 30 秒后重连 `resume`，期间消息全部补到，无重复、无乱序 |
+| 群聊 | 建群后成员即时看到群；被邀请者出现群会话；被踢后发消息返回 `E_NOT_MEMBER` |
+| 越权 | 非群主邀请/踢人返回 `E_NOAUTH`；非成员读群消息返回 `E_NOT_MEMBER` |
+
+### 12.6 与旧行为对比（收敛后）
+
+| 场景 | 旧（PHP + 轮询） | 新（Lite 网关 + WS） |
+| --- | --- | --- |
+| 收到消息 | 最长 3 秒后轮询到 | WS 推送，<300ms |
+| 会话卡片 | 每次全量拉取、整表替换 | 事件驱动，与聊天页同帧 |
+| 好友申请 | 无发出记录、无验证消息持久化 | 收到/发出双向可查，带验证消息 |
+| 加好友后 | 需手动刷新 | 双方事件推送，即时出现 |
+| 断线 | 靠轮询恢复，可能漏消息 | `resume` 按 seq 补发，过期回 `resync` |
+| 消息重复 | `client_id` + 内容指纹补丁 | 数据库唯一索引，天然幂等 |
+| 未读/在线/分组 | 有（但不可靠） | 不提供（按需求移除） |
