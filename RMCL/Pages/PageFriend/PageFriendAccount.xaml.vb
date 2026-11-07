@@ -153,8 +153,7 @@ Public Class PageFriendAccount
         RunInNewThread(
         Sub()
             Try
-                Dim Param As New JObject From {{"email", Email}, {"purpose", "register"}}
-                Dim Data As JObject = ModFriend.FriendApi("send_code", Param, False)
+                Dim Data As JObject = ModFriend.SendCode(Email)
                 '服务端 debug_code（旧字段名 dev_code）用于本地调试直接回显验证码
                 Dim DevCode As String = If(Data Is Nothing, "", Data.Value(Of String)("debug_code"))
                 If String.IsNullOrEmpty(DevCode) AndAlso Data IsNot Nothing Then
@@ -216,12 +215,8 @@ Public Class PageFriendAccount
         RunInNewThread(
         Sub()
             Try
-                Dim Param As New JObject From {
-                    {"email", Email}, {"code", Code}, {"nickname", Name},
-                    {"password", Pass}, {"invite", Invite},
-                    {"device", Settings.Get(Of String)("Identify")}
-                }
-                Dim Data As JObject = ModFriend.FriendApi("register", Param, False, 20000)
+                Dim Data As JObject = ModFriend.Register(Email, Code, Name, Pass, Invite,
+                                                         Settings.Get(Of String)("Identify"))
                 ModFriend.FriendLoginSucceed(Data.Value(Of String)("token"), CType(Data("user"), JObject))
                 RunInUi(
                 Sub()
@@ -248,11 +243,7 @@ Public Class PageFriendAccount
         RunInNewThread(
         Sub()
             Try
-                Dim Param As New JObject From {
-                    {"email", Email}, {"password", Pass},
-                    {"device", Settings.Get(Of String)("Identify")}
-                }
-                Dim Data As JObject = ModFriend.FriendApi("login", Param, False, 20000)
+                Dim Data As JObject = ModFriend.Login(Email, Pass, Settings.Get(Of String)("Identify"))
                 ModFriend.FriendLoginSucceed(Data.Value(Of String)("token"), CType(Data("user"), JObject))
                 RunInUi(
                 Sub()
@@ -387,7 +378,7 @@ Public Class PageFriendAccount
 
                 Dim Data As JObject
                 Try
-                    Data = ModFriend.FriendApi("rayskin_login", Payload, False, 25000)
+                    Data = ModFriend.RayskinLogin(Payload)
                 Catch ex As FriendApiException When UseToken AndAlso ex.Code = "E_TOKEN_INVALID"
                     'accessToken 也过期了：重新认证后再试一次
                     If String.IsNullOrEmpty(Pass) Then Throw
@@ -395,7 +386,7 @@ Public Class PageFriendAccount
                     RayskinPasswordLogin(Server, Email, Pass, CachedUuid, CachedName, Access, Uuid, PlayerName)
                     Payload("access_token") = Access
                     Payload("name") = PlayerName
-                    Data = ModFriend.FriendApi("rayskin_login", Payload, False, 25000)
+                    Data = ModFriend.RayskinLogin(Payload)
                 End Try
 
                 ModFriend.FriendLoginSucceed(Data.Value(Of String)("token"), CType(Data("user"), JObject))

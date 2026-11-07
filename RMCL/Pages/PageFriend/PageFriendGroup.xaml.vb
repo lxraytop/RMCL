@@ -122,7 +122,7 @@
             LabCreateHint.Text = "群名称需要 2-24 个字符。"
             Return
         End If
-        Dim Members As New JArray()
+        Dim Members As New List(Of Long)
         For Each Pair As KeyValuePair(Of Long, MyCheckBox) In Picks
             If Pair.Value.Checked Then Members.Add(Pair.Key)
         Next
@@ -135,9 +135,7 @@
         RunInNewThread(
         Sub()
             Try
-                Dim Param As New JObject From {{"name", Name}, {"members", Members}}
-                Dim Data As JObject = ModFriend.FriendApi("group_create", Param, True, 20000)
-                Dim Group As FriendGroup = ModFriend.ParseGroup(CType(Data("group"), JObject))
+                Dim Group As FriendGroup = ModFriend.CreateGroup(Name, Members)
                 RunInUi(
                 Sub()
                     LabCreateHint.Text = $"群聊「{Group.Name}」已创建。"
@@ -160,16 +158,11 @@
         RunInNewThread(
         Sub()
             Try
-                Dim Data As JObject = ModFriend.FriendApi("group_info", New JObject From {{"group_id", Item.Id}})
+                Dim Members As List(Of FriendGroupMember) = ModFriend.GetGroupMembers(Item.Id)
                 Dim Lines As New List(Of String)
-                Dim Arr As JArray = If(Data Is Nothing, Nothing, TryCast(Data("members"), JArray))
-                If Arr IsNot Nothing Then
-                    For Each Token As JToken In Arr
-                        Dim Obj As JObject = CType(Token, JObject)
-                        Lines.Add($"{Obj.Value(Of String)("nickname")}（{Obj.Value(Of String)("email")}）" &
-                                  If(Obj.Value(Of Integer)("role") = 1, " · 群主", ""))
-                    Next
-                End If
+                For Each Member As FriendGroupMember In Members
+                    Lines.Add($"{Member.Nickname}（{Member.Email}）" & If(Member.Role = 1, " · 群主", ""))
+                Next
                 RunInUi(Sub() MyMsgBox(String.Join(vbCrLf, Lines), $"群成员 · {Item.Name}", "关闭"))
             Catch ex As Exception
                 RunInUi(Sub() Hint("读取群成员失败：" & ModFriend.FriendErrorText(ex), HintType.Red))
@@ -274,7 +267,7 @@
         RunInNewThread(
         Sub()
             Try
-                ModFriend.FriendApi("group_kick", New JObject From {{"group_id", GroupId}, {"user_id", Member.Id}})
+                ModFriend.KickGroupMember(GroupId, Member.Id)
                 RunInUi(
                 Sub()
                     Hint($"已将 {Member.Nickname} 移出群聊", HintType.Green, False)
@@ -289,7 +282,7 @@
 
     Private Sub BtnInvite_Click(sender As Object, e As EventArgs) Handles BtnInvite.Click
         If ManagingGroup Is Nothing Then Return
-        Dim Members As New JArray()
+        Dim Members As New List(Of Long)
         For Each Pair As KeyValuePair(Of Long, MyCheckBox) In InvitePicks
             If Pair.Value.Checked Then Members.Add(Pair.Key)
         Next
@@ -302,8 +295,7 @@
         RunInNewThread(
         Sub()
             Try
-                Dim Param As New JObject From {{"group_id", GroupId}, {"members", Members}}
-                ModFriend.FriendApi("group_add_members", Param)
+                ModFriend.AddGroupMembers(GroupId, Members)
                 RunInUi(
                 Sub()
                     Hint("邀请已发送，成员已入群", HintType.Green, False)
@@ -328,7 +320,7 @@
         RunInNewThread(
         Sub()
             Try
-                ModFriend.FriendApi("group_leave", New JObject From {{"group_id", Item.Id}})
+                ModFriend.LeaveGroup(Item.Id)
                 RunInUi(Sub() Refresh(True))
             Catch ex As Exception
                 RunInUi(Sub() Hint("退出失败：" & ModFriend.FriendErrorText(ex), HintType.Red))

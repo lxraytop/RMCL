@@ -180,7 +180,6 @@ Public Class Settings
         New Setting("UiPageFriends", False, Source:=Sources.Registry, OnChanged:=AddressOf PageSetupUI.HiddenRefresh), '顶部栏好友页面（默认隐藏）
         New Setting("FriendToken", "", Source:=Sources.Registry, Encrypted:=True), '好友服务登录令牌
         New Setting("FriendSelfJson", "{}", Source:=Sources.Registry, Encrypted:=True), '好友账号信息缓存
-        New Setting("FriendLastMsgId", 0L, Source:=Sources.Registry), '好友消息增量指针
         New Setting("FriendLastSeq", 0L, Source:=Sources.Registry), '好友事件序号游标，断线重连时据此补拉漏掉的事件
         New Setting("FriendConvCollapsed", False, Source:=Sources.Registry), '消息页左侧会话列表是否收起
         New Setting("FriendDeletedIds", "[]", Source:=Sources.Registry), '本机已删除的消息 id（避免被云端备份恢复）

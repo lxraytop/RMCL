@@ -251,9 +251,7 @@ Public Class PageFriendChat
 
     ''' <summary>删除会话：服务端会话列表与本机缓存一起清掉。</summary>
     Private Sub DeleteConversationRow(Conv As FriendConversation)
-        Dim Tip As String = If(Conv.FriendDeleted,
-                               $"「{Conv.Title}」的好友关系已解除，删除后不会再出现在会话列表里。",
-                               $"删除与「{Conv.Title}」的会话？本机聊天记录会一并清除，服务器上的漫游记录不受影响。")
+        Dim Tip As String = $"删除与「{Conv.Title}」的会话？本机聊天记录会一并清除，服务器上的消息记录不受影响。"
         If MyMsgBox(Tip, "删除会话", "删除", "取消", IsWarn:=True) <> 1 Then Return
         Dim ConvType As Integer = Conv.ConvType
         Dim ConvKey As String = Conv.ConvKey
@@ -316,7 +314,7 @@ Public Class PageFriendChat
                 End Sub)
                 '标记已读
                 Try
-                    ModFriend.FriendApi("read", New JObject From {{"conv_type", ConvType}, {"conv_key", ConvKey}})
+                    ModFriend.MarkRead(ConvType, ConvKey)
                     '服务端清零后立刻同步本地红点，不用等下一次轮询
                     RunInUi(
                     Sub()

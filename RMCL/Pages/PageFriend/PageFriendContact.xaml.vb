@@ -34,10 +34,9 @@
         Sub()
             Try
                 Dim Contacts As List(Of FriendContact) = ModFriend.GetContacts()
-                Dim Requests As JArray = Nothing
+                Dim Requests As List(Of FriendRequest) = Nothing
                 Try
-                    Dim Data As JObject = ModFriend.FriendApi("requests")
-                    If Data IsNot Nothing Then Requests = TryCast(Data("items"), JArray)
+                    Requests = ModFriend.GetIncomingRequests()
                 Catch ex As Exception
                     Logger.Warn(ex, "读取好友请求失败")
                 End Try
@@ -102,7 +101,7 @@
         RunInNewThread(
         Sub()
             Try
-                ModFriend.FriendApi("friend_delete", New JObject From {{"user_id", Contact.Id}})
+                ModFriend.DeleteFriend(Contact.Id)
                 RunInUi(Sub() RefreshAll(True))
             Catch ex As Exception
                 RunInUi(Sub() Hint("删除失败：" & ModFriend.FriendErrorText(ex), HintType.Red))
@@ -114,19 +113,14 @@
 
 #Region "好友请求"
 
-    Private Sub BuildRequests(Items As JArray)
+    Private Sub BuildRequests(Items As List(Of FriendRequest))
         PanRequests.Children.Clear()
         If Items Is Nothing OrElse Items.Count = 0 Then
             LabRequestEmpty.Visibility = Visibility.Visible
             Return
         End If
         LabRequestEmpty.Visibility = Visibility.Collapsed
-        For Each Token As JToken In Items
-            Dim Obj As JObject = CType(Token, JObject)
-            Dim RequestId As Long = Obj.Value(Of Long)("id")
-            Dim Name As String = Obj.Value(Of String)("from_name")
-            Dim Email As String = Obj.Value(Of String)("from_email")
-            Dim Message As String = Obj.Value(Of String)("message")
+        For Each Request As FriendRequest In Items
 
             Dim Row As New Grid With {.Height = 42, .Margin = New Thickness(0, 0, 0, 4)}
             Row.ColumnDefinitions.Add(New ColumnDefinition With {.Width = New GridLength(1, GridUnitType.Star)})
@@ -135,12 +129,12 @@
 
             Dim Info As New StackPanel With {.VerticalAlignment = VerticalAlignment.Center}
             Info.Children.Add(New TextBlock With {
-                .Text = $"{Name}（{Email}）",
+                .Text = $"{Request.FromName}（{Request.FromEmail}）",
                 .FontSize = 13,
                 .TextTrimming = TextTrimming.CharacterEllipsis
             })
             Info.Children.Add(New TextBlock With {
-                .Text = If(String.IsNullOrEmpty(Message), "请求加你为好友", Message),
+                .Text = If(String.IsNullOrEmpty(Request.Message), "请求加你为好友", Request.Message),
                 .FontSize = 11,
                 .Opacity = 0.55,
                 .TextTrimming = TextTrimming.CharacterEllipsis
@@ -150,14 +144,14 @@
             Dim BtnAccept As New MyButton With {
                 .Text = "同意", .MinWidth = 62, .Height = 28, .Padding = New Thickness(10, 0, 10, 0), .ColorType = MyButton.ColorState.Highlight, .Margin = New Thickness(0, 0, 8, 0)
             }
-            AddHandler BtnAccept.Click, Sub(sender As Object, e As MouseButtonEventArgs) AnswerRequest(RequestId, True)
+            AddHandler BtnAccept.Click, Sub(sender As Object, e As MouseButtonEventArgs) AnswerRequest(Request.Id, True)
             Grid.SetColumn(BtnAccept, 1)
             Row.Children.Add(BtnAccept)
 
             Dim BtnReject As New MyButton With {
                 .Text = "拒绝", .MinWidth = 62, .Height = 28, .Padding = New Thickness(10, 0, 10, 0)
             }
-            AddHandler BtnReject.Click, Sub(sender As Object, e As MouseButtonEventArgs) AnswerRequest(RequestId, False)
+            AddHandler BtnReject.Click, Sub(sender As Object, e As MouseButtonEventArgs) AnswerRequest(Request.Id, False)
             Grid.SetColumn(BtnReject, 2)
             Row.Children.Add(BtnReject)
 
@@ -169,7 +163,11 @@
         RunInNewThread(
         Sub()
             Try
-                ModFriend.FriendApi(If(Accept, "friend_accept", "friend_reject"), New JObject From {{"request_id", RequestId}})
+                If Accept Then
+                    ModFriend.AcceptRequest(RequestId)
+                Else
+                    ModFriend.RejectRequest(RequestId)
+                End If
                 RunInUi(
                 Sub()
                     Hint(If(Accept, "已同意好友请求", "已拒绝好友请求"), HintType.Green, False)
@@ -204,16 +202,15 @@
         RunInNewThread(
         Sub()
             Try
-                Dim Data As JObject = ModFriend.FriendApi("search", New JObject From {{"keyword", Keyword}})
-                Dim Arr As JArray = If(Data Is Nothing, Nothing, TryCast(Data("items"), JArray))
-                RunInUi(Sub() BuildSearchResult(Arr))
+                Dim Items As List(Of FriendContact) = ModFriend.SearchUsers(Keyword)
+                RunInUi(Sub() BuildSearchResult(Items))
             Catch ex As Exception
                 RunInUi(Sub() LabSearchHint.Text = "搜索失败：" & ModFriend.FriendErrorText(ex))
             End Try
         End Sub, "Friend Search")
     End Sub
 
-    Private Sub BuildSearchResult(Items As JArray)
+    Private Sub BuildSearchResult(Items As List(Of FriendContact))
         PanSearchResult.Children.Clear()
         If Items Is Nothing OrElse Items.Count = 0 Then
             LabSearchHint.Text = "没有找到匹配的用户。"
@@ -221,9 +218,7 @@
         End If
         LabSearchHint.Text = $"找到 {Items.Count} 个用户。"
         Dim Incoming As Integer = 0
-        For Each Token As JToken In Items
-            Dim Obj As JObject = CType(Token, JObject)
-            Dim Contact As FriendContact = ModFriend.ParseContact(Obj)
+        For Each Contact As FriendContact In Items
             Dim Row As New Grid With {.Height = 38, .Margin = New Thickness(0, 0, 0, 4)}
             Row.ColumnDefinitions.Add(New ColumnDefinition With {.Width = New GridLength(1, GridUnitType.Star)})
             Row.ColumnDefinitions.Add(New ColumnDefinition With {.Width = GridLength.Auto})
@@ -271,7 +266,7 @@
         RunInNewThread(
         Sub()
             Try
-                ModFriend.FriendApi("add", New JObject From {{"user_id", Contact.Id}, {"message", "你好，我是 " & ModFriend.MyName}})
+                ModFriend.AddFriend(Contact.Id, "你好，我是 " & ModFriend.MyName)
                 RunInUi(
                 Sub()
                     LabSearchHint.Text = $"已向 {Contact.Nickname} 发送好友请求。"

@@ -107,7 +107,6 @@ Public Module ModFriend
         If User IsNot Nothing AndAlso User.Value(Of Long)("id") <> OldId Then
             '换账号后序号与本地缓存都要重置，避免把上一个账号的消息算进来
             Settings.Set("FriendLastSeq", 0L)
-            Settings.Set("FriendLastMsgId", 0L)
         End If
         StartRealtime()
     End Sub
@@ -126,14 +125,16 @@ Public Module ModFriend
         Settings.Set("FriendToken", "")
         Settings.Set("FriendSelfJson", "{}")
         Settings.Set("FriendLastSeq", 0L)
-        Settings.Set("FriendLastMsgId", 0L)
     End Sub
 
 #End Region
 
 #Region "HTTP"
 
-    ''' <summary>调用网关。必须在工作线程调用。</summary>
+    ''' <summary>
+    ''' 调用网关的唯一入口：拼地址、带令牌、把错误体转成 FriendApiException。
+    ''' 必须在工作线程调用。
+    ''' </summary>
     Private Function CallApi(Method As HttpMethod, Path As String, Optional Param As JObject = Nothing,
                              Optional NeedAuth As Boolean = True, Optional Timeout As Integer = 15000) As JObject
         Dim Url As String = FriendServer & ApiPrefix & Path
@@ -190,139 +191,6 @@ Public Module ModFriend
     End Function
 
     ''' <summary>
-    ''' 兼容层：把旧的 action 名称映射到网关的 REST 路径。
-    ''' 新代码请直接用 CallApi 或下面的强类型方法。
-    ''' </summary>
-    Public Function FriendApi(Action As String, Optional Param As JObject = Nothing,
-                              Optional NeedAuth As Boolean = True, Optional Timeout As Integer = 15000) As JObject
-        Select Case Action
-            Case "send_code"
-                Return CallApi(HttpMethod.Post, "/auth/send-code", Param, False, Timeout)
-            Case "register"
-                Return CallApi(HttpMethod.Post, "/auth/register", Param, False, Timeout)
-            Case "login"
-                Return CallApi(HttpMethod.Post, "/auth/login", Param, False, Timeout)
-            Case "rayskin_login"
-                Return CallApi(HttpMethod.Post, "/auth/rayskin", Param, False, Timeout)
-            Case "me"
-                Return CallApi(HttpMethod.Get, "/me")
-            Case "contacts"
-                Dim Data As JObject = CallApi(HttpMethod.Get, "/friends")
-                Dim Items As New JArray()
-                For Each Token As JToken In DirectCast(If(Data("items"), New JArray()), JArray)
-                    Items.Add(ContactJson(CType(Token, JObject), "friend"))
-                Next
-                Return New JObject From {{"items", Items}}
-            Case "conversations"
-                Dim Data As JObject = CallApi(HttpMethod.Get, "/conversations")
-                Dim Items As New JArray()
-                For Each Token As JToken In DirectCast(If(Data("items"), New JArray()), JArray)
-                    Dim Obj As JObject = CType(Token, JObject)
-                    Obj("online") = False
-                    Obj("friend_deleted") = False
-                    Obj("roam") = False
-                    Items.Add(Obj)
-                Next
-                Return New JObject From {{"items", Items}}
-            Case "requests"
-                Dim Data As JObject = CallApi(HttpMethod.Get, "/friend-requests",
-                                              New JObject From {{"box", "in"}, {"include_handled", False}})
-                Dim Items As New JArray()
-                For Each Token As JToken In DirectCast(If(Data("items"), New JArray()), JArray)
-                    Dim Obj As JObject = CType(Token, JObject)
-                    '只显示待处理的申请：已同意/已拒绝的留着会让「同意」点了没反应
-                    Dim Status As String = Obj.Value(Of String)("status")
-                    If Not String.IsNullOrEmpty(Status) AndAlso
-                       Not String.Equals(Status, "pending", StringComparison.OrdinalIgnoreCase) Then Continue For
-                    Dim UserObj As JObject = TryCast(Obj("user"), JObject)
-                    Items.Add(New JObject From {
-                        {"id", Obj("id")},
-                        {"from_name", If(UserObj Is Nothing, "", UserObj.Value(Of String)("nickname"))},
-                        {"from_email", If(UserObj Is Nothing, "", UserObj.Value(Of String)("email"))},
-                        {"message", Obj.Value(Of String)("wording")},
-                        {"status", Obj.Value(Of String)("status")},
-                        {"created_at", Obj("created_at")}
-                    })
-                Next
-                Return New JObject From {{"items", Items}}
-            Case "read"
-                Dim ConvType As Integer = If(Param Is Nothing, 0, Param.Value(Of Integer)("conv_type"))
-                Dim ConvKey As String = If(Param Is Nothing, "", Param.Value(Of String)("conv_key"))
-                Return CallApi(HttpMethod.Post, $"/conversations/{ConvType}:{Uri.EscapeDataString(ConvKey)}/read")
-            Case "friend_delete"
-                Return CallApi(HttpMethod.Delete, "/friends/" & Param.Value(Of Long)("user_id"))
-            Case "friend_accept"
-                Return CallApi(HttpMethod.Post, $"/friend-requests/{Param.Value(Of Long)("request_id")}/accept")
-            Case "friend_reject"
-                Return CallApi(HttpMethod.Post, $"/friend-requests/{Param.Value(Of Long)("request_id")}/reject")
-            Case "search"
-                Dim Data As JObject = CallApi(HttpMethod.Get, "/search", New JObject From {{"q", Param.Value(Of String)("keyword")}})
-                Dim Items As New JArray()
-                For Each Token As JToken In DirectCast(If(Data("items"), New JArray()), JArray)
-                    Items.Add(ContactJson(CType(Token, JObject), ""))
-                Next
-                Return New JObject From {{"items", Items}}
-            Case "add"
-                Return CallApi(HttpMethod.Post, "/friend-requests", New JObject From {
-                    {"to_id", Param.Value(Of Long)("user_id")},
-                    {"wording", Param.Value(Of String)("message")}
-                })
-            Case "group_list"
-                Return CallApi(HttpMethod.Get, "/groups")
-            Case "group_create"
-                Dim Data As JObject = CallApi(HttpMethod.Post, "/groups", New JObject From {
-                    {"name", Param.Value(Of String)("name")},
-                    {"members", If(Param("members"), New JArray())}
-                })
-                Return New JObject From {{"group", GroupJson(Data)}}
-            Case "group_info"
-                Return CallApi(HttpMethod.Get, "/groups/" & Param.Value(Of Long)("group_id"))
-            Case "group_kick"
-                Return CallApi(HttpMethod.Delete, $"/groups/{Param.Value(Of Long)("group_id")}/members/{Param.Value(Of Long)("user_id")}")
-            Case "group_add_members"
-                Return CallApi(HttpMethod.Post, $"/groups/{Param.Value(Of Long)("group_id")}/members",
-                               New JObject From {{"members", If(Param("members"), New JArray())}})
-            Case "group_leave"
-                Return CallApi(HttpMethod.Delete, $"/groups/{Param.Value(Of Long)("group_id")}/members/{MyId}")
-            Case "messages"
-                Dim ConvType As Integer = Param.Value(Of Integer)("conv_type")
-                Dim ConvKey As String = Param.Value(Of String)("conv_key")
-                Return CallApi(HttpMethod.Get, "/messages", New JObject From {
-                    {"conv", $"{ConvType}:{ConvKey}"},
-                    {"before", Param.Value(Of Long)("before_id")},
-                    {"limit", Param.Value(Of Integer)("limit")}
-                })
-            Case "send"
-                Return CallApi(HttpMethod.Post, "/messages", New JObject From {
-                    {"conv", $"{Param.Value(Of Integer)("conv_type")}:{Param.Value(Of String)("conv_key")}"},
-                    {"body", Param.Value(Of String)("body")},
-                    {"client_msg_id", Param.Value(Of String)("client_id")}
-                }, True, Timeout)
-            Case "recall"
-                Return CallApi(HttpMethod.Post, "/messages/" & Param.Value(Of Long)("msg_id") & "/recall")
-            Case "history"
-                Dim Data As JObject = CallApi(HttpMethod.Get, "/history", New JObject From {
-                    {"keyword", Param.Value(Of String)("keyword")},
-                    {"scope", Param.Value(Of String)("scope")},
-                    {"before", Param.Value(Of Long)("before_id")},
-                    {"limit", Param.Value(Of Integer)("limit")}
-                })
-                Dim Items As JArray = DirectCast(If(Data("items"), New JArray()), JArray)
-                Dim NextBefore As Long = 0
-                For Each Token As JToken In Items
-                    Dim Id As Long = Token.Value(Of Long)("id")
-                    If NextBefore = 0 OrElse Id < NextBefore Then NextBefore = Id
-                    '单聊消息里的 conv_key 是 min_max 形式，点击结果要按「对方 id」打开会话
-                    Dim Obj As JObject = CType(Token, JObject)
-                    Obj("conv_key") = PeerConvKey(Obj.Value(Of Integer)("conv_type"), Obj.Value(Of String)("conv_key"))
-                Next
-                Return New JObject From {{"items", Items}, {"next_before", NextBefore}}
-            Case Else
-                Throw New FriendApiException("E_UNKNOWN", "未知的接口：" & Action)
-        End Select
-    End Function
-
-    ''' <summary>
     ''' 把服务端的关系字段统一成界面认识的一小组取值。
     '''
     ''' 服务端 /search 返回 none / friend / requested / incoming，
@@ -346,28 +214,6 @@ Public Module ModFriend
         End Select
     End Function
 
-    Private Function ContactJson(Obj As JObject, DefaultRelation As String) As JObject
-        Return New JObject From {
-            {"id", Obj("id")},
-            {"email", Obj("email")},
-            {"nickname", Obj("nickname")},
-            {"remark", ""},
-            {"relation", NormalizeRelation(Obj.Value(Of String)("relation"), DefaultRelation)},
-            {"online", False}
-        }
-    End Function
-
-    Private Function GroupJson(Obj As JObject) As JObject
-        If Obj("group") IsNot Nothing Then Obj = CType(Obj("group"), JObject)
-        Return New JObject From {
-            {"id", Obj("id")},
-            {"name", Obj("name")},
-            {"owner_id", Obj("owner_id")},
-            {"member_count", Obj("member_count")},
-            {"created_at", If(Obj("created_at") Is Nothing, 0, Obj("created_at"))}
-        }
-    End Function
-
     ''' <summary>把异常转成适合提示用户的文案。</summary>
     Public Function FriendErrorText(ex As Exception) As String
         Dim ApiEx As FriendApiException = TryCast(ex, FriendApiException)
@@ -383,17 +229,10 @@ Public Module ModFriend
 
     Private RealtimeThread As System.Threading.Thread = Nothing
     Private _RealtimeRunning As Boolean = False
-    Private _RealtimeConnected As Boolean = False
     Private ReadOnly RealtimeQueue As New System.Collections.Concurrent.ConcurrentQueue(Of JObject)
 
     ''' <summary>收到推送时在后台线程触发，页面需自行切回 UI 线程。</summary>
     Public Event RealtimeActivity()
-
-    Public ReadOnly Property RealtimeConnected As Boolean
-        Get
-            Return _RealtimeConnected
-        End Get
-    End Property
 
     Public Sub StartRealtime()
         If Not IsLoggedIn Then Return
@@ -406,7 +245,6 @@ Public Module ModFriend
 
     Public Sub StopRealtime()
         _RealtimeRunning = False
-        _RealtimeConnected = False
     End Sub
 
     Private Sub RealtimeLoop()
@@ -418,7 +256,6 @@ Public Module ModFriend
                 Dim Base As String = FriendServer.Replace("https://", "wss://").Replace("http://", "ws://")
                 Dim WsUri As New Uri(Base & "/ws?token=" & Uri.EscapeDataString(FriendToken))
                 Socket.ConnectAsync(WsUri, System.Threading.CancellationToken.None).GetAwaiter().GetResult()
-                _RealtimeConnected = True
                 Backoff = 1
 
                 Dim ResumeMsg As New JObject From {{"op", "resume"}, {"since", LastSeqCursor()}}
@@ -447,8 +284,7 @@ Public Module ModFriend
             Catch ex As Exception
                 Logger.Warn(ex, "好友实时连接断开")
             Finally
-                _RealtimeConnected = False
-                If PingTimer IsNot Nothing Then PingTimer.Dispose()
+                        If PingTimer IsNot Nothing Then PingTimer.Dispose()
                 Try
                     Socket.Dispose()
                 Catch
@@ -572,16 +408,6 @@ Public Module ModFriend
         Public LastAt As Long
         Public Unread As Integer
         Public MemberCount As Integer
-        Public Online As Boolean
-        ''' <summary>好友关系已解除（账号还在），会话仍保留，界面上标记为「已删除的好友」。</summary>
-        Public FriendDeleted As Boolean
-        ''' <summary>是否开启了聊天记录漫游。</summary>
-        Public Roam As Boolean
-        Public ReadOnly Property Key As String
-            Get
-                Return ConvType & "|" & ConvKey
-            End Get
-        End Property
     End Class
 
     Public Class FriendContact
@@ -589,8 +415,24 @@ Public Module ModFriend
         Public Email As String
         Public Nickname As String
         Public Remark As String
+        ''' <summary>与服务端 /search 对齐后取值：""（可加）/ friend / pending / incoming / self。</summary>
         Public Relation As String
-        Public Online As Boolean
+    End Class
+
+    ''' <summary>一条待处理的好友申请。</summary>
+    Public Class FriendRequest
+        Public Id As Long
+        Public FromId As Long
+        Public FromName As String
+        Public FromEmail As String
+        Public Message As String
+        Public CreatedAt As Long
+    End Class
+
+    ''' <summary>历史检索结果：消息本体 + 所在会话标题。</summary>
+    Public Class FriendHistoryItem
+        Public Message As FriendMessage
+        Public Title As String
     End Class
 
     Public Class FriendGroup
@@ -648,8 +490,7 @@ Public Module ModFriend
             .Email = Obj.Value(Of String)("email"),
             .Nickname = Obj.Value(Of String)("nickname"),
             .Remark = Obj.Value(Of String)("remark"),
-            .Relation = Obj.Value(Of String)("relation"),
-            .Online = Obj.Value(Of Boolean)("online")
+            .Relation = Obj.Value(Of String)("relation")
         }
     End Function
 
@@ -667,6 +508,148 @@ Public Module ModFriend
 
 #Region "业务接口"
 
+    ' ---------------- 账号 ----------------
+
+    ''' <summary>发送邮箱验证码。服务端开了 debug_code 时响应里直接带验证码。</summary>
+    Public Function SendCode(Email As String) As JObject
+        Return CallApi(HttpMethod.Post, "/auth/send-code",
+                       New JObject From {{"email", Email}, {"purpose", "register"}}, False)
+    End Function
+
+    ''' <summary>注册并自动登录。返回体里带 token 与 user。</summary>
+    Public Function Register(Email As String, Code As String, Nickname As String,
+                             Password As String, Invite As String, Device As String) As JObject
+        Return CallApi(HttpMethod.Post, "/auth/register", New JObject From {
+            {"email", Email}, {"code", Code}, {"nickname", Nickname},
+            {"password", Password}, {"invite", Invite}, {"device", Device}
+        }, False, 20000)
+    End Function
+
+    Public Function Login(Email As String, Password As String, Device As String) As JObject
+        Return CallApi(HttpMethod.Post, "/auth/login", New JObject From {
+            {"email", Email}, {"password", Password}, {"device", Device}
+        }, False, 20000)
+    End Function
+
+    ''' <summary>RaySkin 一键登录。Payload 的字段由调用方按服务端约定拼好。</summary>
+    Public Function RayskinLogin(Payload As JObject) As JObject
+        Return CallApi(HttpMethod.Post, "/auth/rayskin", Payload, False, 25000)
+    End Function
+
+    ' ---------------- 好友 ----------------
+
+    ''' <summary>按邮箱或昵称搜人。结果里的 Relation 已换算成界面取值。</summary>
+    Public Function SearchUsers(Keyword As String) As List(Of FriendContact)
+        Dim Result As New List(Of FriendContact)
+        Dim Data As JObject = CallApi(HttpMethod.Get, "/search", New JObject From {{"q", Keyword}})
+        For Each Token As JToken In DirectCast(If(Data("items"), New JArray()), JArray)
+            Dim Obj As JObject = CType(Token, JObject)
+            Result.Add(New FriendContact With {
+                .Id = Obj.Value(Of Long)("id"),
+                .Email = Obj.Value(Of String)("email"),
+                .Nickname = Obj.Value(Of String)("nickname"),
+                .Relation = NormalizeRelation(Obj.Value(Of String)("relation"), "")
+            })
+        Next
+        Return Result
+    End Function
+
+    ''' <summary>发送好友申请。</summary>
+    Public Sub AddFriend(UserId As Long, Optional Message As String = "")
+        CallApi(HttpMethod.Post, "/friend-requests",
+                New JObject From {{"to_id", UserId}, {"wording", Message}})
+    End Sub
+
+    ''' <summary>收到的、还没处理的好友申请。</summary>
+    Public Function GetIncomingRequests() As List(Of FriendRequest)
+        Dim Result As New List(Of FriendRequest)
+        Dim Data As JObject = CallApi(HttpMethod.Get, "/friend-requests",
+                                      New JObject From {{"box", "in"}, {"include_handled", False}})
+        For Each Token As JToken In DirectCast(If(Data("items"), New JArray()), JArray)
+            Dim Obj As JObject = CType(Token, JObject)
+            '网关新版只回 pending，老版本会把处理过的一起返回，这里再兜一层
+            Dim Status As String = Obj.Value(Of String)("status")
+            If Not String.IsNullOrEmpty(Status) AndAlso
+               Not String.Equals(Status, "pending", StringComparison.OrdinalIgnoreCase) Then Continue For
+            Dim UserObj As JObject = TryCast(Obj("user"), JObject)
+            Result.Add(New FriendRequest With {
+                .Id = Obj.Value(Of Long)("id"),
+                .FromId = If(UserObj Is Nothing, 0L, UserObj.Value(Of Long)("id")),
+                .FromName = If(UserObj Is Nothing, "", UserObj.Value(Of String)("nickname")),
+                .FromEmail = If(UserObj Is Nothing, "", UserObj.Value(Of String)("email")),
+                .Message = Obj.Value(Of String)("wording"),
+                .CreatedAt = Obj.Value(Of Long)("created_at")
+            })
+        Next
+        Return Result
+    End Function
+
+    Public Sub AcceptRequest(RequestId As Long)
+        CallApi(HttpMethod.Post, $"/friend-requests/{RequestId}/accept")
+    End Sub
+
+    Public Sub RejectRequest(RequestId As Long)
+        CallApi(HttpMethod.Post, $"/friend-requests/{RequestId}/reject")
+    End Sub
+
+    ''' <summary>删除好友（双向解除关系，会话与本地记录保留）。</summary>
+    Public Sub DeleteFriend(UserId As Long)
+        CallApi(HttpMethod.Delete, "/friends/" & UserId)
+    End Sub
+
+    ' ---------------- 群组 ----------------
+
+    Public Function CreateGroup(Name As String, Members As IEnumerable(Of Long)) As FriendGroup
+        Dim Data As JObject = CallApi(HttpMethod.Post, "/groups",
+                                      New JObject From {{"name", Name}, {"members", ToIdArray(Members)}},
+                                      True, 20000)
+        Return ParseGroup(Data)
+    End Function
+
+    Public Sub KickGroupMember(GroupId As Long, UserId As Long)
+        CallApi(HttpMethod.Delete, $"/groups/{GroupId}/members/{UserId}")
+    End Sub
+
+    Public Sub AddGroupMembers(GroupId As Long, Members As IEnumerable(Of Long))
+        CallApi(HttpMethod.Post, $"/groups/{GroupId}/members",
+                New JObject From {{"members", ToIdArray(Members)}})
+    End Sub
+
+    Public Sub LeaveGroup(GroupId As Long)
+        CallApi(HttpMethod.Delete, $"/groups/{GroupId}/members/{MyId}")
+    End Sub
+
+    Private Function ToIdArray(Ids As IEnumerable(Of Long)) As JArray
+        Dim Arr As New JArray()
+        If Ids IsNot Nothing Then
+            For Each Id As Long In Ids
+                If Id > 0 Then Arr.Add(Id)
+            Next
+        End If
+        Return Arr
+    End Function
+
+    ' ---------------- 检索 ----------------
+
+    ''' <summary>按关键词检索历史消息。Scope 取 all / friend / group。</summary>
+    Public Function SearchHistory(Keyword As String, Scope As String, BeforeId As Long,
+                                  Optional Limit As Integer = 40) As List(Of FriendHistoryItem)
+        Dim Result As New List(Of FriendHistoryItem)
+        Dim Data As JObject = CallApi(HttpMethod.Get, "/history", New JObject From {
+            {"keyword", Keyword}, {"scope", Scope}, {"before", BeforeId}, {"limit", Limit}
+        }, True, 20000)
+        For Each Token As JToken In DirectCast(If(Data("items"), New JArray()), JArray)
+            Dim Obj As JObject = CType(Token, JObject)
+            Result.Add(New FriendHistoryItem With {
+                .Message = ParseMessage(Obj),
+                .Title = Obj.Value(Of String)("title")
+            })
+        Next
+        Return Result
+    End Function
+
+    ' ---------------- 会话 ----------------
+
     Public Function GetConversations() As List(Of FriendConversation)
         Dim Result As New List(Of FriendConversation)
         Dim Data As JObject = CallApi(HttpMethod.Get, "/conversations")
@@ -681,10 +664,7 @@ Public Module ModFriend
                 .LastBody = Obj.Value(Of String)("last_body"),
                 .LastAt = Obj.Value(Of Long)("last_at"),
                 .Unread = Obj.Value(Of Integer)("unread"),
-                .MemberCount = Obj.Value(Of Integer)("member_count"),
-                .Online = False,
-                .FriendDeleted = False,
-                .Roam = False
+                .MemberCount = Obj.Value(Of Integer)("member_count")
             })
         Next
         Return Result
@@ -1069,13 +1049,6 @@ Public Module ModFriend
         End SyncLock
     End Function
 
-    Public Function DeletedSnapshot() As List(Of Long)
-        SyncLock DeletedLock
-            EnsureDeletedLoaded()
-            Return DeletedIds.ToList()
-        End SyncLock
-    End Function
-
 #End Region
 
 #End Region
@@ -1108,32 +1081,6 @@ Public Module ModFriend
         End Get
     End Property
 
-#Region "漫游（已下线）"
-
-    '体验版自带云端漫游，不再由客户端上传/恢复，这里保留空实现避免旧页面编译失败。
-
-    Public Class RoamUploadResult
-        Public LocalCount As Integer
-        Public Added As Integer
-    End Class
-
-    Public Function SetRoam(ConvType As Integer, ConvKey As String, Enabled As Boolean) As Integer
-        Return 0
-    End Function
-
-    Public Function UploadRoam(ConvType As Integer, ConvKey As String) As RoamUploadResult
-        Return New RoamUploadResult()
-    End Function
-
-    Public Function RestoreRoam(ConvType As Integer, ConvKey As String) As Integer
-        Return 0
-    End Function
-
-    Public Function RestoreLocalHistory(Optional SinceId As Long = 0) As Integer
-        Return 0
-    End Function
-
-#End Region
 
 #Region "链接识别与导入"
 

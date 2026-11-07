@@ -39,36 +39,28 @@
                     Scope = "group"
             End Select
         End If
-        Dim Param As New JObject From {
-            {"keyword", TextKeyword.Text.Trim()},
-            {"scope", Scope},
-            {"before_id", If(Append, LastBefore, 0L)},
-            {"limit", 40}
-        }
+        Dim Keyword As String = TextKeyword.Text.Trim()
+        Dim Before As Long = If(Append, LastBefore, 0L)
         LabHint.Text = "正在查询……"
         BtnLoadMore.IsEnabled = False
         RunInNewThread(
         Sub()
             Try
-                Dim Data As JObject = ModFriend.FriendApi("history", Param, True, 20000)
-                Dim Arr As JArray = If(Data Is Nothing, Nothing, TryCast(Data("items"), JArray))
-                Dim MaxId As Long = If(Data Is Nothing, 0L, Data.Value(Of Long)("next_before"))
+                Dim Items As List(Of FriendHistoryItem) = ModFriend.SearchHistory(Keyword, Scope, Before, 40)
+                Dim MaxId As Long = If(Items.Count = 0, 0L, Items.Min(Function(x) x.Message.Id))
                 RunInUi(
                 Sub()
                     If Not Append Then PanResult.Children.Clear()
-                    Dim Count As Integer = If(Arr Is Nothing, 0, Arr.Count)
-                    If Arr IsNot Nothing Then
-                        For Each Token As JToken In Arr
-                            PanResult.Children.Add(BuildRow(CType(Token, JObject)))
-                        Next
-                    End If
-                    HasMore = Count >= 40
+                    For Each Entry As FriendHistoryItem In Items
+                        PanResult.Children.Add(BuildRow(Entry))
+                    Next
+                    HasMore = Items.Count >= 40
                     BtnLoadMore.Visibility = If(HasMore, Visibility.Visible, Visibility.Collapsed)
                     BtnLoadMore.IsEnabled = True
                     If Append Then
-                        LabHint.Text = $"又加载了 {Count} 条。"
+                        LabHint.Text = $"又加载了 {Items.Count} 条。"
                     Else
-                        LabHint.Text = If(Count = 0, "没有找到匹配的记录。", $"找到 {Count} 条记录。")
+                        LabHint.Text = If(Items.Count = 0, "没有找到匹配的记录。", $"找到 {Items.Count} 条记录。")
                     End If
                     If MaxId > 0 Then LastBefore = MaxId
                 End Sub)
@@ -82,13 +74,11 @@
         End Sub, "Friend History")
     End Sub
 
-    Private Function BuildRow(Obj As JObject) As FrameworkElement
-        Dim ConvType As Integer = Obj.Value(Of Integer)("conv_type")
-        Dim ConvKey As String = Obj.Value(Of String)("conv_key")
-        Dim Title As String = Obj.Value(Of String)("title")
-        Dim FromName As String = Obj.Value(Of String)("from_name")
-        Dim Body As String = Obj.Value(Of String)("body")
-        Dim CreatedAt As Long = Obj.Value(Of Long)("created_at")
+    Private Function BuildRow(Entry As FriendHistoryItem) As FrameworkElement
+        Dim Msg As FriendMessage = Entry.Message
+        Dim Title As String = Entry.Title
+        Dim FromName As String = If(String.IsNullOrEmpty(Msg.FromName), "未知", Msg.FromName)
+        Dim Body As String = If(Msg.Recalled, "[已撤回]", Msg.Body)
 
         Dim Row As New Border With {
             .CornerRadius = New CornerRadius(9),
@@ -117,7 +107,7 @@
         Layout.Children.Add(Stack)
 
         Dim Time As New TextBlock With {
-            .Text = FormatTime(CreatedAt),
+            .Text = FormatTime(Msg.CreatedAt),
             .FontSize = 10.5,
             .Opacity = 0.45,
             .Margin = New Thickness(10, 1, 0, 0),
@@ -129,7 +119,7 @@
 
         AddHandler Row.MouseLeftButtonUp,
             Sub(sender As Object, e As MouseButtonEventArgs)
-                FrmFriendLeft.OpenChat(ConvType, ConvKey, Title)
+                FrmFriendLeft.OpenChat(Msg.ConvType, Msg.ConvKey, Title)
             End Sub
         Return Row
     End Function
