@@ -11,7 +11,7 @@ Public Module ModFriend
     ''' <summary>
     ''' 好友网关地址。部署 server-v2 后把这里改成实际地址（通常是 https://im.example.com）。
     ''' </summary>
-    Public Const DefaultFriendServer As String = "https://im.mc.lxray.top"
+    Public Const DefaultFriendServer As String = "https://immc.lxray.top"
 
     Private Const ApiPrefix As String = "/api/v1"
 

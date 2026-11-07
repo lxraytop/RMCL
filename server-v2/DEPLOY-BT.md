@@ -11,7 +11,7 @@
 | --- | --- |
 | Python | **3.11 或 3.12**（代码用了 `str \| None` 等 3.10+ 语法，3.8/3.9 会语法错误） |
 | 端口 | 对外只开 80 / 443；8099 只监听 127.0.0.1 |
-| 域名 | 例如 `im.mc.lxray.top`，A 记录指向服务器 IP |
+| 域名 | 例如 `immc.lxray.top`，A 记录指向服务器 IP |
 | 宝塔插件 | Nginx、Python 项目管理器（软件商店里叫「Python项目管理器」或「Python项目」） |
 
 ## 1. 拉代码
@@ -146,8 +146,8 @@ chmod 750 /www/wwwroot/rmcl-friend/server-v2/data
 
 宝塔 → 网站 → 添加站点：
 
-- 域名：`im.mc.lxray.top`
-- 根目录：随便建一个空目录即可（例如 `/www/wwwroot/im.mc.lxray.top`），**不要**指向 `server-v2`
+- 域名：`immc.lxray.top`
+- 根目录：随便建一个空目录即可（例如 `/www/wwwroot/immc.lxray.top`），**不要**指向 `server-v2`
 - PHP 版本：纯静态
 - 数据库：不创建
 
@@ -166,7 +166,7 @@ chmod 750 /www/wwwroot/rmcl-friend/server-v2/data
 保存后**必须**给代理加 WebSocket 头，否则握手会 400/断开。找到宝塔生成的代理配置文件：
 
 ```
-/www/server/panel/vhost/nginx/proxy/im.mc.lxray.top/*.conf
+/www/server/panel/vhost/nginx/proxy/immc.lxray.top/*.conf
 ```
 
 把内容改成（或参照 `deploy/nginx-websocket.conf`）：
@@ -199,7 +199,7 @@ location / {
 curl http://127.0.0.1:8099/api/v1/health
 
 # 2. 走域名 + HTTPS
-curl https://im.mc.lxray.top/api/v1/health
+curl https://immc.lxray.top/api/v1/health
 ```
 
 期望返回：
@@ -211,7 +211,7 @@ curl https://im.mc.lxray.top/api/v1/health
 再验证 WebSocket（浏览器控制台，任意 https 页面）：
 
 ```js
-const ws = new WebSocket("wss://im.mc.lxray.top/ws?token=test");
+const ws = new WebSocket("wss://immc.lxray.top/ws?token=test");
 ws.onmessage = e => console.log(e.data);
 ws.onopen = () => console.log("open");
 // 期望先收到 {"op":"hello"...}，再收到 {"op":"error","code":"E_AUTH"}（token 无效是正常的）
@@ -254,7 +254,7 @@ cd server-v2
 
 ```vb
 ' RMCL/Modules/ModFriend.vb
-Public Const DefaultFriendServer As String = "https://im.mc.lxray.top"
+Public Const DefaultFriendServer As String = "https://immc.lxray.top"
 ```
 
 ## 12. 备份与安全
