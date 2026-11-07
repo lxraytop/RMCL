@@ -257,6 +257,8 @@ ws.onerror = e => console.log("error", e);
 | 验证码收不到 | QQ 邮箱需用**授权码**不是登录密码；看项目日志里的 `SMTP 发送失败` |
 | 邀请码无效 | 没执行 `manage.py invite`，或该码已用完 |
 | 修改代码不生效 | 在 Python 项目管理器里点「重启」 |
+| `/docs` 打开是白屏 | Swagger UI 默认从 `cdn.jsdelivr.net` 加载，国内不通。上传 `server-v2/static/` 目录（含 `swagger/`）后再重启，`/docs` 就会读本地资源；只传 `app/` 会回落 CDN，仍然白屏 |
+| `/docs` 404 | 版本太旧：用带 `swagger_docs` 的 `app/main.py`；或直接看 `/openapi.json` |
 
 ## 10. 更新版本
 

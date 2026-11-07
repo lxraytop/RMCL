@@ -930,7 +930,7 @@ async def history(keyword: str = Query(""), scope: str = Query("all"),
 async def snapshot(user: dict = Depends(current_user)):
     friends = await list_friends(user)
     conversations = await list_conversations(user)
-    requests = await list_requests("in", user)
+    requests = await list_requests("in", False, user)
     with tx() as conn:
         seq = int(one(conn, "SELECT COALESCE(MAX(seq), 0) AS s FROM event_log")["s"])
     return {"me": user_public(user), "friends": friends, "conversations": conversations,

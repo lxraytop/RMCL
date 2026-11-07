@@ -188,6 +188,12 @@ async def main() -> None:
     carol_in = api(tc, "GET", "/api/v1/friend-requests?box=in")
     check("待处理申请在列表里", len(carol_in["items"]) == 1 and carol_in["items"][0]["status"] == "pending",
           str(carol_in)[:200])
+    snap = api(tc, "GET", "/api/v1/snapshot")
+    check("快照包含 me/friends/conversations/requests/server_seq",
+          all(k in snap for k in ("me", "friends", "conversations", "requests", "server_seq")), str(snap)[:150])
+    check("快照里的申请只要待处理的",
+          snap["requests"]["items"] and all(x["status"] == "pending" for x in snap["requests"]["items"]),
+          str(snap["requests"])[:200])
     check("同意 carol 的申请", api(tc, "POST", f"/api/v1/friend-requests/{req2['id']}/accept").get("ok") is True)
     check("同意后待处理列表清空", api(tc, "GET", "/api/v1/friend-requests?box=in")["items"] == [])
     handled = api(tc, "GET", "/api/v1/friend-requests?box=in&include_handled=true")["items"]

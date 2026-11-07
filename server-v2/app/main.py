@@ -10,10 +10,13 @@ import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from . import tim
 from .admin import AdminAuthError, router as admin_router
@@ -37,7 +40,38 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="RMCL Friend Gateway", version="2.0.0", lifespan=lifespan)
+# FastAPI 默认的 /docs 从 cdn.jsdelivr.net 拉 swagger-ui，国内基本连不上，
+# 页面会一直白屏。这里改成读仓库自带的 static/swagger（见 deploy 说明），
+# 只有文件缺失时才回落到 CDN。
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+LOCAL_SWAGGER = (STATIC_DIR / "swagger" / "swagger-ui-bundle.js").is_file()
+SWAGGER_JS = "/static/swagger/swagger-ui-bundle.js" if LOCAL_SWAGGER else \
+    "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"
+SWAGGER_CSS = "/static/swagger/swagger-ui.css" if LOCAL_SWAGGER else \
+    "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css"
+
+app = FastAPI(title="RMCL Friend Gateway", version="2.0.0", lifespan=lifespan,
+              docs_url=None, redoc_url=None)
+
+if STATIC_DIR.is_dir():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/docs", include_in_schema=False)
+async def swagger_docs():
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=app.title + " · API 文档",
+        swagger_js_url=SWAGGER_JS,
+        swagger_css_url=SWAGGER_CSS,
+        swagger_favicon_url="",
+    )
+
+
+@app.get("/redoc", include_in_schema=False)
+async def redoc_redirect():
+    # Redoc 的脚本同样在 CDN 上，国内打不开，统一导到本地版 Swagger
+    return RedirectResponse("/docs")
 
 app.add_middleware(
     CORSMiddleware,
