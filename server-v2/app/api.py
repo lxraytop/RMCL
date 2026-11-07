@@ -164,8 +164,21 @@ async def send_code(body: dict):
             " ON CONFLICT(email, purpose) DO UPDATE SET code = excluded.code, expires_at = excluded.expires_at, used = 0",
             (email, purpose, code, now() + 600),
         )
-    # TODO: 接 SMTP；开发环境直接回传
-    log.info("验证码 %s -> %s", email, code)
+    from . import mail
+
+    if mail.enabled():
+        sent = await mail.send(
+            email,
+            "RMCL 好友账号验证码",
+            f"你的验证码是 {code}，10 分钟内有效。\n\n如果不是你本人操作，请忽略这封邮件。",
+        )
+        if not sent and not CONFIG.get("debug_code"):
+            fail("E_MAIL", "验证码邮件发送失败，请稍后再试")
+    else:
+        log.info("验证码 %s -> %s", email, code)
+        if not CONFIG.get("debug_code"):
+            fail("E_MAIL", "服务端还没有配置邮件服务，请联系管理员")
+
     if CONFIG.get("debug_code"):
         return {"ok": True, "debug_code": code}
     return {"ok": True}
@@ -923,4 +936,6 @@ async def snapshot(user: dict = Depends(current_user)):
 
 @router.get("/health")
 async def health():
-    return {"ok": True, "tim": tim.self_check(), "ws_connections": sum(len(v) for v in HUB._conns.values())}
+    from . import mail
+    return {"ok": True, "tim": tim.self_check(), "mail": mail.self_check(),
+            "ws_connections": sum(len(v) for v in HUB._conns.values())}

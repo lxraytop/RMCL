@@ -2,3 +2,4 @@ data/
 config.json
 __pycache__/
 *.pyc
+config.smtp.json

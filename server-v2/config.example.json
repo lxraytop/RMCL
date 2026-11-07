@@ -2,8 +2,8 @@
   "db": "data/friend.db",
   "token_ttl_days": 30,
   "debug_code": true,
-  "presence_grace_seconds": 30,
   "event_retention_days": 7,
+  "require_invite": true,
   "tim": {
     "enabled": true,
     "sdkappid": 1600171310,
@@ -11,5 +11,15 @@
     "admin": "administrator",
     "group_type": "Private",
     "friendship_mirror": false
+  },
+  "smtp": {
+    "host": "",
+    "port": 465,
+    "encryption": "ssl",
+    "user": "",
+    "pass": "",
+    "from": "",
+    "from_name": "RaySkin",
+    "timeout": 15
   }
 }

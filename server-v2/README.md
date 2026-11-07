@@ -102,7 +102,11 @@ wss://<host>/ws?token=<登录令牌>
 | `group.removed` | 被踢 / 解散 | 移除群与会话 |
 | `conversation.removed` | 本机删除会话 | 从列表移除 |
 
-## 部署（VPS）
+## 部署（宝塔面板）
+
+保姆级步骤见 [`DEPLOY-BT.md`](DEPLOY-BT.md)：Python 项目管理器 + 站点反代 + WebSocket 头 + HTTPS。
+
+## 部署（VPS / systemd）
 
 ```bash
 git clone -b refactor/friend-im-v2 <repo> /opt/rmcl-friend
