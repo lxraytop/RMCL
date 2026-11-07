@@ -221,6 +221,28 @@ async def main() -> None:
     ha = api(ta, "GET", "/api/v1/history?keyword=历史检索样本")
     check("scope 缺省等于 all", ha["items"] and ha["items"][0]["body"] == "历史检索样本", str(ha)[:200])
 
+    print("== 登录起点：新登录不重放历史，断线才补拉 ==")
+    async with websockets.connect(f"{WS}?token={tc}") as ws3:
+        hello = json.loads(await asyncio.wait_for(ws3.recv(), timeout=5))
+        seq = hello["server_seq"]
+        check("hello 带 server_seq", isinstance(seq, int) and seq > 0, str(seq))
+        await ws3.send(json.dumps({"op": "resume", "since": seq}))
+        first = json.loads(await asyncio.wait_for(ws3.recv(), timeout=5))
+        check("从 server_seq 起步不重放历史事件", first.get("op") == "resumed", str(first)[:150])
+        check("不重放时 seq 就是服务端当前值", first.get("seq") == seq, f"{first.get('seq')}/{seq}")
+
+    async with websockets.connect(f"{WS}?token={tc}") as ws4:
+        json.loads(await asyncio.wait_for(ws4.recv(), timeout=5))
+        await ws4.send(json.dumps({"op": "resume", "since": 0}))
+        kinds = []
+        while True:
+            e = json.loads(await asyncio.wait_for(ws4.recv(), timeout=3))
+            if e.get("op") == "resumed":
+                break
+            kinds.append(e.get("type"))
+        check("since=0 会把历史事件全部重放（所以客户端新登录必须从 server_seq 起步）",
+              "message.new" in kinds, str(kinds[:6]))
+
     print("== 删除好友 ==")
     api(ta, "DELETE", f"/api/v1/friends/{idb}")
     fa = api(ta, "GET", "/api/v1/friends")

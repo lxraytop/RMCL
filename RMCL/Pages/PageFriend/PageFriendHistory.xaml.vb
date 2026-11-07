@@ -3,8 +3,32 @@
     Private LastBefore As Long = 0
     Private HasMore As Boolean = False
 
+    Private SessionHooked As Boolean = False
+
     Private Sub PageFriendHistory_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded
         PanBack.ScrollToHome()
+        If Not SessionHooked Then
+            AddHandler ModFriend.SessionChanged, AddressOf FriendSessionChanged
+            AddHandler ModFriend.LocalCleared, AddressOf FriendLocalCleared
+            SessionHooked = True
+        End If
+    End Sub
+
+    ''' <summary>换账号后清空检索结果，避免看到上一个账号的记录。</summary>
+    Private Sub FriendSessionChanged()
+        RunInUi(
+        Sub()
+            LastBefore = 0
+            HasMore = False
+            PanResult.Children.Clear()
+            BtnLoadMore.Visibility = Visibility.Collapsed
+            LabHint.Text = ""
+        End Sub)
+    End Sub
+
+    ''' <summary>本机聊天记录清空后，服务端仍可检索，这里只提示结果可能来自云端。</summary>
+    Private Sub FriendLocalCleared()
+        RunInUi(Sub() LabHint.Text = "本机缓存已清除，检索结果来自服务器。")
     End Sub
 
     Private Sub BtnSearch_Click(sender As Object, e As EventArgs) Handles BtnSearch.Click

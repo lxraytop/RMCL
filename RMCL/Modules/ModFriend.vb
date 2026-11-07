@@ -102,13 +102,17 @@ Public Module ModFriend
             OldId = MyId
         Catch
         End Try
+        Dim NewId As Long = If(User Is Nothing, 0L, User.Value(Of Long)("id"))
         Settings.Set("FriendToken", Token)
         Settings.Set("FriendSelfJson", If(User Is Nothing, "{}", User.ToString(Formatting.None)))
-        If User IsNot Nothing AndAlso User.Value(Of Long)("id") <> OldId Then
-            '换账号后序号与本地缓存都要重置，避免把上一个账号的消息算进来
-            Settings.Set("FriendLastSeq", 0L)
-        End If
+        '换账号（或重新登录）都要把上一个会话的内存状态清掉：事件队列里可能还压着旧账号的推送，
+        '本地缓存也按旧 id 分过组，不清就会出现「切回来后红点还在 / 会话串号」。
+        ResetSessionMemory()
+        '新会话从服务端当前位置开始，不重放历史事件（重放会把旧消息的未读再加一遍）
+        Settings.Set("FriendLastSeq", 0L)
+        _SessionFresh = True
         StartRealtime()
+        RaiseEvent SessionChanged()
     End Sub
 
     ''' <summary>重新拉取当前账号信息。</summary>
@@ -125,6 +129,20 @@ Public Module ModFriend
         Settings.Set("FriendToken", "")
         Settings.Set("FriendSelfJson", "{}")
         Settings.Set("FriendLastSeq", 0L)
+        ResetSessionMemory()
+        RaiseEvent SessionChanged()
+    End Sub
+
+    ''' <summary>
+    ''' 清掉只属于当前这次登录的内存状态：待处理的事件与本地消息缓存。
+    ''' 磁盘上的聊天记录不动（那是「清除本地聊天记录」按钮的职责）。
+    ''' </summary>
+    Private Sub ResetSessionMemory()
+        Dim Dropped As JObject = Nothing
+        While RealtimeQueue.TryDequeue(Dropped)
+        End While
+        LocalClear()
+        _SessionFresh = True
     End Sub
 
 #End Region
@@ -229,37 +247,70 @@ Public Module ModFriend
 
     Private RealtimeThread As System.Threading.Thread = Nothing
     Private _RealtimeRunning As Boolean = False
+    ''' <summary>
+    ''' 会话代号。每次登出/换号 +1，旧线程醒来发现代号变了就退出，
+    ''' 否则退避中的老线程会带着新 token 再连一条 WS，同一条推送被处理两遍（未读翻倍）。
+    ''' </summary>
+    Private _SessionGen As Integer = 0
+    ''' <summary>当前握着的长连接。登出时要主动 Abort，否则旧账号的推送还会继续进来。</summary>
+    Private _RealtimeSocket As System.Net.WebSockets.ClientWebSocket = Nothing
     Private ReadOnly RealtimeQueue As New System.Collections.Concurrent.ConcurrentQueue(Of JObject)
+
+    ''' <summary>
+    ''' 本次登录是否还没建立过实时连接。首次连上时直接用服务端的 server_seq 作为起点，
+    ''' 避免把登录前的历史事件当新消息重放一遍（重放会让未读数翻倍）。
+    ''' </summary>
+    Private _SessionFresh As Boolean = True
 
     ''' <summary>收到推送时在后台线程触发，页面需自行切回 UI 线程。</summary>
     Public Event RealtimeActivity()
+
+    ''' <summary>
+    ''' 登录成功 / 退出登录后触发（后台线程）。
+    ''' 页面收到后必须清空自己缓存的列表、当前会话与未读，再按需重新拉取。
+    ''' </summary>
+    Public Event SessionChanged()
+
+    ''' <summary>本机聊天记录被清空后触发（后台线程），页面据此清掉已渲染的消息。</summary>
+    Public Event LocalCleared()
 
     Public Sub StartRealtime()
         If Not IsLoggedIn Then Return
         If _RealtimeRunning Then Return
         _RealtimeRunning = True
-        RealtimeThread = New System.Threading.Thread(AddressOf RealtimeLoop) With {
+        Dim Gen As Integer = _SessionGen
+        RealtimeThread = New System.Threading.Thread(Sub() RealtimeLoop(Gen)) With {
             .IsBackground = True, .Name = "Friend Realtime"}
         RealtimeThread.Start()
     End Sub
 
     Public Sub StopRealtime()
         _RealtimeRunning = False
+        '让还活着的旧线程（可能正在退避等待）尽快退出
+        _SessionGen += 1
+        Try
+            If _RealtimeSocket IsNot Nothing Then _RealtimeSocket.Abort()
+        Catch
+        End Try
+        _RealtimeSocket = Nothing
     End Sub
 
-    Private Sub RealtimeLoop()
+    Private Sub RealtimeLoop(Gen As Integer)
         Dim Backoff As Integer = 1
-        While _RealtimeRunning AndAlso IsLoggedIn
+        While _RealtimeRunning AndAlso IsLoggedIn AndAlso Gen = _SessionGen
             Dim Socket As New System.Net.WebSockets.ClientWebSocket()
             Dim PingTimer As System.Threading.Timer = Nothing
             Try
                 Dim Base As String = FriendServer.Replace("https://", "wss://").Replace("http://", "ws://")
                 Dim WsUri As New Uri(Base & "/ws?token=" & Uri.EscapeDataString(FriendToken))
                 Socket.ConnectAsync(WsUri, System.Threading.CancellationToken.None).GetAwaiter().GetResult()
+                If Gen <> _SessionGen Then Exit While
+                _RealtimeSocket = Socket
                 Backoff = 1
 
-                Dim ResumeMsg As New JObject From {{"op", "resume"}, {"since", LastSeqCursor()}}
-                SendSocketText(Socket, ResumeMsg.ToString(Formatting.None))
+                '服务端先发 hello；拿到 server_seq 之后再决定从哪个位置补拉：
+                '新登录 → 直接跳到服务端当前序号，不重放；断线重连 → 用本地游标补漏。
+                Dim ResumeSent As Boolean = False
                 PingTimer = New System.Threading.Timer(
                     Sub(state)
                         Try
@@ -270,28 +321,41 @@ Public Module ModFriend
 
                 Dim Buffer(8191) As Byte
                 Dim Builder As New System.Text.StringBuilder()
-                While _RealtimeRunning AndAlso Socket.State = System.Net.WebSockets.WebSocketState.Open
+                While _RealtimeRunning AndAlso Gen = _SessionGen AndAlso
+                      Socket.State = System.Net.WebSockets.WebSocketState.Open
                     Dim Segment As New ArraySegment(Of Byte)(Buffer)
                     Dim Result = Socket.ReceiveAsync(Segment, System.Threading.CancellationToken.None).GetAwaiter().GetResult()
                     If Result.MessageType = System.Net.WebSockets.WebSocketMessageType.Close Then Exit While
                     Builder.Append(System.Text.Encoding.UTF8.GetString(Buffer, 0, Result.Count))
                     If Result.EndOfMessage Then
+                        '换号后旧连接可能还会吐几帧，直接丢弃
+                        If Gen <> _SessionGen Then Exit While
                         Dim Frame As String = Builder.ToString()
                         Builder.Clear()
+                        If Not ResumeSent Then
+                            Dim Cursor As Long = -1
+                            If TryReadHelloCursor(Frame, Cursor) Then
+                                SendSocketText(Socket, New JObject From {
+                                    {"op", "resume"}, {"since", Math.Max(0, Cursor)}
+                                }.ToString(Formatting.None))
+                                ResumeSent = True
+                            End If
+                        End If
                         HandleRealtimeFrame(Frame)
                     End If
                 End While
             Catch ex As Exception
                 Logger.Warn(ex, "好友实时连接断开")
             Finally
-                        If PingTimer IsNot Nothing Then PingTimer.Dispose()
+                If _RealtimeSocket Is Socket Then _RealtimeSocket = Nothing
+                If PingTimer IsNot Nothing Then PingTimer.Dispose()
                 Try
                     Socket.Dispose()
                 Catch
                 End Try
             End Try
 
-            If Not _RealtimeRunning Then Exit While
+            If Not _RealtimeRunning OrElse Gen <> _SessionGen Then Exit While
             System.Threading.Thread.Sleep(TimeSpan.FromSeconds(Backoff))
             Backoff = Math.Min(30, Backoff * 2)
         End While
@@ -327,6 +391,28 @@ Public Module ModFriend
         End Try
     End Sub
 
+    ''' <summary>
+    ''' 解析 hello 帧，决定本次 resume 的起点。
+    ''' 新登录：用服务端 server_seq（跳过历史事件，否则未读会被重放累加）；
+    ''' 断线重连：用本地记录的事件序号（补拉断线期间漏掉的推送）。
+    ''' </summary>
+    Private Function TryReadHelloCursor(Frame As String, ByRef Cursor As Long) As Boolean
+        Dim Obj As JObject
+        Try
+            Obj = JObject.Parse(Frame)
+        Catch
+            Return False
+        End Try
+        If Not String.Equals(Obj.Value(Of String)("op"), "hello", StringComparison.Ordinal) Then Return False
+        If _SessionFresh Then
+            Cursor = If(Obj("server_seq") Is Nothing, 0L, Obj.Value(Of Long)("server_seq"))
+            _SessionFresh = False
+        Else
+            Cursor = LastSeqCursor()
+        End If
+        Return True
+    End Function
+
     Private Sub HandleRealtimeFrame(Frame As String)
         Try
             HandleRealtimeFrameCore(Frame)
@@ -344,8 +430,16 @@ Public Module ModFriend
             Return
         End Try
         Dim Op As String = If(Obj.Value(Of String)("op"), "")
+        If Op = "hello" Then Return
+        If Op = "resumed" Then
+            '补拉结束：让页面用服务端数据校准一次（未读数以服务端为准）
+            RealtimeQueue.Enqueue(New JObject From {{"type", "session.synced"}})
+            RaiseEvent RealtimeActivity()
+            Return
+        End If
         If Op = "resync" Then
-            SaveSeqCursor(0L)
+            '事件已被服务端清理：本地序号作废，下次重连直接从 server_seq 对齐，避免反复重放
+            _SessionFresh = True
             RealtimeQueue.Enqueue(New JObject From {{"type", "resync"}})
             RaiseEvent RealtimeActivity()
             Return
@@ -747,6 +841,8 @@ Public Module ModFriend
         Public ReadOnly Messages As New List(Of FriendMessage)
         Public ReadOnly Recalls As New List(Of Long)
         Public Resync As Boolean
+        ''' <summary>本次补拉已结束，未读与会话列表应改用服务端数据校准。</summary>
+        Public Synced As Boolean
     End Class
 
     ''' <summary>
@@ -772,6 +868,8 @@ Public Module ModFriend
                         Result.Recalls.Add(Id)
                         LocalRecall(Id)
                     End If
+                Case "session.synced"
+                    Result.Synced = True
                 Case "resync"
                     Result.Resync = True
             End Select
@@ -1067,6 +1165,8 @@ Public Module ModFriend
         Try
             Dim Dir As String = LocalFolder & "cache"
             If Directory.Exists(Dir) Then Directory.Delete(Dir, True)
+            '页面手里还留着一份已渲染的消息，必须由它自己清掉，否则界面看起来「没删干净」
+            RaiseEvent LocalCleared()
             Return True
         Catch ex As Exception
             Logger.Warn(ex, "清除本地聊天记录失败")

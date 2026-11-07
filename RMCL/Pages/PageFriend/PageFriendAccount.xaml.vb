@@ -15,12 +15,27 @@ Public Class PageFriendAccount
         End Get
     End Property
 
+    Private SessionHooked As Boolean = False
+
     Private Sub PageFriendAccount_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded
         PanBack.ScrollToHome()
+        If Not SessionHooked Then
+            AddHandler ModFriend.SessionChanged, AddressOf FriendSessionChanged
+            SessionHooked = True
+        End If
         RefreshLoginForm()
         RefreshUI()
         RefreshRayskinAccount()
         RefreshSelfAsync()
+    End Sub
+
+    ''' <summary>登录/登出后同步页面状态（可能是别的页面触发的）。</summary>
+    Private Sub FriendSessionChanged()
+        RunInUi(
+        Sub()
+            RefreshUI()
+            RefreshLocalInfo()
+        End Sub)
     End Sub
 
     ''' <summary>

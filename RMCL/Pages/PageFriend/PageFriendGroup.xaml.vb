@@ -7,9 +7,31 @@
     Private ReadOnly ManagingMembers As New List(Of FriendGroupMember)
     Private ReadOnly InvitePicks As New Dictionary(Of Long, MyCheckBox)
 
+    Private SessionHooked As Boolean = False
+
     Private Sub PageFriendGroup_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded
         PanBack.ScrollToHome()
+        If Not SessionHooked Then
+            AddHandler ModFriend.SessionChanged, AddressOf FriendSessionChanged
+            SessionHooked = True
+        End If
         Refresh(True)
+    End Sub
+
+    ''' <summary>换账号后清掉上一份账号的群列表与选人面板。</summary>
+    Private Sub FriendSessionChanged()
+        RunInUi(
+        Sub()
+            Friends.Clear()
+            Picks.Clear()
+            PanFriendPick.Children.Clear()
+            PanGroups.Children.Clear()
+            ManagingGroup = Nothing
+            CardManage.Visibility = Visibility.Collapsed
+            LabGroupHint.Text = "还没有加入任何群聊"
+            LastRefresh = 0
+            If ModFriend.IsLoggedIn Then Refresh(True)
+        End Sub)
     End Sub
 
     Private Sub PageFriendGroup_PageEnter() Handles Me.PageEnter

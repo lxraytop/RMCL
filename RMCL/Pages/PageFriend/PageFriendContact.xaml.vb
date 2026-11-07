@@ -7,6 +7,7 @@
         PanBack.ScrollToHome()
         If Not RealtimeHooked Then
             AddHandler ModFriend.RealtimeActivity, AddressOf FriendRealtimeActivity
+            AddHandler ModFriend.SessionChanged, AddressOf FriendSessionChanged
             RealtimeHooked = True
         End If
         ModFriend.StartRealtime()
@@ -16,6 +17,20 @@
     '收到好友申请 / 同意 / 删除等事件时刷新列表
     Private Sub FriendRealtimeActivity()
         RunInUi(Sub() RefreshAll(True))
+    End Sub
+
+    ''' <summary>换账号后清掉上一份账号的通讯录与申请，避免串号。</summary>
+    Private Sub FriendSessionChanged()
+        RunInUi(
+        Sub()
+            PanContacts.Children.Clear()
+            PanRequests.Children.Clear()
+            PanSearchResult.Children.Clear()
+            LabContactHint.Text = "通讯录还是空的，先加几个好友吧"
+            LabSearchHint.Text = ""
+            LabRequestEmpty.Visibility = Visibility.Visible
+            If ModFriend.IsLoggedIn Then RefreshAll(True)
+        End Sub)
     End Sub
 
     Private Sub PageFriendContact_PageEnter() Handles Me.PageEnter

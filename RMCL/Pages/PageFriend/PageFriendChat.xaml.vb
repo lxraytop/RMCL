@@ -19,9 +19,15 @@ Public Class PageFriendChat
     Private RealtimeHooked As Boolean = False
     Private IsPolling As Boolean = False
     Private IsSending As Boolean = False
+    Private SessionHooked As Boolean = False
     Private LastConvRefresh As Long = 0
 
     Private Sub PageFriendChat_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded
+        If Not SessionHooked Then
+            AddHandler ModFriend.SessionChanged, AddressOf FriendSessionChanged
+            AddHandler ModFriend.LocalCleared, AddressOf FriendLocalCleared
+            SessionHooked = True
+        End If
         If PollTimer Is Nothing Then
             '好友页在前台时 3 秒拉一次，接近即时（离开页面会停止）
             '事件驱动：正常情况由推送触发，定时器只做兜底
@@ -35,6 +41,43 @@ Public Class PageFriendChat
         Else
             RefreshConversations(True)
         End If
+    End Sub
+
+    ''' <summary>换账号 / 退出登录：把上一份账号的会话、未读与消息全部丢掉。</summary>
+    Private Sub FriendSessionChanged()
+        RunInUi(
+        Sub()
+            Conversations.Clear()
+            Messages.Clear()
+            CurrentType = -1
+            CurrentKey = ""
+            CurrentTitle = ""
+            Limit = 60
+            LastConvRefresh = 0
+            BuildConversationList()
+            RenderMessages(True)
+            LabConvTitle.Text = "选择一个会话"
+            LabConvSub.Text = "也可以从通讯录或群聊里打开"
+            LabConvHint.Text = "还没有会话"
+            If ModFriend.IsLoggedIn Then RefreshConversations(True)
+        End Sub)
+    End Sub
+
+    ''' <summary>本机聊天记录被清空：已渲染的消息和会话摘要一起清掉，界面立刻同步。</summary>
+    Private Sub FriendLocalCleared()
+        RunInUi(
+        Sub()
+            Messages.Clear()
+            Limit = 60
+            RenderMessages(True)
+            For Each Conv As FriendConversation In Conversations
+                Conv.LastBody = ""
+            Next
+            ApplyConversationOrder()
+            LabConvTitle.Text = If(CurrentType >= 0, CurrentTitle, "选择一个会话")
+            LabConvSub.Text = If(CurrentType >= 0, "本机聊天记录已清除，重新打开会从服务器同步", "也可以从通讯录或群聊里打开")
+            Hint("本机聊天记录已清除", HintType.Green, False)
+        End Sub)
     End Sub
 
     Private Sub PageFriendChat_PageEnter() Handles Me.PageEnter
@@ -693,7 +736,7 @@ Public Class PageFriendChat
         Sub()
             Try
                 Dim Polled As ModFriend.FriendPollResult = ModFriend.Poll()
-                If Polled.Messages.Count = 0 AndAlso Polled.Recalls.Count = 0 Then Return
+                If Polled.Messages.Count = 0 AndAlso Polled.Recalls.Count = 0 AndAlso Not Polled.Synced Then Return
                 '有当前会话的新消息就追加显示，其它会话只更新列表
                 Dim ForCurrent As List(Of FriendMessage) =
                     Polled.Messages.Where(Function(m) m.ConvType = CurrentType AndAlso m.ConvKey = CurrentKey).ToList()
@@ -743,7 +786,11 @@ Public Class PageFriendChat
                         End If
                     Next
                     If Touched Then ApplyConversationOrder()
-                    If Unknown Then RefreshConversations(True)
+                    '刚补拉完（重连/登录）或事件已过期：未读与会话以服务端为准，整体刷一次，
+                    '避免本地累加与服务端漂移
+                    If Unknown OrElse Polled.Synced OrElse Polled.Resync Then RefreshConversations(True)
+                    '事件被清理过，本地可能缺消息，重新拉一次当前会话
+                    If Polled.Resync AndAlso CurrentType >= 0 Then ReloadCurrent()
                 End Sub)
             Catch ex As Exception
                 Logger.Warn(ex, "拉取好友新消息失败")
