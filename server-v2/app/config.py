@@ -47,3 +47,16 @@ TIM_KEY_FILE = (
     if CONFIG["tim"]["key_file"] and not os.path.isabs(CONFIG["tim"]["key_file"])
     else Path(CONFIG["tim"]["key_file"] or "")
 )
+
+
+def describe() -> dict:
+    """健康检查用：告诉运维进程实际读的是哪个配置文件。"""
+    return {
+        "path": str(CONFIG_PATH),
+        "exists": CONFIG_PATH.is_file(),
+        "debug_code": bool(CONFIG.get("debug_code")),
+        "tim_enabled": bool(CONFIG.get("tim", {}).get("enabled")),
+        "tim_key": str(TIM_KEY_FILE),
+        "tim_key_exists": bool(TIM_KEY_FILE and TIM_KEY_FILE.is_file()),
+        "smtp_file": (ROOT / "config.smtp.json").is_file(),
+    }

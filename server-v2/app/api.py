@@ -936,6 +936,6 @@ async def snapshot(user: dict = Depends(current_user)):
 
 @router.get("/health")
 async def health():
-    from . import mail
-    return {"ok": True, "tim": tim.self_check(), "mail": mail.self_check(),
+    from . import config, mail
+    return {"ok": True, "config": config.describe(), "tim": tim.self_check(), "mail": mail.self_check(),
             "ws_connections": sum(len(v) for v in HUB._conns.values())}
