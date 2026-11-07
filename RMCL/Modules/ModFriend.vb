@@ -390,7 +390,7 @@ Public Module ModFriend
                 _RealtimeConnected = True
                 Backoff = 1
 
-                Dim ResumeMsg As New JObject From {{"op", "resume"}, {"since", Settings.Get(Of Long)("FriendLastSeq")}}
+                Dim ResumeMsg As New JObject From {{"op", "resume"}, {"since", LastSeqCursor()}}
                 SendSocketText(Socket, ResumeMsg.ToString(Formatting.None))
                 PingTimer = New System.Threading.Timer(
                     Sub(state)
@@ -442,7 +442,34 @@ Public Module ModFriend
         End SyncLock
     End Sub
 
+    ''' <summary>读取事件序号游标。设置项缺失时退化为 0，避免把重连线程打断。</summary>
+    Private Function LastSeqCursor() As Long
+        Try
+            Return Settings.Get(Of Long)("FriendLastSeq")
+        Catch ex As Exception
+            Logger.Warn(ex, "读取好友事件序号失败，按 0 处理")
+            Return 0L
+        End Try
+    End Function
+
+    Private Sub SaveSeqCursor(Seq As Long)
+        Try
+            Settings.Set("FriendLastSeq", Seq)
+        Catch ex As Exception
+            Logger.Warn(ex, $"保存好友事件序号失败：{Seq}")
+        End Try
+    End Sub
+
     Private Sub HandleRealtimeFrame(Frame As String)
+        Try
+            HandleRealtimeFrameCore(Frame)
+        Catch ex As Exception
+            '单帧解析失败不能让整个连接退出
+            Logger.Warn(ex, "处理好友实时事件失败")
+        End Try
+    End Sub
+
+    Private Sub HandleRealtimeFrameCore(Frame As String)
         Dim Obj As JObject
         Try
             Obj = JObject.Parse(Frame)
@@ -451,14 +478,14 @@ Public Module ModFriend
         End Try
         Dim Op As String = If(Obj.Value(Of String)("op"), "")
         If Op = "resync" Then
-            Settings.Set("FriendLastSeq", 0L)
+            SaveSeqCursor(0L)
             RealtimeQueue.Enqueue(New JObject From {{"type", "resync"}})
             RaiseEvent RealtimeActivity()
             Return
         End If
         If Op <> "event" Then Return
         Dim Seq As Long = If(Obj("seq") Is Nothing, 0L, Obj.Value(Of Long)("seq"))
-        If Seq > 0 Then Settings.Set("FriendLastSeq", Seq)
+        If Seq > 0 Then SaveSeqCursor(Seq)
         RealtimeQueue.Enqueue(Obj)
         RaiseEvent RealtimeActivity()
     End Sub
