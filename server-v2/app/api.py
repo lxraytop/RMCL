@@ -98,20 +98,22 @@ def msg_payload(row: dict) -> dict:
         "kind": row["kind"],
         "created_at": int(row["created_at"]),
         "recalled_at": int(row["recalled_at"]),
+        "from_name": row.get("from_name") or "",
     }
 
 
 def touch_conversation(conn, user_id: int, conv_type: int, conv_key: str,
-                       msg_id: int, body: str, at: int) -> None:
+                       msg_id: int, body: str, at: int, unread_delta: int = 0) -> None:
     conn.execute(
-        "INSERT INTO conversation (user_id, conv_type, conv_key, last_msg_id, last_body, last_at, hidden)\n"
-        " VALUES (?, ?, ?, ?, ?, ?, 0)\n"
+        "INSERT INTO conversation (user_id, conv_type, conv_key, last_msg_id, last_body, last_at, unread, hidden)\n"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, 0)\n"
         " ON CONFLICT(user_id, conv_type, conv_key) DO UPDATE SET\n"
         "   last_msg_id = excluded.last_msg_id,\n"
         "   last_body = excluded.last_body,\n"
         "   last_at = excluded.last_at,\n"
+        "   unread = unread + ?,\n"
         "   hidden = 0",
-        (user_id, conv_type, conv_key, msg_id, body[:120], at),
+        (user_id, conv_type, conv_key, msg_id, body[:120], at, max(0, unread_delta), unread_delta),
     )
 
 
@@ -209,6 +211,83 @@ async def login(body: dict):
             "user_sig": tim.user_sig(str(user["id"])) if tim.enabled() else ""}
 
 
+async def _rayskin_verify(server: str, uuid: str, name: str, access_token: str, server_id: str) -> dict | None:
+    """校验 RaySkin 身份。优先 accessToken（join 被代理拦截时的兜底），否则 hasJoined。"""
+    base = server.rstrip("/")
+    async with httpx.AsyncClient(timeout=8) as client:
+        if access_token:
+            try:
+                r = await client.post(f"{base}/authserver/validate", json={"accessToken": access_token})
+                if r.status_code in (401, 403):
+                    return None
+                if r.status_code == 204:
+                    p = await client.get(f"{base}/sessionserver/session/minecraft/profile/{uuid}")
+                    if p.status_code == 200:
+                        prof = p.json()
+                        if str(prof.get("id", "")).replace("-", "").lower() == uuid.replace("-", "").lower():
+                            return prof
+            except Exception as exc:
+                log.warning("RaySkin validate 失败: %s", exc)
+        if name and server_id:
+            try:
+                r = await client.get(
+                    f"{base}/sessionserver/session/minecraft/hasJoined",
+                    params={"username": name, "serverId": server_id},
+                )
+                if r.status_code == 200 and r.text.strip():
+                    return r.json()
+            except Exception as exc:
+                log.warning("RaySkin hasJoined 失败: %s", exc)
+    return None
+
+
+@router.post("/auth/rayskin")
+async def rayskin_login(body: dict):
+    email = (body.get("email") or "").strip().lower()
+    uuid = (body.get("uuid") or "").strip().replace("-", "").lower()
+    name = (body.get("name") or "").strip()
+    server = (body.get("server") or "").strip()
+    server_id = (body.get("server_id") or "").strip()
+    access_token = (body.get("access_token") or "").strip()
+    if "@" not in email or not uuid or not server:
+        fail("E_PARAM", "RaySkin 返回的数据不完整")
+    if not server.lower().startswith("https://"):
+        fail("E_RAYSKIN", "认证服务器必须使用 https")
+
+    profile = await _rayskin_verify(server, uuid, name, access_token, server_id)
+    if profile is None:
+        fail("E_RAYSKIN", "RaySkin 校验失败，请到启动页重新登录后再试")
+    if str(profile.get("id", "")).replace("-", "").lower() != uuid:
+        fail("E_RAYSKIN", "RaySkin 校验结果与提交的账号不一致")
+    name = (profile.get("name") or name or email.split("@")[0])[:32]
+
+    with tx() as conn:
+        user = one(conn, "SELECT * FROM user WHERE rayskin_uuid = ? OR email = ?", (uuid, email))
+        if user is None:
+            if not CONFIG.get("rayskin_auto_register", True):
+                fail("E_NOACCOUNT", "还没有绑定这个 RaySkin 账号，请先注册", 404)
+            conn.execute(
+                "INSERT INTO user (email, nickname, rayskin_uuid, created_at) VALUES (?, ?, ?, ?)",
+                (email, name, uuid, now()),
+            )
+            uid = int(conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"])
+        else:
+            if user["status"] != "active":
+                fail("E_DISABLED", "账号已被停用", 403)
+            uid = int(user["id"])
+            conn.execute("UPDATE user SET rayskin_uuid = ?, nickname = COALESCE(NULLIF(nickname, ''), ?) WHERE id = ?",
+                         (uuid, name, uid))
+        token = new_token()
+        conn.execute(
+            "INSERT INTO auth_token (token, user_id, device, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+            (token, uid, body.get("device") or "", now(), now() + int(CONFIG["token_ttl_days"]) * 86400),
+        )
+        user = one(conn, "SELECT * FROM user WHERE id = ?", (uid,))
+    asyncio.create_task(tim.account_import(uid, user["nickname"]))
+    return {"ok": True, "token": token, "user": user_public(user),
+            "user_sig": tim.user_sig(str(uid)) if tim.enabled() else ""}
+
+
 @router.post("/auth/logout")
 async def logout(user: dict = Depends(current_user), authorization: str | None = Header(default=None)):
     token = (authorization or "")[7:].strip()
@@ -219,7 +298,12 @@ async def logout(user: dict = Depends(current_user), authorization: str | None =
 
 @router.get("/me")
 async def me(user: dict = Depends(current_user)):
-    return {"user": user_public(user)}
+    with tx() as conn:
+        unread = int(one(conn, "SELECT COALESCE(SUM(unread), 0) AS c FROM conversation WHERE user_id = ?",
+                         (user["id"],))["c"])
+        pending = int(one(conn, "SELECT COUNT(*) AS c FROM friend_request WHERE to_id = ? AND status = 'pending'",
+                          (user["id"],))["c"])
+    return {"user": user_public(user), "unread": unread, "pending_requests": pending}
 
 
 # ---------------------------------------------------------------- 好友
@@ -416,9 +500,25 @@ async def list_conversations(user: dict = Depends(current_user)):
                 "title": title,
                 "last_body": it["last_body"],
                 "last_at": int(it["last_at"]),
+                "unread": int(it["unread"]),
                 "member_count": member_count,
             })
     return {"items": out}
+
+
+@router.post("/conversations/{conv:path}/read")
+async def read_conversation(conv: str, user: dict = Depends(current_user)):
+    conv_type, key = parse_conv(conv)
+    with tx() as conn:
+        conn.execute(
+            "UPDATE conversation SET unread = 0 WHERE user_id = ? AND conv_type = ? AND conv_key = ?",
+            (user["id"], conv_type, key),
+        )
+        total = int(one(conn, "SELECT COALESCE(SUM(unread), 0) AS c FROM conversation WHERE user_id = ?",
+                        (user["id"],))["c"])
+        events = emit(conn, [user["id"]], "conversation.updated", {"conv": conv, "unread": 0})
+    await HUB.push_many(events)
+    return {"ok": True, "unread": total}
 
 
 @router.delete("/conversations/{conv:path}")
@@ -447,11 +547,12 @@ async def list_messages(conv: str, before: int = 0, limit: int = 40, user: dict 
         else:
             require_friend(conn, user["id"], int(key))
         params: list = [conv_type, canonical]
-        sql = "SELECT * FROM message WHERE conv_type = ? AND conv_key = ?"
+        sql = ("SELECT m.*, u.nickname AS from_name FROM message m "
+               "LEFT JOIN user u ON u.id = m.from_id WHERE m.conv_type = ? AND m.conv_key = ?")
         if before > 0:
-            sql += " AND id < ?"
+            sql += " AND m.id < ?"
             params.append(before)
-        sql += " ORDER BY id DESC LIMIT ?"
+        sql += " ORDER BY m.id DESC LIMIT ?"
         params.append(limit + 1)
         items = rows(conn, sql, tuple(params))
     has_more = len(items) > limit
@@ -480,12 +581,12 @@ async def send_message(body: dict, user: dict = Depends(current_user)):
             peer = int(key)
             require_friend(conn, user["id"], peer)
             to_id, group_id = peer, 0
-            recipients = [(user["id"], str(peer)), (peer, str(user["id"]))]
+            recipients = [(user["id"], str(peer), 0), (peer, str(user["id"]), 1)]
         else:
             group_id = int(key)
             require_member(conn, group_id, user["id"])
             to_id = 0
-            recipients = [(uid, str(group_id)) for uid in group_members(conn, group_id)]
+            recipients = [(uid, str(group_id), 0 if uid == user["id"] else 1) for uid in group_members(conn, group_id)]
 
         canonical = canonical_conv_key(conv_type, key, user["id"])
         ts = now()
@@ -495,14 +596,19 @@ async def send_message(body: dict, user: dict = Depends(current_user)):
             (conv_type, canonical, user["id"], to_id, group_id, client_msg_id, text, ts),
         )
         msg_id = int(conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"])
-        payload = msg_payload(one(conn, "SELECT * FROM message WHERE id = ?", (msg_id,)))
+        payload = msg_payload(one(
+            conn,
+            "SELECT m.*, u.nickname AS from_name FROM message m LEFT JOIN user u ON u.id = m.from_id WHERE m.id = ?",
+            (msg_id,),
+        ))
 
         events: list[dict] = []
-        for uid, own_key in recipients:
-            touch_conversation(conn, uid, conv_type, own_key, msg_id, text, ts)
+        for uid, own_key, delta in recipients:
+            touch_conversation(conn, uid, conv_type, own_key, msg_id, text, ts, delta)
             events += emit(conn, [uid], "message.new", {
                 "message": payload,
                 "conv": f"{conv_type}:{own_key}",
+                "unread_delta": delta,
             })
     await HUB.push_many(events)
     if conv_type == 0:
@@ -735,6 +841,54 @@ async def search(q: str = Query(""), user: dict = Depends(current_user)):
                      (it["id"], user["id"])):
                 rel = "incoming"
             out.append({**user_public(it), "relation": rel})
+    return {"items": out}
+
+
+@router.get("/history")
+async def history(keyword: str = Query(""), scope: str = Query("all"),
+                  before: int = 0, limit: int = 40, user: dict = Depends(current_user)):
+    """按关键词检索本人可见的消息。scope: all / friend / group"""
+    limit = max(1, min(100, limit))
+    where = ["(m.to_id = ? OR m.from_id = ? OR (m.conv_type = 1 AND m.group_id IN "
+             "(SELECT group_id FROM group_member WHERE user_id = ?)))"]
+    params: list = [user["id"], user["id"], user["id"]]
+    if scope == "friend":
+        where.append("m.conv_type = 0")
+    elif scope == "group":
+        where.append("m.conv_type = 1")
+    if keyword.strip():
+        where.append("m.body LIKE ? ESCAPE '\\'")
+        params.append("%" + keyword.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")
+    if before > 0:
+        where.append("m.id < ?")
+        params.append(before)
+    params.append(limit)
+    with tx() as conn:
+        items = rows(
+            conn,
+            "SELECT m.*, u.nickname AS from_name FROM message m LEFT JOIN user u ON u.id = m.from_id "
+            "WHERE " + " AND ".join(where) + " ORDER BY m.id DESC LIMIT ?",
+            tuple(params),
+        )
+        titles = {}
+        for it in items:
+            if int(it["conv_type"]) == 0:
+                peer = int(it["to_id"]) if int(it["from_id"]) == user["id"] else int(it["from_id"])
+                if peer not in titles:
+                    row = one(conn, "SELECT nickname FROM user WHERE id = ?", (peer,))
+                    titles[peer] = row["nickname"] if row else ""
+            else:
+                gid = int(it["group_id"])
+                if gid not in titles:
+                    row = one(conn, "SELECT name FROM chat_group WHERE id = ?", (gid,))
+                    titles[gid] = row["name"] if row else ""
+    out = []
+    for it in items:
+        item = msg_payload(it)
+        key = int(it["to_id"]) if int(it["conv_type"]) == 0 and int(it["from_id"]) == user["id"] else int(it["from_id"])
+        item["title"] = titles.get(key, "")
+        item["from_name"] = it["from_name"] or ""
+        out.append(item)
     return {"items": out}
 
 

@@ -16,6 +16,7 @@ Public Class PageFriendChat
     Private ReadOnly Conversations As New List(Of FriendConversation)
 
     Private PollTimer As DispatcherTimer
+    Private RealtimeHooked As Boolean = False
     Private IsPolling As Boolean = False
     Private IsSending As Boolean = False
     Private LastConvRefresh As Long = 0
@@ -23,7 +24,8 @@ Public Class PageFriendChat
     Private Sub PageFriendChat_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded
         If PollTimer Is Nothing Then
             '好友页在前台时 3 秒拉一次，接近即时（离开页面会停止）
-            PollTimer = New DispatcherTimer With {.Interval = TimeSpan.FromSeconds(3)}
+            '事件驱动：正常情况由推送触发，定时器只做兜底
+            PollTimer = New DispatcherTimer With {.Interval = TimeSpan.FromSeconds(15)}
             AddHandler PollTimer.Tick, Sub() PollOnce()
         End If
         '恢复上次的会话列表折叠状态
@@ -37,6 +39,11 @@ Public Class PageFriendChat
 
     Private Sub PageFriendChat_PageEnter() Handles Me.PageEnter
         If Not ModFriend.IsLoggedIn Then Return
+        If Not RealtimeHooked Then
+            AddHandler ModFriend.RealtimeActivity, AddressOf FriendRealtimeActivity
+            RealtimeHooked = True
+        End If
+        ModFriend.StartRealtime()
         If PollTimer IsNot Nothing Then PollTimer.Start()
         PollOnce()
         RefreshConversations(False)
@@ -170,30 +177,12 @@ Public Class PageFriendChat
         Dim TitleRow As New StackPanel With {.Orientation = Orientation.Horizontal}
         Dim TitleText As String = Conv.Title
         If Conv.ConvType = 1 AndAlso Conv.MemberCount > 0 Then TitleText &= $"（{Conv.MemberCount}）"
-        If Conv.FriendDeleted Then TitleText &= "（已删除的好友）"
-        If Conv.ConvType = 0 Then
-            TitleRow.Children.Add(New System.Windows.Shapes.Ellipse With {
-                .Width = 7, .Height = 7,
-                .Fill = If(Conv.Online, New SolidColorBrush(Color.FromRgb(46, 160, 67)), New SolidColorBrush(Color.FromRgb(160, 166, 176))),
-                .Margin = New Thickness(0, 0, 5, 0),
-                .VerticalAlignment = VerticalAlignment.Center
-            })
-        End If
         TitleRow.Children.Add(New TextBlock With {
             .Text = TitleText,
             .FontSize = 13,
             .FontWeight = FontWeights.SemiBold,
             .TextTrimming = TextTrimming.CharacterEllipsis
         })
-        If Conv.ConvType = 0 AndAlso Not Conv.FriendDeleted Then
-            TitleRow.Children.Add(New TextBlock With {
-                .Text = If(Conv.Online, "在线", "离线"),
-                .FontSize = 10.5,
-                .Opacity = If(Conv.Online, 0.85, 0.45),
-                .Margin = New Thickness(5, 0, 0, 0),
-                .VerticalAlignment = VerticalAlignment.Center
-            })
-        End If
         Left.Children.Add(TitleRow)
         Dim Preview As New TextBlock With {
             .Text = If(String.IsNullOrEmpty(Conv.LastBody), "（暂无消息）", Conv.LastBody.Replace(vbCrLf, " ")),
@@ -691,6 +680,11 @@ Public Class PageFriendChat
                 End Sub)
             End Try
         End Sub, "Friend Send")
+    End Sub
+
+    '实时事件在后台线程触发，切回 UI 线程后再取事件
+    Private Sub FriendRealtimeActivity()
+        RunInUi(Sub() PollOnce())
     End Sub
 
     Private Sub PollOnce()

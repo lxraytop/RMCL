@@ -185,20 +185,8 @@
                 <local:MyCard Margin="0,0,0,15" Title="聊天记录">
                     <StackPanel Margin="25,40,25,18">
                         <TextBlock TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,14"
-                                   Text="把服务器上已有的历史一次性回填到本机缓存（不受「漫游」开关限制），恢复后离线也能查看。只想恢复某个会话，用下面的「聊天记录漫游」卡片。" />
-                        <Grid Height="35">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <local:MyButton x:Name="BtnRestore" Text="恢复本地聊天记录" MinWidth="160" Height="35" Padding="13,0" ColorType="Highlight" Margin="0,0,12,0" />
-                            <local:MyButton Grid.Column="1" x:Name="BtnRestoreAll" Text="从头恢复全部" MinWidth="130" Height="35" Padding="13,0" />
-                        </Grid>
-                        <TextBlock x:Name="LabRestoreStatus" Margin="1,12,0,0" FontSize="12.5" TextWrapping="Wrap"
-                                   Foreground="{DynamicResource ColorBrush3}" Text="" />
+                                   Text="聊天记录保存在本机，打开会话时会自动从服务器补齐最近的消息；换电脑后重新打开会话即可看到云端保留的记录。" />
 
-                        <Rectangle Height="1" Margin="0,16,0,14" Fill="{DynamicResource ColorBrushGray4}" Opacity="0.25" />
                         <TextBlock x:Name="LabLocalPath" TextWrapping="Wrap" FontSize="12" Opacity="0.62"
                                    LineHeight="18" Text="本机缓存位置：正在读取……" />
                         <Grid Height="35" Margin="0,10,0,0">
@@ -217,14 +205,6 @@
                     </StackPanel>
                 </local:MyCard>
 
-                <local:MyCard Margin="0,0,0,15" Title="聊天记录漫游">
-                    <StackPanel Margin="25,40,25,18">
-                        <TextBlock TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,12"
-                                   Text="默认不保存到云端。只有在这里开启漫游的会话，聊天记录才会长期保存在服务器上；换电脑或重装后可以单独把某个会话的记录恢复到本机。" />
-                        <StackPanel x:Name="PanRoam" />
-                        <TextBlock x:Name="LabRoamHint" Margin="1,10,0,0" FontSize="12" Opacity="0.62" TextWrapping="Wrap" Text="" />
-                    </StackPanel>
-                </local:MyCard>
             </StackPanel>
 
         </StackPanel>

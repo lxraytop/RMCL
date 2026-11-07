@@ -1,26 +1,21 @@
 ﻿''' <summary>
 ''' 好友模块：账号、通讯录、群组、消息与会话的客户端封装。
 '''
-''' 设计原则（与需求「最大性能、最小占用」对应）：
-''' - 所有网络请求都只在工作线程发起，绝不在 UI 线程等待；
-''' - 消息统一走自建服务端的增量接口（since_id），一次轮询拉全部会话的新消息；
-''' - 会话/联系人/群组只在需要时拉取，且带内存缓存；
-''' - 历史消息按会话落盘缓存，切会话时先显示本地缓存再补拉；
-''' - 聊天记录不会随窗口关闭而丢失，账号页提供「恢复本地聊天记录」。
+''' 数据来源：Friend Gateway v2（server-v2/），REST 做命令、WebSocket 做事件。
+''' 客户端只维护一份状态，收到事件后由页面重绘，不再靠定时轮询猜变化。
 ''' </summary>
 Public Module ModFriend
 
 #Region "常量"
 
     ''' <summary>
-    ''' 默认好友服务地址。部署 server/ 后，把这里改成实际地址即可；
-    ''' 用户也可以在「设置 → 功能 → 好友页面」里覆盖。
+    ''' 好友网关地址。部署 server-v2 后把这里改成实际地址（通常是 https://im.example.com）。
     ''' </summary>
-    Public Const DefaultFriendServer As String = "https://update.mc.lxray.top"
+    Public Const DefaultFriendServer As String = "https://im.mc.lxray.top"
 
-    ''' <summary>
-    ''' 单个会话在本地最多保留的消息条数。
-    ''' </summary>
+    Private Const ApiPrefix As String = "/api/v1"
+
+    ''' <summary>单个会话在本地最多保留的消息条数。</summary>
     Private Const LocalMessageLimit As Integer = 400
 
 #End Region
@@ -36,15 +31,9 @@ Public Module ModFriend
         End Sub
     End Class
 
-    ''' <summary>
-    ''' 好友服务地址，去掉末尾斜杠。
-    ''' </summary>
-    ''' <summary>
-    ''' 好友服务地址固定为内置值，不读取设置，也不在界面上展示。
-    ''' </summary>
+    ''' <summary>好友网关地址，去掉末尾斜杠。</summary>
     Public ReadOnly Property FriendServer As String
         Get
-            '去掉末尾斜杠，否则会拼出 https://host//index.php，部分主机对双斜杠会直接拒绝
             Return DefaultFriendServer.TrimEnd("/"c)
         End Get
     End Property
@@ -89,9 +78,7 @@ Public Module ModFriend
     Private CachedSelfRaw As String = Nothing
     Private CachedSelf As JObject = Nothing
 
-    ''' <summary>
-    ''' 当前登录用户信息（来自服务端）。
-    ''' </summary>
+    ''' <summary>当前登录用户信息（来自服务端）。</summary>
     Public ReadOnly Property FriendSelf As JObject
         Get
             Dim Raw As String = Settings.Get(Of String)("FriendSelfJson")
@@ -110,78 +97,247 @@ Public Module ModFriend
     End Property
 
     Public Sub FriendLoginSucceed(Token As String, User As JObject)
-        Dim OldId As Long = MyId
+        Dim OldId As Long = 0
+        Try
+            OldId = MyId
+        Catch
+        End Try
         Settings.Set("FriendToken", Token)
         Settings.Set("FriendSelfJson", If(User Is Nothing, "{}", User.ToString(Formatting.None)))
-        '换账号时重置增量指针，避免把上一个账号的消息算进来
-        If User IsNot Nothing AndAlso User.Value(Of Long)("id") <> OldId Then Settings.Set("FriendLastMsgId", 0L)
+        If User IsNot Nothing AndAlso User.Value(Of Long)("id") <> OldId Then
+            '换账号后序号与本地缓存都要重置，避免把上一个账号的消息算进来
+            Settings.Set("FriendLastSeq", 0L)
+            Settings.Set("FriendLastMsgId", 0L)
+        End If
+        StartRealtime()
     End Sub
 
-    ''' <summary>
-    ''' 重新拉取当前账号信息（邀请码用量、昵称等）。
-    ''' </summary>
+    ''' <summary>重新拉取当前账号信息。</summary>
     Public Sub RefreshSelf()
         If Not IsLoggedIn Then Return
-        Dim Data As JObject = FriendApi("me")
+        Dim Data As JObject = CallApi(HttpMethod.Get, "/me")
         If Data IsNot Nothing AndAlso Data("user") IsNot Nothing Then
             Settings.Set("FriendSelfJson", CType(Data("user"), JObject).ToString(Formatting.None))
         End If
     End Sub
 
     Public Sub FriendLogout()
+        StopRealtime()
         Settings.Set("FriendToken", "")
         Settings.Set("FriendSelfJson", "{}")
+        Settings.Set("FriendLastSeq", 0L)
         Settings.Set("FriendLastMsgId", 0L)
     End Sub
 
 #End Region
 
-#Region "网络"
+#Region "HTTP"
 
-    ''' <summary>
-    ''' 调用好友服务端接口。必须在工作线程调用。
-    ''' </summary>
-    Public Function FriendApi(Method As String, Optional Param As JObject = Nothing,
-                              Optional NeedAuth As Boolean = True, Optional Timeout As Integer = 15000) As JObject
-        Dim Url As String = FriendServer.TrimEnd("/"c)
-        If Not Url.EndsWith("index.php", StringComparison.OrdinalIgnoreCase) Then Url &= "/index.php"
-        Url &= "?action=friend_" & Method
+    ''' <summary>调用网关。必须在工作线程调用。</summary>
+    Private Function CallApi(Method As HttpMethod, Path As String, Optional Param As JObject = Nothing,
+                             Optional NeedAuth As Boolean = True, Optional Timeout As Integer = 15000) As JObject
+        Dim Url As String = FriendServer & ApiPrefix & Path
+        Dim Body As String = Nothing
+        If Method Is HttpMethod.Get Then
+            If Param IsNot Nothing AndAlso Param.Count > 0 Then
+                Dim Parts As New List(Of String)
+                For Each Prop As JProperty In Param.Properties()
+                    Dim Value As String = If(Prop.Value.Type = JTokenType.Null, "", Prop.Value.ToString())
+                    Parts.Add(Uri.EscapeDataString(Prop.Name) & "=" & Uri.EscapeDataString(Value))
+                Next
+                Url &= If(Url.Contains("?"), "&", "?") & String.Join("&", Parts)
+            End If
+        Else
+            Body = If(Param Is Nothing, "{}", Param.ToString(Formatting.None))
+        End If
 
         Dim Headers(,) As String = Nothing
         If NeedAuth Then
             Dim Token As String = FriendToken
             If String.IsNullOrEmpty(Token) Then Throw New FriendApiException("E_TOKEN", "尚未登录好友账号")
-            Headers = New String(,) {{"X-Friend-Token", Token}}
+            Headers = New String(,) {{"Authorization", "Bearer " & Token}}
         End If
 
-        Dim Body As String = If(Param Is Nothing, "{}", Param.ToString(Formatting.None))
         Dim Raw As String
         Try
-            Raw = NetRequestByClient(Url, HttpMethod.Post, Body, "application/json; charset=utf-8",
+            Raw = NetRequestByClient(Url, Method, Body, "application/json; charset=utf-8",
                                      "application/json", Timeout, Headers, RequireJson:=True)
         Catch ex As HttpRequestCodeException
-            Throw New FriendApiException("E_HTTP", $"好友服务返回 HTTP {CInt(ex.StatusCode)}，请确认服务端已部署最新版本")
+            Dim Code As String = "E_HTTP"
+            Dim Msg As String = $"好友服务返回 HTTP {CInt(ex.StatusCode)}"
+            Try
+                Dim ErrRoot As JObject = JObject.Parse(If(ex.Response, ""))
+                Dim Err As JObject = TryCast(ErrRoot("error"), JObject)
+                If Err IsNot Nothing Then
+                    Code = If(String.IsNullOrEmpty(Err.Value(Of String)("code")), Code, Err.Value(Of String)("code"))
+                    Msg = If(String.IsNullOrEmpty(Err.Value(Of String)("message")), Msg, Err.Value(Of String)("message"))
+                End If
+            Catch
+                '错误体不是 JSON 时保留状态码文案
+            End Try
+            Throw New FriendApiException(Code, Msg)
         Catch ex As FormatException
-            Throw New FriendApiException("E_BADJSON", "好友服务返回的不是 JSON，服务端可能还没有部署好友功能")
+            Throw New FriendApiException("E_BADJSON", "好友服务返回的不是 JSON，请确认网关已部署且地址正确")
         End Try
+
         Dim Obj As JObject
         Try
             Obj = JObject.Parse(Raw)
         Catch ex As Exception
             Throw New FriendApiException("E_BADJSON", "好友服务返回了无法解析的内容")
         End Try
-
-        If Obj("ok") IsNot Nothing AndAlso Not Obj.Value(Of Boolean)("ok") Then
-            Dim Err As JObject = TryCast(Obj("error"), JObject)
-            If Err Is Nothing Then Throw New FriendApiException("E_UNKNOWN", "好友服务请求失败")
-            Throw New FriendApiException(Err.Value(Of String)("code"), Err.Value(Of String)("message"))
-        End If
-        Return TryCast(Obj("data"), JObject)
+        Return Obj
     End Function
 
     ''' <summary>
-    ''' 把异常转成适合提示用户的文案。
+    ''' 兼容层：把旧的 action 名称映射到网关的 REST 路径。
+    ''' 新代码请直接用 CallApi 或下面的强类型方法。
     ''' </summary>
+    Public Function FriendApi(Action As String, Optional Param As JObject = Nothing,
+                              Optional NeedAuth As Boolean = True, Optional Timeout As Integer = 15000) As JObject
+        Select Case Action
+            Case "send_code"
+                Return CallApi(HttpMethod.Post, "/auth/send-code", Param, False, Timeout)
+            Case "register"
+                Return CallApi(HttpMethod.Post, "/auth/register", Param, False, Timeout)
+            Case "login"
+                Return CallApi(HttpMethod.Post, "/auth/login", Param, False, Timeout)
+            Case "rayskin_login"
+                Return CallApi(HttpMethod.Post, "/auth/rayskin", Param, False, Timeout)
+            Case "me"
+                Return CallApi(HttpMethod.Get, "/me")
+            Case "contacts"
+                Dim Data As JObject = CallApi(HttpMethod.Get, "/friends")
+                Dim Items As New JArray()
+                For Each Token As JToken In DirectCast(If(Data("items"), New JArray()), JArray)
+                    Items.Add(ContactJson(CType(Token, JObject), "friend"))
+                Next
+                Return New JObject From {{"items", Items}}
+            Case "conversations"
+                Dim Data As JObject = CallApi(HttpMethod.Get, "/conversations")
+                Dim Items As New JArray()
+                For Each Token As JToken In DirectCast(If(Data("items"), New JArray()), JArray)
+                    Dim Obj As JObject = CType(Token, JObject)
+                    Obj("online") = False
+                    Obj("friend_deleted") = False
+                    Obj("roam") = False
+                    Items.Add(Obj)
+                Next
+                Return New JObject From {{"items", Items}}
+            Case "requests"
+                Dim Data As JObject = CallApi(HttpMethod.Get, "/friend-requests", New JObject From {{"box", "in"}})
+                Dim Items As New JArray()
+                For Each Token As JToken In DirectCast(If(Data("items"), New JArray()), JArray)
+                    Dim Obj As JObject = CType(Token, JObject)
+                    Dim UserObj As JObject = TryCast(Obj("user"), JObject)
+                    Items.Add(New JObject From {
+                        {"id", Obj("id")},
+                        {"from_name", If(UserObj Is Nothing, "", UserObj.Value(Of String)("nickname"))},
+                        {"from_email", If(UserObj Is Nothing, "", UserObj.Value(Of String)("email"))},
+                        {"message", Obj.Value(Of String)("wording")},
+                        {"status", Obj.Value(Of String)("status")},
+                        {"created_at", Obj("created_at")}
+                    })
+                Next
+                Return New JObject From {{"items", Items}}
+            Case "read"
+                Dim ConvType As Integer = If(Param Is Nothing, 0, Param.Value(Of Integer)("conv_type"))
+                Dim ConvKey As String = If(Param Is Nothing, "", Param.Value(Of String)("conv_key"))
+                Return CallApi(HttpMethod.Post, $"/conversations/{ConvType}:{Uri.EscapeDataString(ConvKey)}/read")
+            Case "friend_delete"
+                Return CallApi(HttpMethod.Delete, "/friends/" & Param.Value(Of Long)("user_id"))
+            Case "friend_accept"
+                Return CallApi(HttpMethod.Post, $"/friend-requests/{Param.Value(Of Long)("request_id")}/accept")
+            Case "friend_reject"
+                Return CallApi(HttpMethod.Post, $"/friend-requests/{Param.Value(Of Long)("request_id")}/reject")
+            Case "search"
+                Dim Data As JObject = CallApi(HttpMethod.Get, "/search", New JObject From {{"q", Param.Value(Of String)("keyword")}})
+                Dim Items As New JArray()
+                For Each Token As JToken In DirectCast(If(Data("items"), New JArray()), JArray)
+                    Items.Add(ContactJson(CType(Token, JObject), "none"))
+                Next
+                Return New JObject From {{"items", Items}}
+            Case "add"
+                Return CallApi(HttpMethod.Post, "/friend-requests", New JObject From {
+                    {"to_id", Param.Value(Of Long)("user_id")},
+                    {"wording", Param.Value(Of String)("message")}
+                })
+            Case "group_list"
+                Return CallApi(HttpMethod.Get, "/groups")
+            Case "group_create"
+                Dim Data As JObject = CallApi(HttpMethod.Post, "/groups", New JObject From {
+                    {"name", Param.Value(Of String)("name")},
+                    {"members", If(Param("members"), New JArray())}
+                })
+                Return New JObject From {{"group", GroupJson(Data)}}
+            Case "group_info"
+                Return CallApi(HttpMethod.Get, "/groups/" & Param.Value(Of Long)("group_id"))
+            Case "group_kick"
+                Return CallApi(HttpMethod.Delete, $"/groups/{Param.Value(Of Long)("group_id")}/members/{Param.Value(Of Long)("user_id")}")
+            Case "group_add_members"
+                Return CallApi(HttpMethod.Post, $"/groups/{Param.Value(Of Long)("group_id")}/members",
+                               New JObject From {{"members", If(Param("members"), New JArray())}})
+            Case "group_leave"
+                Return CallApi(HttpMethod.Delete, $"/groups/{Param.Value(Of Long)("group_id")}/members/{MyId}")
+            Case "messages"
+                Dim ConvType As Integer = Param.Value(Of Integer)("conv_type")
+                Dim ConvKey As String = Param.Value(Of String)("conv_key")
+                Return CallApi(HttpMethod.Get, "/messages", New JObject From {
+                    {"conv", $"{ConvType}:{ConvKey}"},
+                    {"before", Param.Value(Of Long)("before_id")},
+                    {"limit", Param.Value(Of Integer)("limit")}
+                })
+            Case "send"
+                Return CallApi(HttpMethod.Post, "/messages", New JObject From {
+                    {"conv", $"{Param.Value(Of Integer)("conv_type")}:{Param.Value(Of String)("conv_key")}"},
+                    {"body", Param.Value(Of String)("body")},
+                    {"client_msg_id", Param.Value(Of String)("client_id")}
+                }, True, Timeout)
+            Case "recall"
+                Return CallApi(HttpMethod.Post, "/messages/" & Param.Value(Of Long)("msg_id") & "/recall")
+            Case "history"
+                Dim Data As JObject = CallApi(HttpMethod.Get, "/history", New JObject From {
+                    {"keyword", Param.Value(Of String)("keyword")},
+                    {"scope", Param.Value(Of String)("scope")},
+                    {"before", Param.Value(Of Long)("before_id")},
+                    {"limit", Param.Value(Of Integer)("limit")}
+                })
+                Dim Items As JArray = DirectCast(If(Data("items"), New JArray()), JArray)
+                Dim NextBefore As Long = 0
+                For Each Token As JToken In Items
+                    Dim Id As Long = Token.Value(Of Long)("id")
+                    If NextBefore = 0 OrElse Id < NextBefore Then NextBefore = Id
+                Next
+                Return New JObject From {{"items", Items}, {"next_before", NextBefore}}
+            Case Else
+                Throw New FriendApiException("E_UNKNOWN", "未知的接口：" & Action)
+        End Select
+    End Function
+
+    Private Function ContactJson(Obj As JObject, DefaultRelation As String) As JObject
+        Return New JObject From {
+            {"id", Obj("id")},
+            {"email", Obj("email")},
+            {"nickname", Obj("nickname")},
+            {"remark", ""},
+            {"relation", If(String.IsNullOrEmpty(Obj.Value(Of String)("relation")), DefaultRelation,
+                            Obj.Value(Of String)("relation"))},
+            {"online", False}
+        }
+    End Function
+
+    Private Function GroupJson(Obj As JObject) As JObject
+        If Obj("group") IsNot Nothing Then Obj = CType(Obj("group"), JObject)
+        Return New JObject From {
+            {"id", Obj("id")},
+            {"name", Obj("name")},
+            {"owner_id", Obj("owner_id")},
+            {"member_count", Obj("member_count")},
+            {"created_at", If(Obj("created_at") Is Nothing, 0, Obj("created_at"))}
+        }
+    End Function
+
+    ''' <summary>把异常转成适合提示用户的文案。</summary>
     Public Function FriendErrorText(ex As Exception) As String
         Dim ApiEx As FriendApiException = TryCast(ex, FriendApiException)
         If ApiEx IsNot Nothing Then Return ApiEx.Message
@@ -189,6 +345,123 @@ Public Module ModFriend
         If NetEx IsNot Nothing Then Return $"好友服务返回 HTTP {CInt(NetEx.StatusCode)}"
         Return If(String.IsNullOrWhiteSpace(ex.Message), "网络请求失败", ex.Message)
     End Function
+
+#End Region
+
+#Region "实时连接"
+
+    Private RealtimeThread As System.Threading.Thread = Nothing
+    Private _RealtimeRunning As Boolean = False
+    Private _RealtimeConnected As Boolean = False
+    Private ReadOnly RealtimeQueue As New System.Collections.Concurrent.ConcurrentQueue(Of JObject)
+
+    ''' <summary>收到推送时在后台线程触发，页面需自行切回 UI 线程。</summary>
+    Public Event RealtimeActivity()
+
+    Public ReadOnly Property RealtimeConnected As Boolean
+        Get
+            Return _RealtimeConnected
+        End Get
+    End Property
+
+    Public Sub StartRealtime()
+        If Not IsLoggedIn Then Return
+        If _RealtimeRunning Then Return
+        _RealtimeRunning = True
+        RealtimeThread = New System.Threading.Thread(AddressOf RealtimeLoop) With {
+            .IsBackground = True, .Name = "Friend Realtime"}
+        RealtimeThread.Start()
+    End Sub
+
+    Public Sub StopRealtime()
+        _RealtimeRunning = False
+        _RealtimeConnected = False
+    End Sub
+
+    Private Sub RealtimeLoop()
+        Dim Backoff As Integer = 1
+        While _RealtimeRunning AndAlso IsLoggedIn
+            Dim Socket As New System.Net.WebSockets.ClientWebSocket()
+            Dim PingTimer As System.Threading.Timer = Nothing
+            Try
+                Dim Base As String = FriendServer.Replace("https://", "wss://").Replace("http://", "ws://")
+                Dim WsUri As New Uri(Base & "/ws?token=" & Uri.EscapeDataString(FriendToken))
+                Socket.ConnectAsync(WsUri, System.Threading.CancellationToken.None).GetAwaiter().GetResult()
+                _RealtimeConnected = True
+                Backoff = 1
+
+                Dim ResumeMsg As New JObject From {{"op", "resume"}, {"since", Settings.Get(Of Long)("FriendLastSeq")}}
+                SendSocketText(Socket, ResumeMsg.ToString(Formatting.None))
+                PingTimer = New System.Threading.Timer(
+                    Sub(state)
+                        Try
+                            SendSocketText(Socket, PingText)
+                        Catch
+                        End Try
+                    End Sub, Nothing, 25000, 25000)
+
+                Dim Buffer(8191) As Byte
+                Dim Builder As New System.Text.StringBuilder()
+                While _RealtimeRunning AndAlso Socket.State = System.Net.WebSockets.WebSocketState.Open
+                    Dim Segment As New ArraySegment(Of Byte)(Buffer)
+                    Dim Result = Socket.ReceiveAsync(Segment, System.Threading.CancellationToken.None).GetAwaiter().GetResult()
+                    If Result.MessageType = System.Net.WebSockets.WebSocketMessageType.Close Then Exit While
+                    Builder.Append(System.Text.Encoding.UTF8.GetString(Buffer, 0, Result.Count))
+                    If Result.EndOfMessage Then
+                        Dim Frame As String = Builder.ToString()
+                        Builder.Clear()
+                        HandleRealtimeFrame(Frame)
+                    End If
+                End While
+            Catch ex As Exception
+                Logger.Warn(ex, "好友实时连接断开")
+            Finally
+                _RealtimeConnected = False
+                If PingTimer IsNot Nothing Then PingTimer.Dispose()
+                Try
+                    Socket.Dispose()
+                Catch
+                End Try
+            End Try
+
+            If Not _RealtimeRunning Then Exit While
+            System.Threading.Thread.Sleep(TimeSpan.FromSeconds(Backoff))
+            Backoff = Math.Min(30, Backoff * 2)
+        End While
+    End Sub
+
+    Private Const PingText As String = "{""op"":""ping""}"
+
+    Private Sub SendSocketText(Socket As System.Net.WebSockets.ClientWebSocket, Text As String)
+        If Socket.State <> System.Net.WebSockets.WebSocketState.Open Then Return
+        Dim Bytes As Byte() = System.Text.Encoding.UTF8.GetBytes(Text)
+        Dim Segment As New ArraySegment(Of Byte)(Bytes)
+        SyncLock Socket
+            Socket.SendAsync(Segment, System.Net.WebSockets.WebSocketMessageType.Text, True,
+                             System.Threading.CancellationToken.None).GetAwaiter().GetResult()
+        End SyncLock
+    End Sub
+
+    Private Sub HandleRealtimeFrame(Frame As String)
+        Dim Obj As JObject
+        Try
+            Obj = JObject.Parse(Frame)
+        Catch
+            Return
+        End Try
+        Dim Op As String = If(Obj.Value(Of String)("op"), "")
+        If Op = "resync" Then
+            Settings.Set("FriendLastSeq", 0L)
+            RealtimeQueue.Enqueue(New JObject From {{"type", "resync"}})
+            RaiseEvent RealtimeActivity()
+            Return
+        End If
+        If Op <> "event" Then Return
+        Dim Seq As Long = If(Obj("seq") Is Nothing, 0L, Obj.Value(Of Long)("seq"))
+        If Seq > 0 Then Settings.Set("FriendLastSeq", Seq)
+        RealtimeQueue.Enqueue(Obj)
+        RaiseEvent RealtimeActivity()
+    End Sub
 
 #End Region
 
@@ -314,9 +587,8 @@ Public Module ModFriend
 
     Public Function GetConversations() As List(Of FriendConversation)
         Dim Result As New List(Of FriendConversation)
-        Dim Data As JObject = FriendApi("conversations")
-        If Data Is Nothing Then Return Result
-        Dim Arr As JArray = TryCast(Data("items"), JArray)
+        Dim Data As JObject = CallApi(HttpMethod.Get, "/conversations")
+        Dim Arr As JArray = If(Data Is Nothing, Nothing, TryCast(Data("items"), JArray))
         If Arr Is Nothing Then Return Result
         For Each Token As JToken In Arr
             Dim Obj As JObject = CType(Token, JObject)
@@ -328,9 +600,9 @@ Public Module ModFriend
                 .LastAt = Obj.Value(Of Long)("last_at"),
                 .Unread = Obj.Value(Of Integer)("unread"),
                 .MemberCount = Obj.Value(Of Integer)("member_count"),
-                .Online = Obj.Value(Of Boolean)("online"),
-                .FriendDeleted = Obj.Value(Of Boolean)("friend_deleted"),
-                .Roam = Obj.Value(Of Boolean)("roam")
+                .Online = False,
+                .FriendDeleted = False,
+                .Roam = False
             })
         Next
         Return Result
@@ -338,7 +610,7 @@ Public Module ModFriend
 
     Public Function GetContacts() As List(Of FriendContact)
         Dim Result As New List(Of FriendContact)
-        Dim Data As JObject = FriendApi("contacts")
+        Dim Data As JObject = CallApi(HttpMethod.Get, "/friends")
         Dim Arr As JArray = If(Data Is Nothing, Nothing, TryCast(Data("items"), JArray))
         If Arr Is Nothing Then Return Result
         For Each Token As JToken In Arr
@@ -347,12 +619,10 @@ Public Module ModFriend
         Return Result
     End Function
 
-    ''' <summary>
-    ''' 拉取群成员（含角色，1 = 群主）。
-    ''' </summary>
+    ''' <summary>拉取群成员（含角色，1 = 群主）。</summary>
     Public Function GetGroupMembers(GroupId As Long) As List(Of FriendGroupMember)
         Dim Result As New List(Of FriendGroupMember)
-        Dim Data As JObject = FriendApi("group_info", New JObject From {{"group_id", GroupId}})
+        Dim Data As JObject = CallApi(HttpMethod.Get, "/groups/" & GroupId)
         Dim Arr As JArray = If(Data Is Nothing, Nothing, TryCast(Data("members"), JArray))
         If Arr Is Nothing Then Return Result
         For Each Token As JToken In Arr
@@ -369,7 +639,7 @@ Public Module ModFriend
 
     Public Function GetGroups() As List(Of FriendGroup)
         Dim Result As New List(Of FriendGroup)
-        Dim Data As JObject = FriendApi("group_list")
+        Dim Data As JObject = CallApi(HttpMethod.Get, "/groups")
         Dim Arr As JArray = If(Data Is Nothing, Nothing, TryCast(Data("items"), JArray))
         If Arr Is Nothing Then Return Result
         For Each Token As JToken In Arr
@@ -378,13 +648,14 @@ Public Module ModFriend
         Return Result
     End Function
 
-    ''' <summary>
-    ''' 拉取某个会话的历史消息（before_id 为 0 表示最新一页）。
-    ''' </summary>
-    Public Function GetMessages(ConvType As Integer, ConvKey As String, Optional BeforeId As Long = 0, Optional Limit As Integer = 50) As List(Of FriendMessage)
+    ''' <summary>拉取某个会话的历史消息（BeforeId 为 0 表示最新一页）。</summary>
+    Public Function GetMessages(ConvType As Integer, ConvKey As String,
+                                Optional BeforeId As Long = 0, Optional Limit As Integer = 50) As List(Of FriendMessage)
         Dim Result As New List(Of FriendMessage)
-        Dim Param As New JObject From {{"conv_type", ConvType}, {"conv_key", ConvKey}, {"before_id", BeforeId}, {"limit", Limit}}
-        Dim Data As JObject = FriendApi("messages", Param)
+        Dim Param As New JObject From {
+            {"conv", $"{ConvType}:{ConvKey}"}, {"before", BeforeId}, {"limit", Limit}
+        }
+        Dim Data As JObject = CallApi(HttpMethod.Get, "/messages", Param)
         Dim Arr As JArray = If(Data Is Nothing, Nothing, TryCast(Data("items"), JArray))
         If Arr Is Nothing Then Return Result
         For Each Token As JToken In Arr
@@ -393,98 +664,76 @@ Public Module ModFriend
         Return Result
     End Function
 
-    ''' <summary>
-    ''' 发送消息。返回服务端落库后的消息。
-    ''' </summary>
+    ''' <summary>发送消息。返回服务端落库后的消息。</summary>
     Public Function SendMessage(ConvType As Integer, ConvKey As String, Body As String) As FriendMessage
         Dim Param As New JObject From {
-            {"conv_type", ConvType}, {"conv_key", ConvKey}, {"body", Body},
-            {"client_id", Guid.NewGuid().ToString("N")}
+            {"conv", $"{ConvType}:{ConvKey}"},
+            {"body", Body},
+            {"client_msg_id", Guid.NewGuid().ToString("N")}
         }
-        Dim Data As JObject = FriendApi("send", Param, True, 20000)
-        If Data Is Nothing OrElse Data("message") Is Nothing Then Throw New FriendApiException("E_SEND", "消息发送失败")
+        Dim Data As JObject = CallApi(HttpMethod.Post, "/messages", Param, True, 20000)
+        If Data Is Nothing OrElse Data("message") Is Nothing Then
+            Throw New FriendApiException("E_SEND", "消息发送失败")
+        End If
         Dim Msg As FriendMessage = ParseMessage(CType(Data("message"), JObject))
         LocalAppend(Msg)
         Return Msg
     End Function
 
-    ''' <summary>一次轮询的结果：新消息 + 被撤回的消息 ID。</summary>
+    ''' <summary>一次推送处理的结果：新消息、被撤回的消息 ID、是否需要全量重拉。</summary>
     Public Class FriendPollResult
         Public ReadOnly Messages As New List(Of FriendMessage)
         Public ReadOnly Recalls As New List(Of Long)
+        Public Resync As Boolean
     End Class
 
     ''' <summary>
-    ''' 增量拉取新消息。返回本次新增的消息（可能来自多个会话）与撤回事件。
+    ''' 取出实时连接缓存的事件。不再发网络请求，所以可以在 UI 线程调用。
     ''' </summary>
     Public Function Poll() As FriendPollResult
         Dim Result As New FriendPollResult()
-        Dim Since As Long = Settings.Get(Of Long)("FriendLastMsgId")
-        Dim Param As New JObject From {{"since_id", Since}, {"limit", 100}}
-        Dim Data As JObject = FriendApi("poll", Param, True, 20000)
-        If Data Is Nothing Then Return Result
-        Dim Arr As JArray = TryCast(Data("messages"), JArray)
-        If Arr IsNot Nothing Then
-            For Each Token As JToken In Arr
-                Dim Msg As FriendMessage = ParseMessage(CType(Token, JObject))
-                Result.Messages.Add(Msg)
-                LocalAppend(Msg)
-            Next
-        End If
-        Dim RecallArr As JArray = TryCast(Data("recalls"), JArray)
-        If RecallArr IsNot Nothing Then
-            For Each Token As JToken In RecallArr
-                Dim MsgId As Long = Token.Value(Of Long)()
-                Result.Recalls.Add(MsgId)
-                LocalRecall(MsgId)
-            Next
-        End If
-        Dim MaxId As Long = Since
-        If Data("max_id") IsNot Nothing AndAlso Data("max_id").Type <> JTokenType.Null Then MaxId = Data.Value(Of Long)("max_id")
-        If MaxId > Since Then Settings.Set("FriendLastMsgId", MaxId)
+        If Not _RealtimeRunning Then StartRealtime()
+        Dim Obj As JObject = Nothing
+        Do While RealtimeQueue.TryDequeue(Obj)
+            Dim Kind As String = If(Obj.Value(Of String)("type"), "")
+            Dim Data As JObject = TryCast(Obj("data"), JObject)
+            Select Case Kind
+                Case "message.new"
+                    If Data IsNot Nothing AndAlso Data("message") IsNot Nothing Then
+                        Dim Msg As FriendMessage = ParseMessage(CType(Data("message"), JObject))
+                        Result.Messages.Add(Msg)
+                        LocalAppend(Msg)
+                    End If
+                Case "message.recalled"
+                    If Data IsNot Nothing Then
+                        Dim Id As Long = Data.Value(Of Long)("message_id")
+                        Result.Recalls.Add(Id)
+                        LocalRecall(Id)
+                    End If
+                Case "resync"
+                    Result.Resync = True
+            End Select
+        Loop
         Return Result
     End Function
 
-    ''' <summary>撤回自己发的消息（服务端限制在 2 分钟内）。</summary>
+    ''' <summary>撤回自己发的消息（服务端限制 2 分钟内）。</summary>
     Public Sub RecallMessage(MsgId As Long)
         If MsgId <= 0 Then Return
-        FriendApi("recall", New JObject From {{"msg_id", MsgId}})
+        CallApi(HttpMethod.Post, "/messages/" & MsgId & "/recall")
         LocalRecall(MsgId)
     End Sub
 
-    ''' <summary>
-    ''' 从服务端恢复历史消息到本地缓存（账号页的「恢复本地聊天记录」）。
-    ''' 返回新增条数。
-    ''' </summary>
-    Public Function RestoreLocalHistory(Optional SinceId As Long = 0) As Integer
-        Dim Added As Integer = 0
-        Dim Cursor As Long = SinceId
-        '服务端每页最多 500 条，这里最多翻 20 页（1 万条），够覆盖绝大多数使用场景
-        For Page As Integer = 1 To 20
-            Dim Param As New JObject From {{"since_id", Cursor}, {"limit", 500}}
-            Dim Excluded As List(Of Long) = DeletedSnapshot()
-            If Excluded.Count > 0 Then Param("exclude") = String.Join(",", Excluded.Take(2000))
-            Dim Data As JObject = FriendApi("sync", Param, True, 30000)
-            If Data Is Nothing Then Exit For
-            Dim Arr As JArray = TryCast(Data("messages"), JArray)
-            If Arr Is Nothing OrElse Arr.Count = 0 Then Exit For
-            For Each Token As JToken In Arr
-                Dim Msg As FriendMessage = ParseMessage(CType(Token, JObject))
-                '本机删掉的消息即使服务端还留着，也不要再恢复回来
-                If Msg.Id > 0 AndAlso IsDeleted(Msg.Id) Then Continue For
-                LocalAppend(Msg)
-                Added += 1
-            Next
-            Dim NewMax As Long = Cursor
-            If Data("max_id") IsNot Nothing AndAlso Data("max_id").Type <> JTokenType.Null Then NewMax = Data.Value(Of Long)("max_id")
-            If NewMax <= Cursor Then Exit For
-            Cursor = NewMax
-            If Cursor > Settings.Get(Of Long)("FriendLastMsgId") Then Settings.Set("FriendLastMsgId", Cursor)
-            If Arr.Count < 500 Then Exit For
-        Next
-        LocalFlush()
-        Return Added
-    End Function
+    ''' <summary>已读上报（清红点）。</summary>
+    Public Sub MarkRead(ConvType As Integer, ConvKey As String)
+        CallApi(HttpMethod.Post, $"/conversations/{ConvType}:{Uri.EscapeDataString(ConvKey)}/read")
+    End Sub
+
+    ''' <summary>删除会话（只从列表移除，消息按会话历史保留）。</summary>
+    Public Sub DeleteConversation(ConvType As Integer, ConvKey As String)
+        CallApi(HttpMethod.Delete, $"/conversations/{ConvType}:{Uri.EscapeDataString(ConvKey)}")
+        LocalClearConversation(ConvType, ConvKey)
+    End Sub
 
 #End Region
 
@@ -628,12 +877,6 @@ Public Module ModFriend
         End SyncLock
     End Sub
 
-    ''' <summary>删除整个会话（服务端会话列表 + 本机缓存）。</summary>
-    Public Sub DeleteConversation(ConvType As Integer, ConvKey As String)
-        FriendApi("conversation_delete", New JObject From {{"conv_type", ConvType}, {"conv_key", ConvKey}})
-        LocalClearConversation(ConvType, ConvKey)
-    End Sub
-
     ''' <summary>只清掉某个会话的本机缓存文件。</summary>
     Public Sub LocalClearConversation(ConvType As Integer, ConvKey As String)
         SyncLock LocalLock
@@ -735,102 +978,9 @@ Public Module ModFriend
 
 #End Region
 
-#Region "聊天记录漫游"
-
-    ''' <summary>开启 / 关闭某个会话的聊天记录漫游，返回云端当前保存的条数。</summary>
-    Public Function SetRoam(ConvType As Integer, ConvKey As String, Enabled As Boolean) As Integer
-        Dim Data As JObject = FriendApi("roam_set", New JObject From {
-            {"conv_type", ConvType}, {"conv_key", ConvKey}, {"enabled", Enabled}
-        })
-        Return If(Data Is Nothing, 0, Data.Value(Of Integer)("count"))
-    End Function
-
-    Public Class RoamUploadResult
-        Public LocalCount As Integer
-        Public Added As Integer
-    End Class
-
-    ''' <summary>把本机保存的某个会话的聊天记录上传到云端（需先开启漫游）。</summary>
-    Public Function UploadRoam(ConvType As Integer, ConvKey As String) As RoamUploadResult
-        Dim Result As New RoamUploadResult()
-        Dim List As List(Of FriendMessage) = LocalLoad(ConvType, ConvKey)
-        Dim Batch As New JArray()
-        For Each Msg As FriendMessage In List
-            If Msg.Id <= 0 OrElse Msg.Recalled OrElse String.IsNullOrWhiteSpace(Msg.Body) Then Continue For
-            If IsDeleted(Msg.Id) Then Continue For
-            Result.LocalCount += 1
-            Batch.Add(New JObject From {
-                {"body", Msg.Body}, {"created_at", Msg.CreatedAt}, {"from_id", Msg.FromId},
-                {"client_id", $"rmcl_{Msg.Id}_{Msg.FromId}"}
-            })
-            If Batch.Count >= 100 Then
-                Result.Added += SendRoamBatch(ConvType, ConvKey, Batch)
-                Batch = New JArray()
-            End If
-        Next
-        If Batch.Count > 0 Then Result.Added += SendRoamBatch(ConvType, ConvKey, Batch)
-        Return Result
-    End Function
-
-    Private Function SendRoamBatch(ConvType As Integer, ConvKey As String, Batch As JArray) As Integer
-        Dim Data As JObject = FriendApi("roam_upload", New JObject From {
-            {"conv_type", ConvType}, {"conv_key", ConvKey}, {"messages", Batch}
-        }, True, 30000)
-        Return If(Data Is Nothing, 0, Data.Value(Of Integer)("added"))
-    End Function
-
-    ''' <summary>
-    ''' 内容指纹：上传过的本机记录在服务端会拿到新的 id，
-    ''' 只按 id 去重会让同一句话在本地出现两次，所以再按「发送者 + 时间 + 内容」判重。
-    ''' </summary>
-    Private Function RoamContentKey(Msg As FriendMessage) As String
-        Return $"{Msg.FromId}|{Msg.CreatedAt}|{Msg.Body}"
-    End Function
-
-    ''' <summary>从云端把某个会话的漫游记录拉回本机，返回新增条数。</summary>
-    Public Function RestoreRoam(ConvType As Integer, ConvKey As String) As Integer
-        Dim Local As List(Of FriendMessage) = LocalLoad(ConvType, ConvKey)
-        Dim Existing As New HashSet(Of Long)(Local.Where(Function(m) m.Id > 0).Select(Function(m) m.Id))
-        Dim ExistingContent As New HashSet(Of String)(Local.Select(Function(m) RoamContentKey(m)))
-        Dim Added As Integer = 0
-        Dim Before As Long = 0
-        '每页 200 条，最多翻 50 页（1 万条）
-        For Page As Integer = 1 To 50
-            Dim Param As New JObject From {
-                {"conv_type", ConvType}, {"conv_key", ConvKey},
-                {"before_id", Before}, {"limit", 200}
-            }
-            Dim Data As JObject = FriendApi("roam_restore", Param, True, 30000)
-            If Data Is Nothing Then Exit For
-            Dim Arr As JArray = TryCast(Data("items"), JArray)
-            If Arr Is Nothing OrElse Arr.Count = 0 Then Exit For
-            For Each Token As JToken In Arr
-                Dim Msg As FriendMessage = ParseMessage(CType(Token, JObject))
-                If Msg.Id <= 0 OrElse Existing.Contains(Msg.Id) OrElse IsDeleted(Msg.Id) Then Continue For
-                Dim Key As String = RoamContentKey(Msg)
-                If ExistingContent.Contains(Key) Then Continue For
-                LocalAppend(Msg)
-                Existing.Add(Msg.Id)
-                ExistingContent.Add(Key)
-                Added += 1
-            Next
-            Dim NextId As Long = 0
-            If Data("next_before_id") IsNot Nothing AndAlso Data("next_before_id").Type <> JTokenType.Null Then
-                NextId = Data.Value(Of Long)("next_before_id")
-            End If
-            If NextId <= 0 OrElse NextId = Before Then Exit For
-            Before = NextId
-            If Arr.Count < 200 Then Exit For
-        Next
-        LocalFlush()
-        Return Added
-    End Function
-
 #End Region
 
-    ''' <summary>
-    ''' 清空所有本地缓存（退出账号时可调用，目前保留以便换号后重新同步）。
-    ''' </summary>
+    ''' <summary>清空内存缓存（不删磁盘）。</summary>
     Public Sub LocalClear()
         SyncLock LocalLock
             LocalCache.Clear()
@@ -838,18 +988,12 @@ Public Module ModFriend
         End SyncLock
     End Sub
 
-    ''' <summary>
-    ''' 清除本机保存的聊天记录（内存 + 磁盘）。服务端的历史记录不受影响，
-    ''' 重新打开会话时会从服务端重新拉取。
-    ''' </summary>
+    ''' <summary>清除本机保存的聊天记录（内存 + 磁盘）。服务端历史不受影响。</summary>
     Public Function LocalClearAll() As Boolean
         LocalClear()
         Try
             Dim Dir As String = LocalFolder & "cache"
             If Directory.Exists(Dir) Then Directory.Delete(Dir, True)
-            '顺手清掉旧版本的临时目录，避免残留
-            Dim Legacy As String = PathTemp & "Friend"
-            If Directory.Exists(Legacy) Then Directory.Delete(Legacy, True)
             Return True
         Catch ex As Exception
             Logger.Warn(ex, "清除本地聊天记录失败")
@@ -857,12 +1001,37 @@ Public Module ModFriend
         End Try
     End Function
 
-    ''' <summary>本地聊天记录的存放目录，界面上用于告知用户。</summary>
+    ''' <summary>本机聊天记录的存放目录，界面上用于告知用户。</summary>
     Public ReadOnly Property LocalFolderForDisplay As String
         Get
             Return LocalFolder & "cache"
         End Get
     End Property
+
+#Region "漫游（已下线）"
+
+    '体验版自带云端漫游，不再由客户端上传/恢复，这里保留空实现避免旧页面编译失败。
+
+    Public Class RoamUploadResult
+        Public LocalCount As Integer
+        Public Added As Integer
+    End Class
+
+    Public Function SetRoam(ConvType As Integer, ConvKey As String, Enabled As Boolean) As Integer
+        Return 0
+    End Function
+
+    Public Function UploadRoam(ConvType As Integer, ConvKey As String) As RoamUploadResult
+        Return New RoamUploadResult()
+    End Function
+
+    Public Function RestoreRoam(ConvType As Integer, ConvKey As String) As Integer
+        Return 0
+    End Function
+
+    Public Function RestoreLocalHistory(Optional SinceId As Long = 0) As Integer
+        Return 0
+    End Function
 
 #End Region
 

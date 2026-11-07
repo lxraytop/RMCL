@@ -2,7 +2,7 @@ PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
 -- 体验版能力范围（Lite）：好友列表 + 申请 + 单聊/群聊 + 会话
--- 不含：未读、在线状态、好友分组、备注、黑名单、关系链镜像、漫游
+-- 不含：在线状态、好友分组、备注、黑名单、关系链镜像、漫游
 
 CREATE TABLE IF NOT EXISTS meta (
   k TEXT PRIMARY KEY,
@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS conversation (
   last_msg_id INTEGER NOT NULL DEFAULT 0,
   last_body   TEXT NOT NULL DEFAULT '',
   last_at     INTEGER NOT NULL DEFAULT 0,
+  unread      INTEGER NOT NULL DEFAULT 0,
   hidden      INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, conv_type, conv_key)
 );

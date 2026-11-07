@@ -4,8 +4,8 @@
 > 目标：用腾讯云 IM 官方 Web 示例的「单一数据源 + 事件驱动」模型，替换现有基于 HTTP 轮询、多份真相的伪 IM 实现。
 > 本文档先给结论，再给差距、架构、数据模型、接口、阶段计划与验收标准。
 >
-> **11-07 范围收敛**：按「只做体验版能做到的功能」的要求，去掉未读、在线状态、好友分组、
-> 好友关系链（备注/黑名单/镜像）与漫游，最终范围见第 12 节。第 1–10 节保留原始分析，
+> **11-07 范围收敛**：按「只做体验版能做到的功能」的要求，去掉在线状态、好友分组、
+> 好友关系链（备注/黑名单/镜像）与漫游；**未读红点保留**（用户明确要求）。最终范围见第 12 节。第 1–10 节保留原始分析，
 > 用于说明为什么砍掉这些能力，以及将来要加回来时的设计依据。
 
 ---
@@ -676,7 +676,7 @@ AddHandler Store.Changed, AddressOf RenderAll
 | 消息撤回（2 分钟） | ✅ | 已有交互，成本低 |
 | 历史分页 | ✅ | 基础 |
 | 建群 / 邀请 / 踢人 / 退群 | ✅ | 体验版支持 |
-| 未读红点 / 已读上报 | ❌ | 用户明确不要；体验版也无已读回执 |
+| 未读红点 / 已读上报 | ✅ | 会话红点是必需交互；已读回执（对方看到「已读」）不做 |
 | 在线状态 | ❌ | 体验版不支持用户状态（需旗舰版） |
 | 好友分组 | ❌ | 用户明确不要 |
 | 备注 / 黑名单 / 关系链镜像 | ❌ | 归入「好友关系」复杂功能，去掉 |
@@ -688,7 +688,7 @@ AddHandler Store.Changed, AddressOf RenderAll
 `conversation` / `message` / `chat_group` / `group_member` / `event_log` / `meta`（12 张）。
 
 相比全量方案删掉了：`friend_group`、`block`、`presence`；
-`conversation` 去掉 `unread` / `pinned` / `muted`；`friendship` 去掉 `remark` / `group_id`；
+`conversation` 保留 `unread`（去掉 `pinned` / `muted`）；`friendship` 去掉 `remark` / `group_id`；
 `friend_request` 去掉 `read_at`。
 
 ### 12.3 收敛后的接口
@@ -698,7 +698,7 @@ AddHandler Store.Changed, AddressOf RenderAll
 | 认证 | `POST /auth/send-code`、`/auth/register`、`/auth/login`、`/auth/logout`、`GET /me` |
 | 好友 | `GET /friends`、`GET /friends/{id}`、`DELETE /friends/{id}` |
 | 申请 | `GET /friend-requests?box=in|out`、`POST /friend-requests`、`POST /friend-requests/{id}/accept`、`/reject` |
-| 会话 | `GET /conversations`、`DELETE /conversations/{conv}` |
+| 会话 | `GET /conversations`、`POST /conversations/{conv}/read`、`DELETE /conversations/{conv}` |
 | 消息 | `GET /messages`、`POST /messages`、`POST /messages/{id}/recall` |
 | 群组 | `GET /groups`、`POST /groups`、`GET /groups/{id}`、`PATCH /groups/{id}`、`POST /groups/{id}/members`、`DELETE /groups/{id}/members/{uid}` |
 | 其他 | `GET /search`、`GET /snapshot`、`GET /health` |
@@ -711,7 +711,8 @@ AddHandler Store.Changed, AddressOf RenderAll
 `friend.request`、`friend.accepted`、`friend.request.handled`、`friend.removed`、
 `message.new`、`message.recalled`、`group.updated`、`group.removed`、`conversation.removed`。
 
-删除：`presence.changed`、`friend.group.updated`、`block.updated`、`conversation.updated`（原用于未读）。
+删除：`presence.changed`、`friend.group.updated`、`block.updated`。
+`conversation.updated` 保留，用于多端已读同步。
 
 ### 12.5 验收标准（替代第 8 节）
 
@@ -737,7 +738,8 @@ AddHandler Store.Changed, AddressOf RenderAll
 | 加好友后 | 需手动刷新 | 双方事件推送，即时出现 |
 | 断线 | 靠轮询恢复，可能漏消息 | `resume` 按 seq 补发，过期回 `resync` |
 | 消息重复 | `client_id` + 内容指纹补丁 | 数据库唯一索引，天然幂等 |
-| 未读/在线/分组 | 有（但不可靠） | 不提供（按需求移除） |
+| 未读 | 轮询覆盖，偶发不消失 | 服务端权威 + 事件推送，打开会话即清零 |
+| 在线/分组 | 有（但不可靠） | 不提供（按需求移除） |
 
 ### 12.7 修订后的阶段计划（替代第 7 节）
 

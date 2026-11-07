@@ -1,8 +1,8 @@
 """端到端冒烟（Lite 范围）。
 
-覆盖：注册 → 加好友 → 申请 → 同意 → 好友列表 → WS 实时消息 → 幂等 → 撤回
+覆盖：注册 → 加好友 → 申请 → 同意 → 好友列表 → WS 实时消息 → 未读/已读 → 幂等 → 撤回
       → 断线补发 → 建群/踢人/越权 → 删好友后拒发
-不含：未读、在线、分组、备注、黑名单、漫游
+不含：在线、分组、备注、黑名单、漫游
 
 前置：uvicorn 跑在 127.0.0.1:8099，config.json 里 debug_code=true
 运行：python tests/smoke.py
@@ -97,7 +97,15 @@ async def main() -> None:
         convs = api(tb, "GET", "/api/v1/conversations")
         bob_conv = next(c for c in convs["items"] if c["conv"] == f"0:{ida}")
         check("会话列表更新到最后一条", bob_conv["last_body"] == "你好 Bob", str(bob_conv))
-        check("会话不再返回未读字段", "unread" not in bob_conv, str(bob_conv))
+        check("接收方未读为 1", bob_conv["unread"] == 1, str(bob_conv))
+        me_b = api(tb, "GET", "/api/v1/me")
+        check("/me 汇总未读", me_b.get("unread") == 1, str(me_b))
+        read = api(tb, "POST", f"/api/v1/conversations/0:{ida}/read")
+        check("已读返回剩余总数", read.get("unread") == 0, str(read))
+        bob_conv = next(c for c in api(tb, "GET", "/api/v1/conversations")["items"] if c["conv"] == f"0:{ida}")
+        check("已读后未读清零", bob_conv["unread"] == 0, str(bob_conv))
+        check("发送方自己的会话不累计未读",
+              next(c for c in api(ta, "GET", "/api/v1/conversations")["items"] if c["conv"] == f"0:{idb}")["unread"] == 0)
 
         print("== 幂等 ==")
         r1 = api(ta, "POST", "/api/v1/messages", {"conv": f"0:{idb}", "body": "重复", "client_msg_id": "dup-1"})
@@ -149,8 +157,10 @@ async def main() -> None:
         check("成员看到群", any(x["id"] == gid for x in groups_b["items"]), str(groups_b))
         api(ta, "POST", "/api/v1/messages", {"conv": f"1:{gid}", "body": "群里好"})
         convs_b = api(tb, "GET", "/api/v1/conversations")
-        check("群会话出现在列表", any(c["conv"] == f"1:{gid}" and c["last_body"] == "群里好" for c in convs_b["items"]),
+        group_conv = next((c for c in convs_b["items"] if c["conv"] == f"1:{gid}"), None)
+        check("群会话出现在列表", group_conv is not None and group_conv["last_body"] == "群里好",
               str(convs_b["items"])[:300])
+        check("群消息给其他人记未读", group_conv is not None and group_conv["unread"] >= 1, str(group_conv))
         detail = api(tb, "GET", f"/api/v1/groups/{gid}")
         check("群详情带成员", len(detail["members"]) == 2, str(detail)[:200])
         check("踢人成功", api(ta, "DELETE", f"/api/v1/groups/{gid}/members/{idb}").get("ok") is True)

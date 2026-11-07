@@ -1,10 +1,21 @@
 ﻿Public Class PageFriendContact
 
     Private LastRefresh As Long = 0
+    Private RealtimeHooked As Boolean = False
 
     Private Sub PageFriendContact_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded
         PanBack.ScrollToHome()
+        If Not RealtimeHooked Then
+            AddHandler ModFriend.RealtimeActivity, AddressOf FriendRealtimeActivity
+            RealtimeHooked = True
+        End If
+        ModFriend.StartRealtime()
         RefreshAll(True)
+    End Sub
+
+    '收到好友申请 / 同意 / 删除等事件时刷新列表
+    Private Sub FriendRealtimeActivity()
+        RunInUi(Sub() RefreshAll(True))
     End Sub
 
     Private Sub PageFriendContact_PageEnter() Handles Me.PageEnter
@@ -54,23 +65,10 @@
 
             Dim Info As New StackPanel With {.VerticalAlignment = VerticalAlignment.Center}
             Dim NameRow As New StackPanel With {.Orientation = Orientation.Horizontal}
-            NameRow.Children.Add(New System.Windows.Shapes.Ellipse With {
-                .Width = 7, .Height = 7,
-                .Fill = If(Contact.Online, New SolidColorBrush(Color.FromRgb(46, 160, 67)), New SolidColorBrush(Color.FromRgb(160, 166, 176))),
-                .Margin = New Thickness(0, 0, 5, 0),
-                .VerticalAlignment = VerticalAlignment.Center
-            })
             NameRow.Children.Add(New TextBlock With {
                 .Text = If(String.IsNullOrEmpty(Contact.Remark), Contact.Nickname, $"{Contact.Remark}（{Contact.Nickname}）"),
                 .FontSize = 13,
                 .TextTrimming = TextTrimming.CharacterEllipsis
-            })
-            NameRow.Children.Add(New TextBlock With {
-                .Text = If(Contact.Online, "在线", "离线"),
-                .FontSize = 10.5,
-                .Opacity = If(Contact.Online, 0.85, 0.45),
-                .Margin = New Thickness(5, 0, 0, 0),
-                .VerticalAlignment = VerticalAlignment.Center
             })
             Info.Children.Add(NameRow)
             Info.Children.Add(New TextBlock With {
