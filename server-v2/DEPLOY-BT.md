@@ -33,16 +33,39 @@ cd rmcl-friend/server-v2
 
 | 字段 | 填什么 |
 | --- | --- |
-| 项目名称 | `rmcl-friend` |
+| 项目名称 | 随意，例如 `RMCLIM` |
+| Python 环境 | 选一个 **3.11/3.12** 的环境（没有就点「环境管理」新建） |
+| 启动方式 | **命令行启动**（不要选 uwsgi/gunicorn） |
 | 项目路径 | `/www/wwwroot/rmcl-friend/server-v2` |
-| Python 版本 | `3.11.x`（没有就先在插件里安装） |
-| 框架 | `fastapi`（没有该选项就选「其他」） |
-| 启动方式 | `uvicorn` |
-| 启动文件 / 应用 | `app.main:app` |
-| 端口 | `8099` |
-| 运行用户 | `www` |
-| 安装依赖 | 勾选（`requirements.txt`） |
-| 开机自启 | 勾选 |
+| 启动命令 | 见下方，**必须写完整命令，不能只写 `app.main:app`** |
+| 环境变量 | 无 |
+| 启动用户 | `www` |
+| 开机启动 | 勾选 |
+
+启动命令（把 `/www/server/pyporject_evn/IM/bin/python` 换成你的环境实际路径）：
+
+```bash
+/www/server/pyporject_evn/IM/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8099 --workers 1
+```
+
+> 找不到环境路径时，在「环境管理」里看，或终端执行 `ls /www/server/pyporject_evn/`。
+> 也可以用项目自带的虚拟环境（更稳，见 2.1）。
+
+### 2.1 安装依赖（必须做）
+
+面板不会自动装 `requirements.txt`。终端执行：
+
+```bash
+cd /www/wwwroot/rmcl-friend/server-v2
+# 方式 A：用面板的 Python 环境
+/www/server/pyporject_evn/IM/bin/pip install -r requirements.txt
+
+# 方式 B：项目内自建虚拟环境（然后把启动命令改成 .venv/bin/python）
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+```
+
+装完 `.../bin/python -c "import fastapi, uvicorn, httpx"` 不报错即可。
 
 保存后项目应显示「运行中」。若启动失败，先看项目日志，再对照第 9 节排查。
 
