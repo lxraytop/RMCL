@@ -20,14 +20,14 @@ Public Class MyMsgSelect
             Btn2.Visibility = If(Converter.Button2 = "", Visibility.Collapsed, Visibility.Visible)
             ShapeLine.StrokeThickness = GetWPFSize(1)
             '添加选择控件
-            Btn1.IsEnabled = False
+            Btn1.IsEnabled = MyConverter.IsMultiSelect
             For Each Content In Converter.Content
                 Content = MyVirtualizingElement.TryInit(Content)
                 Dim Selection As IMyRadio = Content
                 PanSelection.Children.Add(Selection)
                 AddHandler Selection.Check, AddressOf OnChecked
                 If TypeOf Selection Is MyListItem Then
-                    CType(Selection, MyListItem).Type = MyListItem.CheckType.RadioBox
+                    CType(Selection, MyListItem).Type = If(MyConverter.IsMultiSelect, MyListItem.CheckType.CheckBox, MyListItem.CheckType.RadioBox)
                     CType(Selection, MyListItem).MinHeight = 24
                 Else
                     CType(Selection, MyRadioBox).MinHeight = 24
@@ -79,7 +79,20 @@ Public Class MyMsgSelect
     End Sub
 
     Public Sub Btn1_Click() Handles Btn1.Click
-        If MyConverter.IsExited OrElse SelectedIndex = -1 Then Return
+        If MyConverter.IsExited Then Return
+        If MyConverter.IsMultiSelect Then
+            '收集所有勾选的项
+            Dim Selected As New List(Of Integer)
+            For i = 0 To PanSelection.Children.Count - 1
+                Dim Control = MyVirtualizingElement.TryInit(PanSelection.Children(i))
+                If TypeOf Control Is MyListItem AndAlso CType(Control, MyListItem).Checked Then Selected.Add(i)
+            Next
+            MyConverter.IsExited = True
+            MyConverter.Result = Selected
+            Close()
+            Return
+        End If
+        If SelectedIndex = -1 Then Return
         MyConverter.IsExited = True
         MyConverter.Result = SelectedIndex
         Close()
@@ -93,6 +106,7 @@ Public Class MyMsgSelect
 
     Private SelectedIndex As Integer = -1
     Private Sub OnChecked(sender As IMyRadio, e As EventArgs)
+        If MyConverter.IsMultiSelect Then Return '多选模式下按钮始终可用
         Btn1.IsEnabled = True
         SelectedIndex = PanSelection.Children.IndexOf(sender)
     End Sub

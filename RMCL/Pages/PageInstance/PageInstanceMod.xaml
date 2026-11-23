@@ -22,6 +22,8 @@
                             <local:MyButton x:Name="BtnManageInstall" Grid.Column="1" MinWidth="110" Text="从文件安装" Padding="13,0" Margin="0,0,15,0" HorizontalAlignment="Left" />
                             <local:MyButton x:Name="BtnManageDownload" Grid.Column="2" MinWidth="110" Text="下载新 Mod" Padding="13,0" Margin="0,0,15,0" HorizontalAlignment="Left" />
                             <local:MyButton x:Name="BtnManageSelectAll" Grid.Column="3" MinWidth="110" Text="全选" Padding="13,0" Margin="0,0,15,0" HorizontalAlignment="Left" />
+                            <local:MyButton x:Name="BtnManageCheckDependency" Grid.Column="4" MinWidth="110" Text="检查前置" Padding="13,0" Margin="0,0,15,0" HorizontalAlignment="Left"
+                                            ToolTip="读取每个 Mod 声明的必需依赖，检查它们是否都已安装。&#xa;被禁用的 Mod 不会被检查。" />
                         </Grid>
                     </local:MyCard>
                     <local:MyCard x:Name="PanListBack" VerticalAlignment="Top" Opacity="0" Margin="0,0,0,14" Title=" " MinHeight="55">

@@ -196,6 +196,10 @@ EndHint:
         Public Button3Action As Action = Nothing
         Public IsWarn As Boolean = False
         Public ForceWait As Boolean = False
+        ''' <summary>
+        ''' 选择模式：是否为多选（复选框）模式。
+        ''' </summary>
+        Public IsMultiSelect As Boolean = False
         Public WaitFrame As New DispatcherFrame(True)
         ''' <summary>
         ''' 弹窗是否已经关闭。
@@ -320,6 +324,27 @@ EndHint:
             ComponentDispatcher.PopModal()
         End Try
         Logger.Info($"选择弹框返回：{If(Converter.Result, "null")}")
+        Return Converter.Result
+    End Function
+    ''' <summary>
+    ''' 显示多选弹窗，返回勾选的项在传入集合中的序号（从 0 开始）。若点击第二个按钮，则返回 Nothing。
+    ''' </summary>
+    ''' <param name="Title">弹窗的标题。</param>
+    ''' <param name="Button1">显示的第一个按钮，默认为 “确定”。</param>
+    ''' <param name="Button2">显示的第二个按钮，默认为 “取消”。</param>
+    Public Function MyMsgBoxMultiSelect(Selections As IEnumerable(Of IMyRadio), Optional Title As String = "提示", Optional Button1 As String = "确定", Optional Button2 As String = "取消", Optional IsWarn As Boolean = False) As List(Of Integer)
+        '将弹窗列入队列
+        Dim Converter As New MyMsgBoxConverter With {.Type = MyMsgBoxType.Select, .Button1 = Button1, .Button2 = Button2, .Content = Selections, .IsWarn = IsWarn, .Title = Title, .IsMultiSelect = True}
+        WaitingMyMsgBox.Enqueue(Converter)
+        Try
+            If FrmMain IsNot Nothing Then FrmMain.DragStop()
+            If RunInUi() Then MyMsgBoxTick()
+            ComponentDispatcher.PushModal()
+            Dispatcher.PushFrame(Converter.WaitFrame)
+        Finally
+            ComponentDispatcher.PopModal()
+        End Try
+        Logger.Info($"多选弹框返回：{If(Converter.Result Is Nothing, "null", String.Join(",", CType(Converter.Result, List(Of Integer))))}")
         Return Converter.Result
     End Function
 

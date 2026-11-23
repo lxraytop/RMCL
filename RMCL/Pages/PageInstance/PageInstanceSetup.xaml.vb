@@ -1,4 +1,4 @@
-Public Class PageInstanceSetup
+﻿Public Class PageInstanceSetup
 
     Private LoadedFirst As Boolean = False
     Private Sub PageSetupSystem_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded

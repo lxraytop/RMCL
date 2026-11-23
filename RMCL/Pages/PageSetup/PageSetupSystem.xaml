@@ -60,6 +60,7 @@
                             <RowDefinition Height="7" />
                             <RowDefinition Height="28" />
                             <RowDefinition Height="7" />
+                            <RowDefinition Height="28" />
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Left" Text="来源" Margin="0,0,25,0" />
                         <local:MyComboBox x:Name="ComboDownloadMod" Grid.Row="0" Grid.ColumnSpan="2" local:SettingService.Key="ToolDownloadMod" Grid.Column="1">
@@ -81,6 +82,13 @@
                                           ToolTip="在 Mod 管理页面中，Mod 项的显示方式">
                             <local:MyComboBoxItem Content="标题显示译名，详情显示文件名" IsSelected="True" />
                             <local:MyComboBoxItem Content="标题显示文件名，详情显示译名" />
+                        </local:MyComboBox>
+                        <TextBlock Grid.Row="6" VerticalAlignment="Center" HorizontalAlignment="Left" Text="前置 Mod" Margin="0,0,25,0" />
+                        <local:MyComboBox Grid.Row="6" x:Name="ComboDownloadDependency" Grid.ColumnSpan="2" local:SettingService.Key="ToolDownloadDependency" Grid.Column="1" 
+                                          ToolTip="下载 Mod 时，如何处理它所需的前置 Mod。&#xa;已安装在目标文件夹中的前置会被自动识别并跳过。">
+                            <local:MyComboBoxItem Content="每次询问要下载哪些前置" IsSelected="True" />
+                            <local:MyComboBoxItem Content="自动下载缺少的前置" />
+                            <local:MyComboBoxItem Content="不处理前置" />
                         </local:MyComboBox>
                     </Grid>
                 </StackPanel>

@@ -505,22 +505,91 @@ GroupDone:
                     End Select
                 End If
                 If File.ResourceType = ResourceTypes.Mod Then FileName = FileName.Replace("~", "-") '~ 会导致 Mixin 加载失败
-                RunInUi(
+
+                '让用户选择保存位置（必须阻塞等待结果，否则后续流程会因 Target 为空而直接退出）
+                Dim Target As String = Nothing
+                RunInUiWait(
                 Sub()
-                    '弹窗要求选择保存位置
-                    Dim Target As String
                     Dim Ext As String = If(File.ResourceType = ResourceTypes.Mod,
                         If(PathUtils.GetExtension(File.FileName) = "litemod", "litemod", "jar"),
                         If(PathUtils.GetExtension(File.FileName) = "mrpack", "mrpack", "zip"))
                     Target = Dialogs.SaveFile("选择保存位置", FileName, DefaultFolder, {(Ext, Desc & "文件")})
-                    If Target Is Nothing Then Return
+                End Sub)
+                If Target Is Nothing Then Return
+                Dim TargetFolder As String = PathUtils.RemoveLastPart(Target)
+
+                '准备前置信息（需要联网查询，在后台线程完成）
+                Dim DependencyTargetVersion As String = File.GameVersions.FirstOrDefault
+                Dim DependencyTargetLoaders As ModLoaders = File.ModLoaders
+                Dim DependencyEntries As List(Of ResourceDependency.DependencyEntry) = Nothing
+                Logger.Info($"前置检查：类型 {File.ResourceType}，该文件记录 {File.Dependencies.Count} 项前置，处理方式 {Settings.Get(Of Integer)("ToolDownloadDependency")}")
+                If File.ResourceType.HasFlagF(ResourceTypes.Mod) AndAlso Settings.Get(Of Integer)("ToolDownloadDependency") <> 2 Then
+                    Try
+                        If File.Dependencies.Any() Then
+                            '从 mods 文件夹反查所属实例，以获得准确的目标游戏版本与加载器
+                            Dim TargetInstance As McInstance = ResourceDependency.GetInstanceOfModsFolder(TargetFolder)
+                            If TargetInstance IsNot Nothing Then
+                                If Not TargetInstance.IsLoaded Then TargetInstance.Load()
+                                DependencyTargetVersion = TargetInstance.Version.VanillaName
+                                DependencyTargetLoaders = TargetInstance.Version.ModLoaders
+                            End If
+                            Hint("正在获取前置资源信息……")
+                            DependencyEntries = ResourceDependency.Collect(Project, File, DependencyTargetVersion, DependencyTargetLoaders,
+                                                                          ResourceDependency.GetInstalledModKeys(TargetFolder))
+                            Logger.Info($"共解析出 {DependencyEntries.Count} 项前置：{String.Join("；", DependencyEntries.Select(Function(d) d.ToString()))}")
+                        End If
+                    Catch ex As Exception
+                        Logger.Warn(ex, "解析前置资源失败，将只下载所选文件")
+                        DependencyEntries = Nothing
+                    End Try
+                End If
+
+                '构造并启动下载任务（需要弹出前置选择框，同样必须阻塞等待）
+                RunInUiWait(
+                Sub()
                     '构造步骤加载器
                     Dim LoaderName As String = Desc & "下载：" & PathUtils.GetFileNameWithoutExtension(Target) & " "
-                    If Not PathUtils.IsSame(PathUtils.RemoveLastPart(Target), DefaultFolder) Then CachedFolder(File.ResourceType) = PathUtils.RemoveLastPart(Target)
+                    If Not PathUtils.IsSame(TargetFolder, DefaultFolder) Then CachedFolder(File.ResourceType) = TargetFolder
                     Dim Loaders As New List(Of LoaderBase)
+                    '挑选需要一并下载的前置
+                    Dim DependencyFiles As New List(Of NetFile)
+                    If DependencyEntries IsNot Nothing AndAlso DependencyEntries.Any(Function(d) d.File IsNot Nothing AndAlso Not d.IsInstalled) Then
+                        Dim SelectedEntries As List(Of ResourceDependency.DependencyEntry) = Nothing
+                        If Settings.Get(Of Integer)("ToolDownloadDependency") = 1 Then
+                            '自动下载所有缺失的前置
+                            SelectedEntries = DependencyEntries.Where(Function(d) d.IsSelected).ToList()
+                        Else
+                            Dim Selections As New List(Of IMyRadio)
+                            For Each Entry In DependencyEntries
+                                Dim NewItem As New MyListItem With {
+                                    .Title = Entry.Project.TranslatedName, .Info = Entry.Description,
+                                    .Height = 36, .Checked = Entry.IsSelected}
+                                If Entry.File Is Nothing Then NewItem.IsEnabled = False
+                                Selections.Add(NewItem)
+                            Next
+                            Dim Chosen As List(Of Integer) = MyMsgBoxMultiSelect(Selections, "下载前置资源", "一起下载", "仅下载主文件")
+                            If Chosen Is Nothing Then
+                                SelectedEntries = New List(Of ResourceDependency.DependencyEntry)
+                            Else
+                                SelectedEntries = Chosen.Where(Function(i) i >= 0 AndAlso i < DependencyEntries.Count).
+                                    Select(Function(i) DependencyEntries(i)).ToList()
+                            End If
+                        End If
+                        '前置与主文件放在同一文件夹中
+                        Dim DependencyFolder As String = PathUtils.AddSlashSuffix(TargetFolder)
+                        For Each Entry In SelectedEntries
+                            If Entry.File Is Nothing Then Continue For
+                            DependencyFiles.Add(Entry.File.ToNetFile(DependencyFolder, ResourceVersion.DownloadReason.Dependency,
+                                                                    DependencyTargetVersion, DependencyTargetLoaders))
+                        Next
+                        If DependencyFiles.Any() Then Logger.Info($"将一并下载 {DependencyFiles.Count} 项前置")
+                    End If
                     Loaders.Add(New LoaderDownload("下载文件", {
                         File.ToNetFile(Target, If(TargetResourceType = ResourceTypes.Any, ResourceVersion.DownloadReason.Dependency, ResourceVersion.DownloadReason.Standalone))
-                    }) With {.ProgressWeight = 6, .Block = True})
+                    }) With {.ProgressWeight = If(DependencyFiles.Any(), 5, 6), .Block = True})
+                    If DependencyFiles.Any() Then
+                        Loaders.Add(New LoaderDownload("下载前置资源", DependencyFiles) With {.ProgressWeight = 1.5 * DependencyFiles.Count, .Block = True})
+                    End If
                     '启动
                     Dim Loader As New LoaderCombo(Of Integer)(LoaderName, Loaders) With {.OnStateChanged =
                     Sub(MyLoader)

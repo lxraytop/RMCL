@@ -133,6 +133,7 @@ Public Class Settings
         New Setting("ToolDownloadTranslateV2", 1, Source:=Sources.Registry),
         New Setting("ToolDownloadCert", False, Source:=Sources.Registry, OnChanged:=AddressOf ModNet.ShouldValidateSslCertificateOnLogin),
         New Setting("ToolDownloadMod", 2, Source:=Sources.Registry),
+        New Setting("ToolDownloadDependency", 0, Source:=Sources.Registry), '下载 Mod 时处理前置的方式：0 每次询问，1 自动下载未安装的前置，2 不处理
         New Setting("ToolModLocalNameStyle", 0, Source:=Sources.Registry),
         New Setting("ToolUpdateRelease", False, Source:=Sources.Registry),
         New Setting("ToolLauncherUpdateAuto", False, Source:=Sources.Registry), '启动时自动检查并下载启动器更新

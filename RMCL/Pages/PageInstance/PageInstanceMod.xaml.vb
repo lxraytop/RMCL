@@ -342,6 +342,103 @@ Install:
 
 #End Region
 
+#Region "前置检查"
+
+    Private CheckingDependency As Boolean = False
+    ''' <summary>
+    ''' 检查当前版本中所有 Mod 的必需前置是否已安装。
+    ''' </summary>
+    Private Sub BtnManageCheckDependency_Click(sender As Object, e As EventArgs) Handles BtnManageCheckDependency.Click
+        Dim Instance As McInstance = PageInstanceLeft.Instance
+        If Instance Is Nothing OrElse CheckingDependency Then Return
+        Dim ModsFolder As String = PathUtils.AddSlashSuffix(Instance.PathIndie & "mods")
+        If Not DirectoryUtils.Exists(ModsFolder) OrElse
+            Not DirectoryUtils.EnumerateFiles(ModsFolder).Any(Function(f) f.Lower.EndsWithF(".jar") OrElse f.Lower.EndsWithF(".jar.disabled")) Then
+            Hint("当前版本没有安装任何 Mod。", HintType.Blue)
+            Return
+        End If
+        CheckingDependency = True
+        BtnManageCheckDependency.Text = "正在检查…"
+        BtnManageCheckDependency.IsEnabled = False
+        Hint("正在检查 Mod 前置，这可能需要一小会儿……", Log:=False)
+        RunInNewThread(
+        Sub()
+            Dim Missing As List(Of ResourceDependency.MissingDependency) = Nothing
+            Dim ErrorMessage As String = Nothing
+            Try
+                Missing = ResourceDependency.CheckDependencies(ModsFolder, Instance.Version.VanillaName, Instance.Version.ModLoaders)
+            Catch ex As Exception
+                Logger.Error(ex, "检查 Mod 前置失败")
+                ErrorMessage = ex.Message
+            End Try
+            RunInUi(
+            Sub()
+                CheckingDependency = False
+                BtnManageCheckDependency.Text = "检查前置"
+                BtnManageCheckDependency.IsEnabled = True
+                If ErrorMessage IsNot Nothing Then
+                    Hint("检查 Mod 前置失败：" & ErrorMessage, HintType.Red)
+                ElseIf Missing Is Nothing OrElse Not Missing.Any() Then
+                    Hint("所有 Mod 的必需前置均已满足。", HintType.Green)
+                Else
+                    ShowMissingDependencies(Instance, Missing)
+                End If
+            End Sub)
+        End Sub, "Check Mod Dependency")
+    End Sub
+
+    ''' <summary>
+    ''' 展示缺失的前置，并允许勾选下载。
+    ''' </summary>
+    Private Sub ShowMissingDependencies(Instance As McInstance, Missing As List(Of ResourceDependency.MissingDependency))
+        Dim Installable As List(Of ResourceDependency.MissingDependency) = Missing.Where(Function(m) m.File IsNot Nothing).ToList()
+        Dim Selections As New List(Of IMyRadio)
+        For Each Entry As ResourceDependency.MissingDependency In Missing
+            Dim NewItem As New MyListItem With {
+                .Title = Entry.DisplayName, .Info = Entry.Description,
+                .Height = 36, .Checked = Entry.File IsNot Nothing}
+            If Entry.File Is Nothing Then NewItem.IsEnabled = False
+            Selections.Add(NewItem)
+        Next
+        Dim Chosen As List(Of Integer) = MyMsgBoxMultiSelect(Selections,
+            $"缺失的前置（依据 Mod 自身的依赖声明，共 {Missing.Count} 项）", "下载", "关闭")
+        If Chosen Is Nothing OrElse Not Chosen.Any() Then Return
+        Dim Selected As List(Of ResourceDependency.MissingDependency) =
+            Chosen.Where(Function(i) i >= 0 AndAlso i < Missing.Count).
+            Select(Function(i) Missing(i)).Where(Function(m) m.File IsNot Nothing).ToList()
+        If Not Selected.Any() Then Return
+        InstallMissingDependencies(Instance, Selected)
+    End Sub
+
+    ''' <summary>
+    ''' 下载并安装缺失的前置。
+    ''' </summary>
+    Private Sub InstallMissingDependencies(Instance As McInstance, Entries As List(Of ResourceDependency.MissingDependency))
+        Try
+            Dim ModsFolder As String = PathUtils.AddSlashSuffix(Instance.PathIndie & "mods")
+            Dim Files As New List(Of NetFile)
+            For Each Entry As ResourceDependency.MissingDependency In Entries
+                Files.Add(Entry.File.ToNetFile(ModsFolder, ResourceVersion.DownloadReason.Dependency,
+                                               Instance.Version.VanillaName, Instance.Version.ModLoaders))
+            Next
+            Dim Loaders As New List(Of LoaderBase) From {
+                New LoaderDownload("下载前置资源", Files) With {.ProgressWeight = Files.Count * 1.5, .Block = True}}
+            Dim Loader As New LoaderCombo(Of Integer)("下载缺失前置：" & Instance.Name, Loaders) With {.OnStateChanged =
+            Sub()
+                If Loader.State = LoadState.Finished Then RunInUi(Sub() ReloadModList())
+            End Sub}
+            Loader.Start(1)
+            LoaderTaskbarAdd(Loader)
+            FrmMain.BtnExtraDownload.ShowRefresh()
+            FrmMain.BtnExtraDownload.Ribble()
+            Logger.Info($"开始下载 {Files.Count} 项缺失的前置")
+        Catch ex As Exception
+            Logger.Error(ex, "下载缺失的前置失败", LogBehavior.Alert)
+        End Try
+    End Sub
+
+#End Region
+
 #Region "选择"
 
     '选择的 Mod 的路径（不含 .disabled 和 .old）
