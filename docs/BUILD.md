@@ -1,4 +1,4 @@
-# 构建说明（RMCL 2.20.2.2）
+# 构建说明（RMCL 2.20.3.0）
 
 RMCL 基于上游 2.14.0.0 开源基线重构，技术栈与上游一致：**.NET Framework 4.8 + WPF + VB.NET**（主工程为传统 vbproj，`RMCLCS` 与 `MeloongCore` 为 SDK 风格 csproj）。
 
@@ -81,13 +81,39 @@ msbuild RMCL\RMCL.vbproj -p:Configuration=Release
 
 | 文件 | 大小 | 说明 |
 | --- | --- | --- |
-| `dist/RMCL 2.20.2.2/RMCL.exe` | 5.91 MB | 主程序，版本信息 `2.20.2.2 / Ray Minecraft Launcher` |
-| `dist/RMCL 2.20.2.2/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
-| `dist/RMCL-2.20.2.2-win.zip` | 2.63 MB | 上述两个文件的压缩包 |
+| `dist/RMCL 2.20.3.0/RMCL.exe` | 5.93 MB | 主程序，版本信息 `2.20.3.0 / Ray Minecraft Launcher` |
+| `dist/RMCL 2.20.3.0/RMCL.exe.config` | 1.5 KB | 绑定重定向 |
+| `dist/RMCL-2.20.3.0-win.zip` | 2.63 MB | 上述两个文件的压缩包 |
 
-对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.20.2.2>，
-资产 `RMCL.exe`（6,198,784 B，sha256 `526703eec3b0afa7…`）与
-`RMCL-2.20.2.2-win.zip`（2,754,367 B，sha256 `d09abfd9f88df3a4…`）。
+对应的 Release：<https://github.com/lxraytop/RMCL/releases/tag/v2.20.3.0>，
+资产 `RMCL.exe`（6,219,264 B，sha256 `a25826f9b1b67a47…`）与
+`RMCL-2.20.3.0-win.zip`（2,762,366 B，sha256 `dbb5438374076847…`）。
+
+### 2.20.3.0 主要变更
+
+下载 Mod 现在会带上它的前置，Mod 管理页也能事后体检。前置判定全部来自 jar 自身的元数据声明，
+不靠文件名猜。
+
+- 资源详情页下载 Mod 时自动解析前置：先选保存位置，再联网取该文件记录的依赖，递归收集两层，
+  按实例的 MC 版本与加载器挑出匹配的前置文件；已装的前置读 jar 里的 modid 识别并默认不勾选。
+  确认后前置与主文件放进同一个下载任务，前置显示为独立的「下载前置资源」步骤，落在同一目录。
+- 新设置项「前置 Mod」（设置 → 系统 → 社区资源）：每次询问 / 自动下载缺失 / 不处理。
+- Mod 管理页新增「检查前置」：读每个 jar 声明的必需依赖（Forge/NeoForge 的 `[[dependencies.x]]`
+  只取 `mandatory` 未关闭且 `type = required` 的项，Fabric 取 `depends`），与已装 modid 比对，
+  缺失项联网找工程并支持一键补装，装完自动刷新 Mod 列表。
+- 内嵌前置算作已安装：递归扫描 `META-INF/jars/`（Fabric）与 `META-INF/jarjar/`（NeoForge）
+  最多 2 层。内嵌 jar 只贡献 modid，不贡献依赖声明。
+- 按加载器分别读取元数据：多平台 jar 同时含 `fabric.mod.json` 与 `mods.toml` 时，Forge 实例
+  只读 TOML，避免把 Fabric 侧的 `fabric-api` 等依赖误报为缺失；纯 Forge 实例忽略 `fabric*` 依赖。
+  被禁用的 `.disabled` Mod 不检查其依赖，但仍计为已安装。
+- 修复 TOML 行尾注释吞掉值（`modId="tofucraft" #mandatory` 曾被读成 `tofucraft" #mandatory`）；
+  合并 `fabric-api` 子模块（`fabric-api-base`、`fabric-registry-sync-v0` 等）避免误报。
+- 前置找不到工程时的搜索改为逐级降级：完整 modid → 前 6/4/3 位（`ftblibrary` → `ftb`），
+  命中后按 slug 归一化前缀 + 加载器后缀（`-forge` / `-neoforge` / `-fabric`）择优。
+  连写 modid 在 Modrinth 上是零结果，FTB 系列也不在 Modrinth，必须靠这条降级 + CurseForge。
+- 选择弹窗支持多选（勾选框列表，返回全部勾选索引），供前置选择复用。
+- 微软登录第 4 步的 403 按响应内容区分成因：`Invalid app registration` 提示「内置应用 ID 未获
+  Mojang 授权」，不再误报成「当前 IP 登录异常，请关掉 VPN/加速器」，细节见 `docs/MS-LOGIN.md`。
 
 ### 2.20.2.2 主要变更
 
