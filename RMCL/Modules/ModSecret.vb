@@ -7,6 +7,8 @@ Friend Module ModSecret
     '在开源版的注册表与常规版的注册表隔离，以防数据冲突
     Public Const RegFolder As String = "RMCLDebug"
     '用于微软登录的 ClientId
+    '注意：Minecraft 服务端维护 client_id 白名单，未获 Mojang 批准的应用在登录第 4 步会得到
+    '403 "Invalid app registration"，需通过 https://aka.ms/mce-reviewappid 申请，详见 docs/MS-LOGIN.md
     Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("RMCL_MS_CLIENT_ID"), "ab25b229-f826-46db-b646-01035c3a3e52")
     'CurseForge API Key（资源搜索与整合包安装均依赖它）
     '优先读取环境变量 RMCL_CURSEFORGE_API_KEY，未设置时使用内置密钥

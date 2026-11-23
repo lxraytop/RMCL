@@ -1020,8 +1020,16 @@ Retry:
                 Logger.Warn(ex, "微软登录第 4 步汇报 429")
                 Throw New Exception("$登录尝试太过频繁，请等待几分钟后再试！")
             ElseIf ex.StatusCode = HttpStatusCode.Forbidden Then
+                '403 有两种完全不同的成因，必须按返回内容区分，否则会把「应用未获 Mojang 批准」误报成「IP 异常」
+                '（Minecraft 服务端维护 client_id 白名单，名单外的应用一律返回 Invalid app registration）
                 Logger.Warn(ex, "微软登录第 4 步汇报 403")
-                Throw New Exception("$当前 IP 的登录尝试异常。" & vbCrLf & "如果你使用了 VPN 或加速器，请把它们关掉或更换节点后再试！")
+                If ex.Response?.Contains("Invalid app registration") Then
+                    Logger.Warn(ex, "微软登录第 4 步：应用 ID 未在 Mojang 白名单中")
+                    Throw New Exception("$RMCL 内置的微软应用 ID 未获得 Mojang 授权，无法换取 Minecraft 登录令牌。" & vbCrLf &
+                                        "这不是你的网络问题，与 VPN、加速器均无关，请等待启动器更新后再试。")
+                Else
+                    Throw New Exception("$当前 IP 的登录尝试异常。" & vbCrLf & "如果你使用了 VPN 或加速器，请把它们关掉或更换节点后再试！")
+                End If
             ElseIf ex.StatusCode = HttpStatusCode.ServiceUnavailable Then
                 Logger.Warn(ex, "微软登录第 4 步汇报 503")
                 Throw New Exception("$Mojang 服务器出现问题，请稍后再试。" & vbCrLf & "你的网络是正常的，RMCL 也是正常的，是 Mojang 出问题了……")

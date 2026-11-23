@@ -86,12 +86,74 @@ scope=XboxLive.signin offline_access
 | `AADSTS700016` application not found | 应用只允许组织账号，而请求走的是 `/consumers` | 把帐户类型改为允许个人账户 |
 | `AADSTS7000218` 需要 client_assertion | 没开「允许公共客户端流」 | 见第二节 |
 | `AADSTS50020` 用户帐户不存在于租户 | 用了工作/学校账号登录个人应用 | 换个人微软账号 |
+| 登录名带 `#EXT#`，如 `xxx_qq.com#EXT#@xxx.onmicrosoft.com` | 这是 Entra ID 的**外部来宾账号 UPN**，不是 Microsoft 账户，不能用于正版登录 | 见第七节 |
 | `authorization_declined` | 用户在网页上点了拒绝 | 重新登录并授权 |
 | `expired_token` / 一直 `authorization_pending` | 代码过期（默认 15 分钟） | 关掉弹窗重来 |
 | `该账号未拥有 Minecraft` | 账号没有 Minecraft Java 版 | 需先在 minecraft.net 购买/绑定 |
 | 提示「需要使用密码登录」 | 账号开启了无密码登录，网页端要求改密码 | 按弹窗引导到 account.live.com 设置密码 |
+| 第 4 步 403，返回 `Invalid app registration` | **Minecraft 服务端有 client_id 白名单**，内置应用 ID 未获 Mojang 授权 | 见第六节，与代理/VPN 无关 |
 
-## 六、安全提醒
+## 六、`Invalid app registration`（第 4 步 403）
+
+现象：微软网页登录成功，第 1～3 步（OAuth → Xbox Live → XSTS）全部通过，
+仅在 `POST /authentication/login_with_xbox` 返回 `403 Forbidden`，响应体为：
+
+```json
+{
+  "path" : "/authentication/login_with_xbox",
+  "errorMessage" : "Invalid app registration, see https://aka.ms/AppRegInfo for more information"
+}
+```
+
+原因：Minecraft 服务端维护一份 **client_id 白名单**，只有被 Mojang 批准过的应用 ID
+才能换取 Minecraft 令牌。新建的 Azure 应用默认不在名单内；曾在内、后被移除的同样会报错。
+这一限制在 Minecraft 服务端实施，**无法通过 Entra 的权限、作用域、重定向 URI 等配置绕过**，
+也**与用户的网络环境、VPN、加速器完全无关**（前 3 步能通即可证明网络是正常的）。
+
+处理：
+
+1. 到 <https://aka.ms/mce-reviewappid> 提交 App ID 登记表，填写自己的 client_id、
+   应用名称、项目地址与用途说明，等待 Mojang Enforcement 加入白名单（通常数天到数周）。
+2. 临时验证可用环境变量换成已获批准的 ID：
+   ```bat
+   set RMCL_MS_CLIENT_ID=已获批准的客户端ID
+   RMCL.exe
+   ```
+3. 不要长期借用其他启动器的 client_id，随时可能被移除而导致整体登录失效。
+
+## 七、`#EXT#` 来宾账号不能用于正版登录
+
+有些 Azure 账号在门户里显示的登录名形如：
+
+```
+lxray_qq.com#EXT#@lxrayqq.onmicrosoft.com
+```
+
+这不是邮箱地址，而是 **Microsoft Entra ID 的外部来宾（Guest / B2B）账号 UPN**：
+
+| 片段 | 含义 |
+| --- | --- |
+| `lxray_qq.com` | 真实邮箱 `lxray@qq.com`，`@` 被替换为 `_` |
+| `#EXT#` | External，表示该身份是从目录外部邀请进来的来宾 |
+| `@lxrayqq.onmicrosoft.com` | 该租户的默认域名（首次用非微软域邮箱登录 Azure 时自动创建） |
+
+**它属于「工作或学校账户」，不是 Microsoft 账户（MSA）**，而 RMCL 走的是
+`login.microsoftonline.com/consumers/...`，只接受个人 MSA。用它登录必然失败
+（通常报 `AADSTS50020`）。含 `#EXT#` 的登录名**不能**填进登录弹窗。
+
+区分用法：
+
+- **AppID 审核表的「联系邮箱」**：填真实邮箱 `lxray@qq.com`，不要填 `#EXT#` 那串。
+  官方要拿它到 Azure 门户核对，而门户里该来宾账号的「邮件」字段就是 `lxray@qq.com`。
+- **Tenant ID**：填目录的 **GUID**（Entra ID → 概览 → 租户 ID），不是 `xxx.onmicrosoft.com` 域名。
+- **登录游戏**：必须用 Microsoft 账户。若 `lxray@qq.com` 已注册过 MSA，
+  网页上会让你在「个人账户」与「工作或学校账户」之间选择，**必须选个人账户**；
+  若尚未注册，先去 <https://signup.live.com> 用它注册一个 MSA（QQ 邮箱注册 MSA 是允许的）。
+
+> 建议：申请审核时用一个纯个人 Microsoft 账户登录 Azure 门户创建应用，使联系邮箱、
+> 租户、应用三者归属一致，核对环节不会有歧义。
+
+## 八、安全提醒
 
 - 客户端 ID 是**公开信息**，写进开源仓库不算泄露；真正需要保密的是客户端 Secret —— 本方案不使用 Secret。
 - 登录令牌（`access_token` / `refresh_token`）保存在本机注册表 `HKCU\Software\RMCLDebug` 下，且经过 DES 加密；
